@@ -10,6 +10,7 @@ import Settings from "./pages/Settings";
 import MobileMore from "./pages/MobileMore";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { GoogleAuthProvider } from "./GoogleAuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { MobileTopBar, MobileBottomNav } from "./MobileShell";
 import "./mobile.css";
@@ -99,7 +100,9 @@ function AppShell() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <GoogleAuthProvider>
+        <AppShell />
+      </GoogleAuthProvider>
     </AuthProvider>
   );
 }

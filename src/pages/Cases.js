@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
+import { useGoogleAuth } from "../GoogleAuthContext";
 
 const emptyForm = {
   title: "",
@@ -12,14 +13,19 @@ const emptyForm = {
   keyDateLabel: "",
   keyDate: "",
   notes: "",
+  syncToCalendar: false,
+  googleEventId: null,
+  googleEventLink: null,
 };
 
 export default function Cases() {
   const { items, add, update, remove } = useCollection("cases", "createdAt");
   const { items: properties } = useCollection("properties", "title");
+  const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [syncing, setSyncing] = useState(false);
 
   const openNew = () => {
     setForm(emptyForm);
@@ -36,11 +42,45 @@ export default function Cases() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
+
+    let savedId = editingId;
     if (editingId) {
       await update(editingId, form);
     } else {
-      await add(form);
+      const ref = await add(form);
+      savedId = ref.id;
     }
+
+    // 處理 Google 行事曆同步
+    if (isConnected && form.keyDate) {
+      setSyncing(true);
+      try {
+        const eventPayload = {
+          title: `${form.title}・${form.keyDateLabel || "關鍵日期"}`,
+          date: form.keyDate,
+          notes: form.notes,
+        };
+        if (form.syncToCalendar) {
+          if (form.googleEventId) {
+            await updateEvent(form.googleEventId, eventPayload);
+          } else {
+            const created = await createEvent(eventPayload);
+            await update(savedId, {
+              googleEventId: created.id,
+              googleEventLink: created.htmlLink,
+            });
+          }
+        } else if (form.googleEventId) {
+          await deleteEvent(form.googleEventId);
+          await update(savedId, { googleEventId: null, googleEventLink: null });
+        }
+      } catch (err) {
+        console.error("Google 行事曆同步失敗", err);
+        alert("Google 行事曆同步失敗，案件本身已儲存成功，可以稍後在編輯畫面重試同步。");
+      }
+      setSyncing(false);
+    }
+
     setShowForm(false);
   };
 
@@ -143,6 +183,40 @@ export default function Cases() {
                 onChange={(e) => setForm({ ...form, keyDate: e.target.value })}
               />
             </div>
+
+            {form.keyDate && (
+              <div className="toggle-row" style={{ background:"#FAFAF8", border:"1px solid var(--border)", borderRadius:8, padding:"12px 14px" }}>
+                {isConnected ? (
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.syncToCalendar}
+                      onChange={(e) => setForm({ ...form, syncToCalendar: e.target.checked })}
+                    />
+                    <span>
+                      <strong>同步到 Google 行事曆</strong>
+                      <br />
+                      <span style={{ color: "var(--muted)", fontSize: 11 }}>
+                        開啟後會在你的行事曆建立對應事件
+                      </span>
+                    </span>
+                  </label>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    尚未連結 Google 帳號，前往「設定」頁面連結後即可同步關鍵日期。
+                  </div>
+                )}
+                {form.googleEventLink && (
+                  <div style={{ marginTop: 8, fontSize: 12 }}>
+                    ✓ 已同步・
+                    <a href={form.googleEventLink} target="_blank" rel="noreferrer">
+                      在 Google 行事曆開啟
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="form-field">
               <label>備註</label>
               <textarea
@@ -152,8 +226,8 @@ export default function Cases() {
               />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn" type="submit">
-                {editingId ? "儲存變更" : "新增案件"}
+              <button className="btn" type="submit" disabled={syncing}>
+                {syncing ? "同步中…" : editingId ? "儲存變更" : "新增案件"}
               </button>
               <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>
                 取消
@@ -164,6 +238,13 @@ export default function Cases() {
                   type="button"
                   onClick={async () => {
                     if (window.confirm("確定要刪除這個案件嗎？")) {
+                      if (form.googleEventId) {
+                        try {
+                          await deleteEvent(form.googleEventId);
+                        } catch {
+                          // 行事曆事件刪不掉也不擋案件刪除
+                        }
+                      }
                       await remove(editingId);
                       setShowForm(false);
                     }
@@ -202,6 +283,7 @@ export default function Cases() {
                       <>
                         <br />
                         {item.keyDateLabel}：{formatDate(item.keyDate)}
+                        {item.googleEventId && " 📅"}
                       </>
                     )}
                   </div>
