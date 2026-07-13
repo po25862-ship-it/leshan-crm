@@ -7,10 +7,14 @@ import Topics from "./pages/Topics";
 import Properties from "./pages/Properties";
 import Needs from "./pages/Needs";
 import Settings from "./pages/Settings";
+import MobileMore from "./pages/MobileMore";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { useIsMobile } from "./hooks/useIsMobile";
+import { MobileTopBar, MobileBottomNav } from "./MobileShell";
+import "./mobile.css";
 
-function Header() {
+function DesktopHeader() {
   const { logout } = useAuth();
   return (
     <header className="app-header">
@@ -48,8 +52,24 @@ function Header() {
   );
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/contacts" element={<Contacts />} />
+      <Route path="/cases" element={<Cases />} />
+      <Route path="/properties" element={<Properties />} />
+      <Route path="/needs" element={<Needs />} />
+      <Route path="/topics" element={<Topics />} />
+      <Route path="/settings" element={<Settings />} />
+      <Route path="/more" element={<MobileMore />} />
+    </Routes>
+  );
+}
+
 function AppShell() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   if (user === undefined) {
     return <main style={{ padding: 40 }}>載入中…</main>;
@@ -60,16 +80,18 @@ function AppShell() {
 
   return (
     <HashRouter>
-      <Header />
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/contacts" element={<Contacts />} />
-        <Route path="/cases" element={<Cases />} />
-        <Route path="/properties" element={<Properties />} />
-        <Route path="/needs" element={<Needs />} />
-        <Route path="/topics" element={<Topics />} />
-        <Route path="/settings" element={<Settings />} />
-      </Routes>
+      {isMobile ? (
+        <div className="mobile-shell">
+          <MobileTopBar />
+          <AppRoutes />
+          <MobileBottomNav />
+        </div>
+      ) : (
+        <>
+          <DesktopHeader />
+          <AppRoutes />
+        </>
+      )}
     </HashRouter>
   );
 }
