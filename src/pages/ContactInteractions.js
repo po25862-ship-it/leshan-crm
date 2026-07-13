@@ -55,7 +55,7 @@ export default function ContactInteractions({ contactId, onLogged }) {
   };
 
   return (
-    <div style={{ marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+    <div>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>互動紀錄</div>
 
       <datalist id="property-options">

@@ -115,8 +115,18 @@ export default function Contacts() {
           <option value="買方">買方</option>
         </select>
       </div>
-        <div className="panel" style={{ marginBottom: 24, maxWidth: 640 }}>
-          <form className="form-grid" onSubmit={onSubmit}>
+      {showForm && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: editingId ? "minmax(320px, 640px) 1fr" : "minmax(320px, 640px)",
+            gap: 24,
+            marginBottom: 24,
+            alignItems: "start",
+          }}
+        >
+          <div className="panel">
+            <form className="form-grid" onSubmit={onSubmit}>
             <div className="form-field">
               <label>姓名</label>
               <input
@@ -206,13 +216,16 @@ export default function Contacts() {
                 </button>
               )}
             </div>
-          </form>
+            </form>
+          </div>
 
           {editingId && (
-            <ContactInteractions
-              contactId={editingId}
-              onLogged={() => update(editingId, { lastContactDate: todayStr() })}
-            />
+            <div className="panel">
+              <ContactInteractions
+                contactId={editingId}
+                onLogged={() => update(editingId, { lastContactDate: todayStr() })}
+              />
+            </div>
           )}
         </div>
       )}
