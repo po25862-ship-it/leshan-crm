@@ -1,0 +1,89 @@
+:root{
+  --bg:#F7F6F3;
+  --panel:#FFFFFF;
+  --ink:#14213D;
+  --muted:#5B6472;
+  --accent:#2D5A4A;
+  --accent-soft:#E4EEE9;
+  --brass:#B08D57;
+  --border:#E4E2DC;
+  --danger:#B34A3C;
+  --danger-soft:#F6E9E6;
+  --buyer:#2D5586;
+  --buyer-soft:#E7EEF7;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans TC',sans-serif;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+a{color:inherit;}
+
+.app-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 32px;background:var(--panel);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:10;
+}
+.brand{display:flex;align-items:baseline;gap:12px;}
+.brand h1{font-family:'Noto Serif TC',serif;font-weight:700;font-size:19px;margin:0;}
+.brand span{font-size:12px;color:var(--muted);}
+.app-nav{display:flex;gap:6px;}
+.app-nav a{font-size:14px;color:var(--muted);text-decoration:none;padding:8px 16px;border-radius:6px;}
+.app-nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:700;}
+
+main{padding:28px 32px 60px;max-width:1320px;margin:0 auto;}
+
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:28px;}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;}
+.kpi .label{font-size:13px;color:var(--muted);margin-bottom:8px;}
+.kpi .value{font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:500;}
+.kpi .value.warn{color:var(--danger);}
+
+.section-title{font-family:'Noto Serif TC',serif;font-weight:700;font-size:17px;margin:0 0 14px;display:flex;align-items:center;gap:10px;}
+.section-title::before{content:"";width:4px;height:16px;background:var(--brass);display:inline-block;border-radius:2px;}
+
+.btn{
+  border:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;
+  background:var(--accent);color:#fff;
+}
+.btn.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--border);}
+.btn.danger{background:var(--danger);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;}
+
+.list-row{
+  display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--border);
+}
+.list-row:last-child{border-bottom:none;}
+.list-row .name{font-weight:700;font-size:14px;}
+.list-row .meta{font-size:12px;color:var(--muted);margin-top:3px;}
+.list-row .actions{display:flex;gap:8px;}
+
+.tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:20px;margin-right:6px;background:var(--accent-soft);color:var(--accent);font-weight:700;}
+.tag.buyer{background:var(--buyer-soft);color:var(--buyer);}
+
+.board{display:grid;gap:14px;grid-auto-flow:column;grid-auto-columns:minmax(240px,1fr);overflow-x:auto;padding-bottom:8px;}
+.col-head{font-size:13px;font-weight:700;color:var(--muted);padding-bottom:10px;border-bottom:2px solid var(--border);margin-bottom:12px;display:flex;justify-content:space-between;}
+.card{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px;margin-bottom:12px;}
+.card .name{font-weight:700;font-size:14px;margin-bottom:4px;}
+.card .meta{font-size:12px;color:var(--muted);line-height:1.7;}
+
+.reminder{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
+.reminder:last-child{border-bottom:none;}
+.reminder .dot{width:8px;height:8px;border-radius:50%;background:var(--danger);margin-top:6px;flex-shrink:0;}
+.reminder .txt .t1{font-size:13px;font-weight:700;}
+.reminder .txt .t2{font-size:12px;color:var(--muted);margin-top:2px;}
+.reminder .txt .t2 .num{font-family:'IBM Plex Mono',monospace;color:var(--danger);font-weight:500;}
+
+.form-grid{display:grid;gap:14px;max-width:520px;}
+.form-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;}
+.form-field input,.form-field select,.form-field textarea{
+  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;
+  font-family:'Noto Sans TC',sans-serif;background:#fff;color:var(--ink);
+}
+.checkbox-row{display:flex;gap:16px;}
+.checkbox-row label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-state .big{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+
+.top-actions{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
