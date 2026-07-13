@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
 import ContactInteractions from "./ContactInteractions";
+import ContactAppointments from "./ContactAppointments";
 
 const emptyForm = {
   name: "",
@@ -220,11 +221,16 @@ export default function Contacts() {
           </div>
 
           {editingId && (
-            <div className="panel">
-              <ContactInteractions
-                contactId={editingId}
-                onLogged={() => update(editingId, { lastContactDate: todayStr() })}
-              />
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="panel">
+                <ContactAppointments contactId={editingId} contactName={form.name} />
+              </div>
+              <div className="panel">
+                <ContactInteractions
+                  contactId={editingId}
+                  onLogged={() => update(editingId, { lastContactDate: todayStr() })}
+                />
+              </div>
             </div>
           )}
         </div>

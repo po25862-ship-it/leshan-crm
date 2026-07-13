@@ -90,18 +90,38 @@ export function GoogleAuthProvider({ children }) {
     [isConnected, session]
   );
 
+  const buildEventBody = ({ title, date, time, durationMinutes = 60, notes }) => {
+    if (time) {
+      const startDateTime = `${date}T${time}:00`;
+      const [h, m] = time.split(":").map(Number);
+      const endDate = new Date(`${date}T00:00:00`);
+      endDate.setHours(h, m + durationMinutes);
+      const pad = (n) => String(n).padStart(2, "0");
+      const endDateTime = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(
+        endDate.getDate()
+      )}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
+      return {
+        summary: title,
+        description: notes || "",
+        start: { dateTime: startDateTime, timeZone: "Asia/Taipei" },
+        end: { dateTime: endDateTime, timeZone: "Asia/Taipei" },
+      };
+    }
+    return {
+      summary: title,
+      description: notes || "",
+      start: { date },
+      end: { date },
+    };
+  };
+
   const createEvent = useCallback(
-    async ({ title, date, notes }) => {
+    async (payload) => {
       const res = await authedFetch(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events",
         {
           method: "POST",
-          body: JSON.stringify({
-            summary: title,
-            description: notes || "",
-            start: { date },
-            end: { date },
-          }),
+          body: JSON.stringify(buildEventBody(payload)),
         }
       );
       if (!res.ok) throw new Error("建立行事曆事件失敗");
@@ -111,17 +131,12 @@ export function GoogleAuthProvider({ children }) {
   );
 
   const updateEvent = useCallback(
-    async (eventId, { title, date, notes }) => {
+    async (eventId, payload) => {
       const res = await authedFetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
         {
           method: "PATCH",
-          body: JSON.stringify({
-            summary: title,
-            description: notes || "",
-            start: { date },
-            end: { date },
-          }),
+          body: JSON.stringify(buildEventBody(payload)),
         }
       );
       if (!res.ok) throw new Error("更新行事曆事件失敗");

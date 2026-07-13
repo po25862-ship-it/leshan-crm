@@ -12,6 +12,7 @@ const emptyForm = {
   lastContactDate: todayStr(),
   keyDateLabel: "",
   keyDate: "",
+  keyTime: "",
   notes: "",
   syncToCalendar: false,
   googleEventId: null,
@@ -58,6 +59,7 @@ export default function Cases() {
         const eventPayload = {
           title: `${form.title}・${form.keyDateLabel || "關鍵日期"}`,
           date: form.keyDate,
+          time: form.keyTime || null,
           notes: form.notes,
         };
         if (form.syncToCalendar) {
@@ -183,6 +185,14 @@ export default function Cases() {
                 onChange={(e) => setForm({ ...form, keyDate: e.target.value })}
               />
             </div>
+            <div className="form-field">
+              <label>時間（選填，不填則視為整天事件）</label>
+              <input
+                type="time"
+                value={form.keyTime}
+                onChange={(e) => setForm({ ...form, keyTime: e.target.value })}
+              />
+            </div>
 
             {form.keyDate && (
               <div className="toggle-row" style={{ background:"#FAFAF8", border:"1px solid var(--border)", borderRadius:8, padding:"12px 14px" }}>
@@ -283,6 +293,7 @@ export default function Cases() {
                       <>
                         <br />
                         {item.keyDateLabel}：{formatDate(item.keyDate)}
+                        {item.keyTime && ` ${item.keyTime}`}
                         {item.googleEventId && " 📅"}
                       </>
                     )}

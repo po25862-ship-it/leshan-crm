@@ -112,7 +112,10 @@ export default function Dashboard() {
                   <div className="t1">
                     {c.title}・{c.keyDateLabel}
                   </div>
-                  <div className="t2">{formatDate(c.keyDate)}</div>
+                  <div className="t2">
+                    {formatDate(c.keyDate)}
+                    {c.keyTime && ` ${c.keyTime}`}
+                  </div>
                 </div>
               </div>
             ))}
