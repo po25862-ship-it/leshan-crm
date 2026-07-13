@@ -4,6 +4,8 @@ import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import Cases from "./pages/Cases";
 import Topics from "./pages/Topics";
+import Properties from "./pages/Properties";
+import Needs from "./pages/Needs";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
@@ -25,6 +27,12 @@ function Header() {
         </NavLink>
         <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
           案件
+        </NavLink>
+        <NavLink to="/properties" className={({ isActive }) => (isActive ? "active" : "")}>
+          物件
+        </NavLink>
+        <NavLink to="/needs" className={({ isActive }) => (isActive ? "active" : "")}>
+          客需
         </NavLink>
         <NavLink to="/topics" className={({ isActive }) => (isActive ? "active" : "")}>
           商談事項
@@ -57,6 +65,8 @@ function AppShell() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/contacts" element={<Contacts />} />
         <Route path="/cases" element={<Cases />} />
+        <Route path="/properties" element={<Properties />} />
+        <Route path="/needs" element={<Needs />} />
         <Route path="/topics" element={<Topics />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>

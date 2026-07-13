@@ -5,6 +5,7 @@ import { formatDate, todayStr } from "../lib/dates";
 const emptyForm = {
   title: "",
   contactName: "",
+  propertyId: "",
   propertyTitle: "",
   statusTag: "洽談中",
   lastContactDate: todayStr(),
@@ -15,6 +16,7 @@ const emptyForm = {
 
 export default function Cases() {
   const { items, add, update, remove } = useCollection("cases", "createdAt");
+  const { items: properties } = useCollection("properties", "title");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -83,7 +85,28 @@ export default function Cases() {
               />
             </div>
             <div className="form-field">
-              <label>關聯物件</label>
+              <label>關聯物件（可從物件清單挑選，或留白手動輸入下方名稱）</label>
+              <select
+                value={form.propertyId || ""}
+                onChange={(e) => {
+                  const p = properties.find((x) => x.id === e.target.value);
+                  setForm({
+                    ...form,
+                    propertyId: e.target.value,
+                    propertyTitle: p ? p.title : form.propertyTitle,
+                  });
+                }}
+              >
+                <option value="">— 不連結物件清單 —</option>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label>物件名稱（未從上方選擇時，可手動輸入）</label>
               <input
                 value={form.propertyTitle}
                 onChange={(e) => setForm({ ...form, propertyTitle: e.target.value })}

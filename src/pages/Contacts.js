@@ -2,13 +2,22 @@ import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
 
-const emptyForm = { name: "", phone: "", tags: [], notes: "", lastContactDate: todayStr() };
+const emptyForm = {
+  name: "",
+  phone: "",
+  tags: [],
+  source: "",
+  notes: "",
+  lastContactDate: todayStr(),
+};
 
 export default function Contacts() {
   const { items, add, update, remove } = useCollection("contacts", "name");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [keyword, setKeyword] = useState("");
+  const [tagFilter, setTagFilter] = useState("全部");
 
   const openNew = () => {
     setForm(emptyForm);
@@ -21,6 +30,7 @@ export default function Contacts() {
       name: item.name || "",
       phone: item.phone || "",
       tags: item.tags || [],
+      source: item.source || "",
       notes: item.notes || "",
       lastContactDate: item.lastContactDate || todayStr(),
     });
@@ -54,6 +64,18 @@ export default function Contacts() {
     return db_ - da;
   });
 
+  const filtered = sorted.filter((item) => {
+    if (tagFilter !== "全部" && !(item.tags || []).includes(tagFilter)) return false;
+    if (!keyword.trim()) return true;
+    const k = keyword.trim();
+    return (
+      (item.name || "").includes(k) ||
+      (item.phone || "").includes(k) ||
+      (item.source || "").includes(k) ||
+      (item.notes || "").includes(k)
+    );
+  });
+
   return (
     <main>
       <div className="top-actions">
@@ -63,7 +85,35 @@ export default function Contacts() {
         </button>
       </div>
 
-      {showForm && (
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+        <input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="搜尋姓名、電話、來源、備註…"
+          style={{
+            flex: 1,
+            minWidth: 220,
+            padding: "10px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: 7,
+            fontSize: 14,
+          }}
+        />
+        <select
+          value={tagFilter}
+          onChange={(e) => setTagFilter(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: 7,
+            fontSize: 14,
+          }}
+        >
+          <option value="全部">全部身分</option>
+          <option value="賣方">賣方</option>
+          <option value="買方">買方</option>
+        </select>
+      </div>
         <div className="panel" style={{ marginBottom: 24 }}>
           <form className="form-grid" onSubmit={onSubmit}>
             <div className="form-field">
@@ -103,6 +153,14 @@ export default function Contacts() {
                   買方
                 </label>
               </div>
+            </div>
+            <div className="form-field">
+              <label>客戶來源（自由輸入，例如：FB 粉專、朋友介紹、591…）</label>
+              <input
+                value={form.source}
+                onChange={(e) => setForm({ ...form, source: e.target.value })}
+                placeholder="例如：FB 粉專廣告"
+              />
             </div>
             <div className="form-field">
               <label>最後聯絡日期</label>
@@ -152,13 +210,13 @@ export default function Contacts() {
       )}
 
       <div className="panel">
-        {sorted.length === 0 && (
+        {filtered.length === 0 && (
           <div className="empty-state">
-            <div className="big">還沒有客戶資料</div>
-            點右上角「＋ 新增客戶」開始建檔
+            <div className="big">{items.length === 0 ? "還沒有客戶資料" : "找不到符合的客戶"}</div>
+            {items.length === 0 && "點右上角「＋ 新增客戶」開始建檔"}
           </div>
         )}
-        {sorted.map((item) => {
+        {filtered.map((item) => {
           const days = daysSince(item.lastContactDate);
           return (
             <div className="list-row" key={item.id}>
@@ -170,6 +228,7 @@ export default function Contacts() {
                   {days !== null && (
                     <span className="mono"> （{days} 天前）</span>
                   )}
+                  {item.source && <>　來源：{item.source}</>}
                 </div>
                 <div style={{ marginTop: 6 }}>
                   {(item.tags || []).map((t) => (
