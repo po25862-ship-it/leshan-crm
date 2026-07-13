@@ -227,7 +227,12 @@ export default function Contacts() {
         {filtered.map((item) => {
           const days = daysSince(item.lastContactDate);
           return (
-            <div className="list-row" key={item.id}>
+            <div
+              className="list-row"
+              key={item.id}
+              onClick={() => openEdit(item)}
+              style={{ cursor: "pointer" }}
+            >
               <div>
                 <div className="name">{item.name}</div>
                 <div className="meta">
@@ -247,10 +252,22 @@ export default function Contacts() {
                 </div>
               </div>
               <div className="actions">
-                <button className="btn ghost" onClick={() => logFollowUp(item)}>
+                <button
+                  className="btn ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    logFollowUp(item);
+                  }}
+                >
                   記錄今日跟進
                 </button>
-                <button className="btn ghost" onClick={() => openEdit(item)}>
+                <button
+                  className="btn ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEdit(item);
+                  }}
+                >
                   編輯
                 </button>
               </div>
