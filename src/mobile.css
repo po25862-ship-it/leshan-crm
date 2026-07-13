@@ -84,10 +84,27 @@
 .mobile-shell .list-row .actions{width:100%;display:flex;gap:8px;}
 .mobile-shell .list-row .actions .btn{flex:1;text-align:center;}
 
-.mobile-shell input, .mobile-shell select, .mobile-shell textarea{
+.mobile-shell input:not([type="checkbox"]):not([type="radio"]),
+.mobile-shell select,
+.mobile-shell textarea{
   font-size:16px; /* 避免 iOS 自動放大畫面 */
   border-radius:12px;
   padding:12px 14px;
+}
+.mobile-shell input[type="checkbox"],
+.mobile-shell input[type="radio"]{
+  width:18px;
+  height:18px;
+  flex-shrink:0;
+  padding:0;
+  border-radius:4px;
+  margin:0;
+}
+.mobile-shell .checkbox-row{
+  gap:24px;
+}
+.mobile-shell .checkbox-row label{
+  white-space:nowrap;
 }
 
 .mobile-shell .top-actions{
@@ -105,9 +122,7 @@
   flex:1;text-align:center;font-size:11px;color:#8A8781;text-decoration:none;
   display:flex;flex-direction:column;align-items:center;gap:4px;
 }
-.mobile-bottom-nav a .dot{width:22px;height:22px;border-radius:7px;background:#F1EFEA;}
 .mobile-bottom-nav a.active{color:#E85D3D;font-weight:700;}
-.mobile-bottom-nav a.active .dot{background:#FDE9E3;}
 
 /* 更多頁 */
 .mobile-more-row{

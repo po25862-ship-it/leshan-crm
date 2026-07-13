@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { LayoutDashboard, Users, Briefcase, Building2, MoreHorizontal } from "lucide-react";
 import { useAuth } from "./AuthContext";
 
 export function MobileTopBar() {
@@ -18,19 +19,19 @@ export function MobileBottomNav() {
   return (
     <nav className="mobile-bottom-nav">
       <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-        <div className="dot"></div>總覽
+        <LayoutDashboard size={20} strokeWidth={2.2} />總覽
       </NavLink>
       <NavLink to="/contacts" className={({ isActive }) => (isActive ? "active" : "")}>
-        <div className="dot"></div>客戶
+        <Users size={20} strokeWidth={2.2} />客戶
       </NavLink>
       <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
-        <div className="dot"></div>案件
+        <Briefcase size={20} strokeWidth={2.2} />案件
       </NavLink>
       <NavLink to="/properties" className={({ isActive }) => (isActive ? "active" : "")}>
-        <div className="dot"></div>物件
+        <Building2 size={20} strokeWidth={2.2} />物件
       </NavLink>
       <NavLink to="/more" className={({ isActive }) => (isActive ? "active" : "")}>
-        <div className="dot"></div>更多
+        <MoreHorizontal size={20} strokeWidth={2.2} />更多
       </NavLink>
     </nav>
   );

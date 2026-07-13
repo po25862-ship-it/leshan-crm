@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
+import ContactInteractions from "./ContactInteractions";
 
 const emptyForm = {
   name: "",
@@ -114,7 +115,7 @@ export default function Contacts() {
           <option value="買方">買方</option>
         </select>
       </div>
-        <div className="panel" style={{ marginBottom: 24 }}>
+        <div className="panel" style={{ marginBottom: 24, maxWidth: 640 }}>
           <form className="form-grid" onSubmit={onSubmit}>
             <div className="form-field">
               <label>姓名</label>
@@ -206,6 +207,13 @@ export default function Contacts() {
               )}
             </div>
           </form>
+
+          {editingId && (
+            <ContactInteractions
+              contactId={editingId}
+              onLogged={() => update(editingId, { lastContactDate: todayStr() })}
+            />
+          )}
         </div>
       )}
 
