@@ -409,7 +409,24 @@ export default function Properties() {
             </div>
             <div className="form-field">
               <label>官網點閱網址</label>
-              <input value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  style={{ flex: 1 }}
+                  value={form.websiteUrl}
+                  onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
+                />
+                {form.websiteUrl && (
+                  <a
+                    href={form.websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn ghost"
+                    style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}
+                  >
+                    開啟網頁
+                  </a>
+                )}
+              </div>
             </div>
             <div className="form-field">
               <label>備註</label>
@@ -568,6 +585,17 @@ export default function Properties() {
               </div>
             </div>
             <div className="actions" onClick={(e) => e.stopPropagation()}>
+              {p.websiteUrl && (
+                <a
+                  href={p.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn ghost"
+                  style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+                >
+                  開啟網頁
+                </a>
+              )}
               {viewMode === "active" ? (
                 <button className="btn ghost" onClick={() => markSold(p)}>
                   標記已售出
