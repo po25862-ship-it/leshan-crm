@@ -45,12 +45,16 @@ export default function Dashboard() {
 
   const propertyStatusCounts = useMemo(() => {
     const map = {};
-    properties.forEach((p) => {
-      const tag = p.statusTag || "未標註";
-      map[tag] = (map[tag] || 0) + 1;
-    });
+    properties
+      .filter((p) => !p.sold)
+      .forEach((p) => {
+        const tag = p.category || "未分類";
+        map[tag] = (map[tag] || 0) + 1;
+      });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [properties]);
+
+  const activePropertiesCount = properties.filter((p) => !p.sold).length;
 
   return (
     <main>
@@ -202,7 +206,7 @@ export default function Dashboard() {
 
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
-            物件・共 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{properties.length}</span>
+            物件・在售 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{activePropertiesCount}</span>
           </div>
           <div className="panel">
             {propertyStatusCounts.length === 0 && (

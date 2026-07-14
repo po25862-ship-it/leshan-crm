@@ -140,9 +140,9 @@ export default function Cases() {
                 }}
               >
                 <option value="">— 不連結物件清單 —</option>
-                {properties.map((p) => (
+                {properties.filter((p) => !p.sold).map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.title}
+                    {p.title}{p.address ? `（${p.address}）` : ""}
                   </option>
                 ))}
               </select>
