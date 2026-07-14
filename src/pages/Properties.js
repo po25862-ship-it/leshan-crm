@@ -206,7 +206,7 @@ export default function Properties() {
     );
   });
 
-  // ---- 匯入 Excel ----
+  // ---- 匯入 Excel（智慧更新：用委託書編號比對新增/更新，並標記消失的物件）----
   const handleImportFile = async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
@@ -243,10 +243,6 @@ export default function Properties() {
             websiteUrl: String(r[15] || ""),
             notes: String(r[17] || ""),
             category: cat,
-            status: "active",
-            statusChangedAt: todayStr(),
-            lastPriceChange: null,
-            customFields: [],
           });
         }
       });
@@ -256,31 +252,172 @@ export default function Properties() {
         return;
       }
 
-      if (
-        !window.confirm(
-          `在檔案裡找到 ${rowsToImport.length} 筆物件，確定要全部匯入嗎？\n（重複匯入同一份檔案會產生重複資料，建議只匯入一次）`
-        )
-      ) {
-        return;
-      }
+      const existingByListingNo = {};
+      items.forEach((p) => {
+        if (p.listingNo) existingByListingNo[p.listingNo] = p;
+      });
+
+      const seen = new Set();
+      let newCount = 0;
+      let updateCount = 0;
+      let priceChangedCount = 0;
+      const ops = []; // { ref, data, merge }
+
+      rowsToImport.forEach((row) => {
+        if (!row.listingNo) return;
+        seen.add(row.listingNo);
+        const existing = existingByListingNo[row.listingNo];
+
+        if (!existing) {
+          const newRef = doc(collection(db, "properties"));
+          ops.push({
+            ref: newRef,
+            data: {
+              ...row,
+              status: "active",
+              statusChangedAt: todayStr(),
+              lastPriceChange: null,
+              customFields: [],
+              createdAt: new Date(),
+            },
+            merge: false,
+          });
+          ops.push({
+            ref: doc(collection(db, `properties/${newRef.id}/statusLogs`)),
+            data: { status: "active", date: todayStr(), createdAt: serverTimestamp() },
+            merge: false,
+          });
+          newCount++;
+        } else {
+          // 地址、備註保留你自己在系統裡填寫/修改過的內容，不被 Excel 覆蓋
+          const { address, notes, totalPrice, ...rest } = row;
+          const updates = { ...rest };
+          const priceChanged = totalPrice !== "" && String(totalPrice) !== String(existing.totalPrice);
+          if (priceChanged) {
+            updates.totalPrice = totalPrice;
+            updates.lastPriceChange = { oldPrice: existing.totalPrice, newPrice: totalPrice, date: todayStr() };
+            ops.push({
+              ref: doc(collection(db, `properties/${existing.id}/priceLogs`)),
+              data: { oldPrice: existing.totalPrice, newPrice: totalPrice, date: todayStr(), createdAt: serverTimestamp() },
+              merge: false,
+            });
+            priceChangedCount++;
+          }
+          ops.push({ ref: doc(db, "properties", existing.id), data: updates, merge: true });
+          updateCount++;
+        }
+      });
+
+      // 這次 Excel 沒出現、但資料庫裡還標記「在售」的物件，自動標為「暫時不賣」
+      const missing = items.filter(
+        (p) => p.listingNo && !seen.has(p.listingNo) && (p.status || "active") === "active"
+      );
+      missing.forEach((p) => {
+        ops.push({
+          ref: doc(db, "properties", p.id),
+          data: { status: "onHold", statusChangedAt: todayStr() },
+          merge: true,
+        });
+        ops.push({
+          ref: doc(collection(db, `properties/${p.id}/statusLogs`)),
+          data: {
+            status: "onHold",
+            date: todayStr(),
+            note: "Excel 更新後未再出現，系統自動標記",
+            createdAt: serverTimestamp(),
+          },
+          merge: false,
+        });
+      });
+
+      const confirmMsg =
+        `這次匯入：\n新增 ${newCount} 筆\n更新 ${updateCount} 筆（其中 ${priceChangedCount} 筆總價異動）\n` +
+        `${missing.length} 筆物件這次沒出現在檔案裡，將自動標記為「暫時不賣」\n\n` +
+        `地址與備註不會被覆蓋，會保留你在系統裡填寫的內容。確定要繼續嗎？`;
+      if (!window.confirm(confirmMsg)) return;
 
       setImporting(true);
-      const CHUNK = 400;
-      for (let i = 0; i < rowsToImport.length; i += CHUNK) {
+      const CHUNK = 450;
+      for (let i = 0; i < ops.length; i += CHUNK) {
         const batch = writeBatch(db);
-        rowsToImport.slice(i, i + CHUNK).forEach((data) => {
-          const docRef = doc(collection(db, "properties"));
-          batch.set(docRef, { ...data, createdAt: new Date() });
+        ops.slice(i, i + CHUNK).forEach((op) => {
+          if (op.merge) batch.set(op.ref, op.data, { merge: true });
+          else batch.set(op.ref, op.data);
         });
         await batch.commit();
       }
       setImporting(false);
-      alert(`匯入完成，共新增 ${rowsToImport.length} 筆物件。`);
+      alert(
+        `匯入完成：新增 ${newCount} 筆、更新 ${updateCount} 筆（${priceChangedCount} 筆調價）、自動標記暫時不賣 ${missing.length} 筆。`
+      );
     } catch (err) {
       console.error(err);
       setImporting(false);
       alert("匯入失敗，請確認檔案格式是否跟範本一致。");
     }
+  };
+
+  // ---- 匯出 Excel（維持原始檔案的分頁與欄位格式）----
+  const handleExport = () => {
+    const exportItems = items.filter((p) => (p.status || "active") === "active");
+
+    const HEADER = [
+      "店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向",
+      "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名",
+      "官網點閱網址", "詳細資料表", "備註",
+    ];
+
+    const wb = XLSX.utils.book_new();
+
+    // 索引總覽（維持原始格式）
+    const indexRows = [
+      ["物件查詢總表 - 索引", null, null],
+      [null, null, null],
+      ["類別", "筆數", "涵蓋店別"],
+    ];
+    let total = 0;
+    CATEGORIES.forEach((cat) => {
+      const rowsInCat = exportItems.filter((p) => (p.category || "") === cat);
+      const stores = [...new Set(rowsInCat.map((p) => p.store).filter(Boolean))];
+      indexRows.push([cat, rowsInCat.length, stores.join("、")]);
+      total += rowsInCat.length;
+    });
+    indexRows.push([null, null, null]);
+    indexRows.push(["總計", total, null]);
+    const indexSheet = XLSX.utils.aoa_to_sheet(indexRows);
+    XLSX.utils.book_append_sheet(wb, indexSheet, "索引總覽");
+
+    // 15 個分類分頁
+    CATEGORIES.forEach((cat) => {
+      const rowsInCat = exportItems.filter((p) => (p.category || "") === cat);
+      const aoa = [HEADER];
+      rowsInCat.forEach((p) => {
+        aoa.push([
+          p.store || "",
+          p.listingNo || "",
+          p.title || "",
+          p.address || "",
+          p.landPing ?? "",
+          p.titlePing ?? "",
+          p.floor || "",
+          p.orientation || "",
+          p.age || "",
+          p.layout || "",
+          p.parkingCount ?? "",
+          p.totalPrice ?? "",
+          p.occupancy || "",
+          p.laneWidth || "",
+          p.agentInfo || "",
+          p.websiteUrl || "",
+          "",
+          p.notes || "",
+        ]);
+      });
+      const sheet = XLSX.utils.aoa_to_sheet(aoa);
+      XLSX.utils.book_append_sheet(wb, sheet, cat);
+    });
+
+    XLSX.writeFile(wb, `物件總表_匯出_${todayStr()}.xlsx`);
   };
 
   const fieldStyle2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
@@ -293,8 +430,11 @@ export default function Properties() {
           物件（{pool.length}）
         </div>
         <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn ghost" onClick={handleExport}>
+            匯出 Excel
+          </button>
           <label className="btn ghost" style={{ cursor: "pointer" }}>
-            {importing ? "匯入中…" : "匯入 Excel"}
+            {importing ? "處理中…" : "匯入／更新 Excel"}
             <input
               type="file"
               accept=".xlsx,.xls"
