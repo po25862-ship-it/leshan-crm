@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { writeBatch, doc, collection } from "firebase/firestore";
+import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
+import { todayStr } from "../lib/dates";
+import PropertyHistory from "./PropertyHistory";
 
 const CATEGORIES = [
   "公寓", "電梯大樓", "套房", "別墅", "透天厝", "建地", "店面",
@@ -11,6 +13,9 @@ const CATEGORIES = [
 ];
 
 const STORES = ["長庚直營店", "長庚捷運直營店", "文青捷運直營店", "捷運樂善直營店"];
+
+const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
+const STATUS_ORDER = ["active", "onHold", "sold"];
 
 const emptyForm = {
   store: STORES[3],
@@ -31,7 +36,9 @@ const emptyForm = {
   websiteUrl: "",
   notes: "",
   category: CATEGORIES[0],
-  sold: false,
+  status: "active",
+  statusChangedAt: todayStr(),
+  lastPriceChange: null,
   sheetFileUrl: null,
   sheetFileName: null,
   sheetFileType: null,
@@ -43,21 +50,27 @@ export default function Properties() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [originalTotalPrice, setOriginalTotalPrice] = useState(null);
   const [keyword, setKeyword] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [layoutKeyword, setLayoutKeyword] = useState("");
   const [activeCategory, setActiveCategory] = useState("全部");
-  const [viewMode, setViewMode] = useState("active"); // active | sold
+  const [viewMode, setViewMode] = useState("active"); // active | onHold | sold
   const [importing, setImporting] = useState(false);
   const [uploadingSheet, setUploadingSheet] = useState(false);
 
   const openNew = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setOriginalTotalPrice(null);
     setShowForm(true);
   };
 
   const openEdit = (item) => {
     setForm({ ...emptyForm, ...item, customFields: item.customFields || [] });
     setEditingId(item.id);
+    setOriginalTotalPrice(item.totalPrice);
     setShowForm(true);
   };
 
@@ -75,20 +88,54 @@ export default function Properties() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
+
     if (editingId) {
-      await update(editingId, form);
+      const priceChanged =
+        form.totalPrice !== "" &&
+        String(form.totalPrice) !== String(originalTotalPrice) &&
+        originalTotalPrice !== null &&
+        originalTotalPrice !== "";
+      const updates = { ...form };
+      if (priceChanged) {
+        updates.lastPriceChange = {
+          oldPrice: originalTotalPrice,
+          newPrice: form.totalPrice,
+          date: todayStr(),
+        };
+      }
+      await update(editingId, updates);
+      if (priceChanged) {
+        await addDoc(collection(db, `properties/${editingId}/priceLogs`), {
+          oldPrice: originalTotalPrice,
+          newPrice: form.totalPrice,
+          date: todayStr(),
+          createdAt: serverTimestamp(),
+        });
+      }
     } else {
-      await add(form);
+      const ref2 = await add(form);
+      await addDoc(collection(db, `properties/${ref2.id}/statusLogs`), {
+        status: form.status,
+        date: todayStr(),
+        createdAt: serverTimestamp(),
+      });
     }
     setShowForm(false);
   };
 
-  const markSold = async (item) => {
-    await update(item.id, { sold: true });
+  const changeStatus = async (item, newStatus) => {
+    const dateStr = todayStr();
+    await update(item.id, { status: newStatus, statusChangedAt: dateStr });
+    await addDoc(collection(db, `properties/${item.id}/statusLogs`), {
+      status: newStatus,
+      date: dateStr,
+      createdAt: serverTimestamp(),
+    });
+    if (editingId === item.id) {
+      setForm((f) => ({ ...f, status: newStatus, statusChangedAt: dateStr }));
+    }
   };
-  const restoreSold = async (item) => {
-    await update(item.id, { sold: false });
-  };
+
   const deleteForever = async (item) => {
     if (window.confirm(`確定要永久刪除「${item.title}」嗎？此動作無法復原。`)) {
       await remove(item.id);
@@ -122,27 +169,33 @@ export default function Properties() {
       const ext = form.sheetFileName ? form.sheetFileName.split(".").pop() : "";
       await deleteObject(ref(storage, `properties/${editingId}/sheet.${ext}`));
     } catch {
-      // 檔案本體刪不掉也不擋，至少把資料庫的參照清掉
+      // 檔案本體刪不掉也不擋
     }
     await update(editingId, { sheetFileUrl: null, sheetFileName: null, sheetFileType: null });
     setForm((f) => ({ ...f, sheetFileUrl: null, sheetFileName: null, sheetFileType: null }));
   };
 
-  // ---- 分類統計（比照 Excel 索引總覽）----
-  const activeItems = items.filter((p) => !p.sold);
-  const soldItems = items.filter((p) => p.sold);
+  // ---- 分類與狀態統計 ----
+  const byStatus = (s) => items.filter((p) => (p.status || "active") === s);
+  const activeItems = byStatus("active");
+  const onHoldItems = byStatus("onHold");
+  const soldItems = byStatus("sold");
+  const pool = viewMode === "active" ? activeItems : viewMode === "onHold" ? onHoldItems : soldItems;
+
   const categoryCounts = useMemo(() => {
     const map = {};
-    activeItems.forEach((p) => {
+    pool.forEach((p) => {
       const c = p.category || "未分類";
       map[c] = (map[c] || 0) + 1;
     });
     return map;
-  }, [activeItems]);
+  }, [pool]);
 
-  const pool = viewMode === "active" ? activeItems : soldItems;
   const filtered = pool.filter((p) => {
     if (activeCategory !== "全部" && (p.category || "未分類") !== activeCategory) return false;
+    if (minPrice && Number(p.totalPrice || 0) < Number(minPrice)) return false;
+    if (maxPrice && Number(p.totalPrice || 0) > Number(maxPrice)) return false;
+    if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
     if (!keyword.trim()) return true;
     const k = keyword.trim();
     return (
@@ -156,7 +209,7 @@ export default function Properties() {
   // ---- 匯入 Excel ----
   const handleImportFile = async (e) => {
     const file = e.target.files[0];
-    e.target.value = ""; // 允許重複選同一檔案
+    e.target.value = "";
     if (!file) return;
 
     try {
@@ -170,7 +223,7 @@ export default function Properties() {
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
-          if (!r || !r[1]) continue; // 沒有委託書編號就跳過（通常代表空列）
+          if (!r || !r[1]) continue;
           rowsToImport.push({
             store: String(r[0] || ""),
             listingNo: String(r[1] || ""),
@@ -190,7 +243,9 @@ export default function Properties() {
             websiteUrl: String(r[15] || ""),
             notes: String(r[17] || ""),
             category: cat,
-            sold: false,
+            status: "active",
+            statusChangedAt: todayStr(),
+            lastPriceChange: null,
             customFields: [],
           });
         }
@@ -214,8 +269,8 @@ export default function Properties() {
       for (let i = 0; i < rowsToImport.length; i += CHUNK) {
         const batch = writeBatch(db);
         rowsToImport.slice(i, i + CHUNK).forEach((data) => {
-          const ref = doc(collection(db, "properties"));
-          batch.set(ref, { ...data, createdAt: new Date() });
+          const docRef = doc(collection(db, "properties"));
+          batch.set(docRef, { ...data, createdAt: new Date() });
         });
         await batch.commit();
       }
@@ -235,7 +290,7 @@ export default function Properties() {
     <main>
       <div className="top-actions">
         <div className="section-title">
-          物件（{viewMode === "active" ? activeItems.length : soldItems.length}）
+          物件（{pool.length}）
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <label className="btn ghost" style={{ cursor: "pointer" }}>
@@ -254,78 +309,89 @@ export default function Properties() {
         </div>
       </div>
 
-      {/* 在售／已售出 切換 */}
+      {/* 狀態切換 */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button
-          className={viewMode === "active" ? "btn" : "btn ghost"}
-          onClick={() => setViewMode("active")}
-        >
+        <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => setViewMode("active")}>
           在售（{activeItems.length}）
         </button>
-        <button
-          className={viewMode === "sold" ? "btn" : "btn ghost"}
-          onClick={() => setViewMode("sold")}
-        >
+        <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => setViewMode("onHold")}>
+          暫時不賣（{onHoldItems.length}）
+        </button>
+        <button className={viewMode === "sold" ? "btn" : "btn ghost"} onClick={() => setViewMode("sold")}>
           已售出（{soldItems.length}）
         </button>
       </div>
 
-      {/* 分類篩選（比照 Excel 索引總覽的分類） */}
-      {viewMode === "active" && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+      {/* 分類篩選 */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+        <button
+          style={{
+            cursor: "pointer", border: "none", borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700,
+            background: activeCategory === "全部" ? "var(--accent)" : "var(--accent-soft)",
+            color: activeCategory === "全部" ? "#fff" : "var(--accent)",
+          }}
+          onClick={() => setActiveCategory("全部")}
+        >
+          全部（{pool.length}）
+        </button>
+        {CATEGORIES.map((c) => (
           <button
-            className={activeCategory === "全部" ? "tag" : "tag"}
+            key={c}
             style={{
-              cursor: "pointer",
-              border: "none",
-              background: activeCategory === "全部" ? "var(--accent)" : "var(--accent-soft)",
-              color: activeCategory === "全部" ? "#fff" : "var(--accent)",
+              cursor: "pointer", border: "none", borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700,
+              background: activeCategory === c ? "var(--accent)" : "var(--accent-soft)",
+              color: activeCategory === c ? "#fff" : "var(--accent)",
             }}
-            onClick={() => setActiveCategory("全部")}
+            onClick={() => setActiveCategory(c)}
           >
-            全部（{activeItems.length}）
+            {c}（{categoryCounts[c] || 0}）
           </button>
-          {CATEGORIES.map((c) => (
-            <button
-              key={c}
-              style={{
-                cursor: "pointer",
-                border: "none",
-                borderRadius: 20,
-                padding: "2px 10px",
-                fontSize: 10,
-                fontWeight: 700,
-                background: activeCategory === c ? "var(--accent)" : "var(--accent-soft)",
-                color: activeCategory === c ? "#fff" : "var(--accent)",
-              }}
-              onClick={() => setActiveCategory(c)}
-            >
-              {c}（{categoryCounts[c] || 0}）
-            </button>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
 
-      <div style={{ marginBottom: 18 }}>
+      {/* 搜尋與篩選 */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="搜尋案名、地址、委託書編號、店名…"
-          style={{
-            width: "100%",
-            maxWidth: 360,
-            padding: "10px 12px",
-            border: "1px solid var(--border)",
-            borderRadius: 7,
-            fontSize: 14,
-          }}
+          style={{ flex: 1, minWidth: 220, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        />
+        <input
+          value={minPrice}
+          onChange={(e) => setMinPrice(e.target.value)}
+          placeholder="最低總價(萬)"
+          type="number"
+          style={{ width: 130, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        />
+        <input
+          value={maxPrice}
+          onChange={(e) => setMaxPrice(e.target.value)}
+          placeholder="最高總價(萬)"
+          type="number"
+          style={{ width: 130, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        />
+        <input
+          value={layoutKeyword}
+          onChange={(e) => setLayoutKeyword(e.target.value)}
+          placeholder="格局包含（例如：3）"
+          style={{ width: 160, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
         />
       </div>
 
       {showForm && (
-        <div className="panel" style={{ marginBottom: 24, maxWidth: 720 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: editingId ? "minmax(320px, 720px) 1fr" : "minmax(320px, 720px)",
+            gap: 24,
+            marginBottom: 24,
+            alignItems: "start",
+          }}
+        >
+          <div className="panel">
           <form className="form-grid" onSubmit={onSubmit}>
-            <div style={fieldStyle2}>
+            <div style={fieldStyle3}>
               <div className="form-field">
                 <label>店名</label>
                 <select value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })}>
@@ -341,6 +407,22 @@ export default function Properties() {
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+              </div>
+              <div className="form-field">
+                <label>狀態</label>
+                {editingId ? (
+                  <select value={form.status} onChange={(e) => changeStatus({ id: editingId }, e.target.value)}>
+                    {STATUS_ORDER.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    {STATUS_ORDER.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -392,6 +474,11 @@ export default function Properties() {
               <div className="form-field">
                 <label>總價（萬）</label>
                 <input value={form.totalPrice} onChange={(e) => setForm({ ...form, totalPrice: e.target.value })} />
+                {editingId && originalTotalPrice !== null && String(originalTotalPrice) !== String(form.totalPrice) && form.totalPrice !== "" && (
+                  <div style={{ fontSize: 11, color: "var(--brass)", marginTop: 4 }}>
+                    儲存後會記錄：{originalTotalPrice} 萬 → {form.totalPrice} 萬
+                  </div>
+                )}
               </div>
               <div className="form-field">
                 <label>空／自</label>
@@ -416,13 +503,7 @@ export default function Properties() {
                   onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
                 />
                 {form.websiteUrl && (
-                  <a
-                    href={form.websiteUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn ghost"
-                    style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}
-                  >
+                  <a href={form.websiteUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                     開啟網頁
                   </a>
                 )}
@@ -445,22 +526,12 @@ export default function Properties() {
                   {form.sheetFileUrl && (
                     <div style={{ marginBottom: 10 }}>
                       {form.sheetFileType && form.sheetFileType.startsWith("image/") ? (
-                        <img
-                          src={form.sheetFileUrl}
-                          alt="物件資料表"
-                          style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }}
-                        />
+                        <img src={form.sheetFileUrl} alt="物件資料表" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }} />
                       ) : (
                         <div style={{ fontSize: 13, marginBottom: 8 }}>📄 {form.sheetFileName}</div>
                       )}
                       <div style={{ display: "flex", gap: 8 }}>
-                        <a
-                          href={form.sheetFileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn ghost"
-                          style={{ textDecoration: "none", display: "inline-block" }}
-                        >
+                        <a href={form.sheetFileUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                           開啟／下載
                         </a>
                         <button type="button" className="btn ghost" onClick={removeSheet}>
@@ -471,98 +542,50 @@ export default function Properties() {
                   )}
                   <label className="btn ghost" style={{ cursor: "pointer", display: "inline-block" }}>
                     {uploadingSheet ? "上傳中…" : form.sheetFileUrl ? "重新上傳" : "上傳資料表"}
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={handleSheetUpload}
-                      style={{ display: "none" }}
-                      disabled={uploadingSheet}
-                    />
+                    <input type="file" accept=".pdf,image/*" onChange={handleSheetUpload} style={{ display: "none" }} disabled={uploadingSheet} />
                   </label>
                 </>
               )}
             </div>
 
             <div className="form-field">
-              <label>自訂欄位（需要記錄其他資訊時，自己加欄位）</label>
+              <label>自訂欄位</label>
               {form.customFields.map((f, idx) => (
                 <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <input
-                    value={f.label}
-                    onChange={(e) => updateCustomField(idx, "label", e.target.value)}
-                    placeholder="欄位名稱"
-                    style={{ flex: 1 }}
-                  />
-                  <input
-                    value={f.value}
-                    onChange={(e) => updateCustomField(idx, "value", e.target.value)}
-                    placeholder="內容"
-                    style={{ flex: 1 }}
-                  />
-                  <button type="button" className="btn ghost" onClick={() => removeCustomField(idx)}>
-                    刪除
-                  </button>
+                  <input value={f.label} onChange={(e) => updateCustomField(idx, "label", e.target.value)} placeholder="欄位名稱" style={{ flex: 1 }} />
+                  <input value={f.value} onChange={(e) => updateCustomField(idx, "value", e.target.value)} placeholder="內容" style={{ flex: 1 }} />
+                  <button type="button" className="btn ghost" onClick={() => removeCustomField(idx)}>刪除</button>
                 </div>
               ))}
-              <button type="button" className="btn ghost" onClick={addCustomField}>
-                ＋ 新增自訂欄位
-              </button>
+              <button type="button" className="btn ghost" onClick={addCustomField}>＋ 新增自訂欄位</button>
             </div>
 
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn" type="submit">
                 {editingId ? "儲存變更" : "新增物件"}
               </button>
-              <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>
-                取消
-              </button>
-              {editingId && !form.sold && (
-                <button
-                  className="btn ghost"
-                  type="button"
-                  onClick={async () => {
-                    await markSold({ id: editingId });
-                    setShowForm(false);
-                  }}
-                >
-                  標記為已售出
-                </button>
-              )}
-              {editingId && form.sold && (
-                <button
-                  className="btn ghost"
-                  type="button"
-                  onClick={async () => {
-                    await restoreSold({ id: editingId });
-                    setShowForm(false);
-                  }}
-                >
-                  復原為在售
-                </button>
-              )}
+              <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
               {editingId && (
-                <button
-                  className="btn danger"
-                  type="button"
-                  onClick={async () => {
-                    await deleteForever({ id: editingId, title: form.title });
-                    setShowForm(false);
-                  }}
-                >
+                <button className="btn danger" type="button" onClick={async () => { await deleteForever({ id: editingId, title: form.title }); setShowForm(false); }}>
                   永久刪除
                 </button>
               )}
             </div>
           </form>
+          </div>
+
+          {editingId && (
+            <div className="panel">
+              <PropertyHistory propertyId={editingId} createdAt={form.createdAt} />
+            </div>
+          )}
         </div>
       )}
 
       <div className="panel">
         {filtered.length === 0 && (
           <div className="empty-state">
-            <div className="big">
-              {items.length === 0 ? "還沒有物件資料" : "找不到符合的物件"}
-            </div>
+            <div className="big">{items.length === 0 ? "還沒有物件資料" : "找不到符合的物件"}</div>
             {items.length === 0 && "點右上角「＋ 新增物件」開始建檔，或用「匯入 Excel」批次匯入"}
           </div>
         )}
@@ -577,37 +600,34 @@ export default function Properties() {
                 {p.store}　{p.listingNo}　{p.address}
               </div>
               <div className="meta">
-                {p.floor && <>{p.floor}　</>}
-                {p.layout && <>{p.layout}　</>}
-                {p.titlePing && <>{p.titlePing} 坪　</>}
-                {p.totalPrice && <>總價 {p.totalPrice} 萬　</>}
-                {p.occupancy && <>{p.occupancy}</>}
+                {Boolean(p.floor) && <>{p.floor}　</>}
+                {Boolean(p.layout) && <>{p.layout}　</>}
+                {Boolean(p.titlePing) && <>{p.titlePing} 坪　</>}
+                {Boolean(p.totalPrice) && <>總價 {p.totalPrice} 萬　</>}
+                {Boolean(p.occupancy) && <>{p.occupancy}</>}
               </div>
+              {p.lastPriceChange && (
+                <div className="meta" style={{ color: "var(--brass)" }}>
+                  💰 已調整：{p.lastPriceChange.oldPrice} 萬 → {p.lastPriceChange.newPrice} 萬（{p.lastPriceChange.date}）
+                </div>
+              )}
             </div>
             <div className="actions" onClick={(e) => e.stopPropagation()}>
               {p.websiteUrl && (
-                <a
-                  href={p.websiteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn ghost"
-                  style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
-                >
+                <a href={p.websiteUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   開啟網頁
                 </a>
               )}
-              {viewMode === "active" ? (
-                <button className="btn ghost" onClick={() => markSold(p)}>
-                  標記已售出
-                </button>
-              ) : (
-                <button className="btn ghost" onClick={() => restoreSold(p)}>
-                  復原在售
-                </button>
-              )}
-              <button className="btn ghost" onClick={() => openEdit(p)}>
-                編輯
-              </button>
+              <select
+                value={p.status || "active"}
+                onChange={(e) => changeStatus(p, e.target.value)}
+                style={{ padding: "8px 10px", fontSize: 12 }}
+              >
+                {STATUS_ORDER.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+              <button className="btn ghost" onClick={() => openEdit(p)}>編輯</button>
             </div>
           </div>
         ))}

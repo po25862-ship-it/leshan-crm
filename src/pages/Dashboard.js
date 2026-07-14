@@ -46,7 +46,7 @@ export default function Dashboard() {
   const propertyStatusCounts = useMemo(() => {
     const map = {};
     properties
-      .filter((p) => !p.sold)
+      .filter((p) => (p.status || "active") !== "sold")
       .forEach((p) => {
         const tag = p.category || "未分類";
         map[tag] = (map[tag] || 0) + 1;
@@ -54,7 +54,7 @@ export default function Dashboard() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [properties]);
 
-  const activePropertiesCount = properties.filter((p) => !p.sold).length;
+  const activePropertiesCount = properties.filter((p) => (p.status || "active") !== "sold").length;
 
   return (
     <main>
