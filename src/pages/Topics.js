@@ -1,21 +1,39 @@
 import React, { useState, useMemo } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
+import { useGoogleAuth } from "../GoogleAuthContext";
 
 const emptyForm = { title: "", counterpart: "", statusTag: "進行中", notes: "" };
 
-function TopicLogs({ topicId }) {
+function TopicLogs({ topicId, topicTitle }) {
   const { items: logs, add, remove } = useCollection(`topics/${topicId}/logs`, "date");
+  const { isConnected, createEvent } = useGoogleAuth();
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState("");
+  const [syncToCalendar, setSyncToCalendar] = useState(false);
 
   const sorted = [...logs].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   const onAdd = async (e) => {
     e.preventDefault();
     if (!note.trim()) return;
-    await add({ date, note });
+    const docData = { date, note, googleEventId: null, googleEventLink: null };
+    if (syncToCalendar && isConnected) {
+      try {
+        const created = await createEvent({
+          title: `商談・${topicTitle || ""}`,
+          date,
+          notes: note,
+        });
+        docData.googleEventId = created.id;
+        docData.googleEventLink = created.htmlLink;
+      } catch (err) {
+        console.error("Google 行事曆同步失敗", err);
+      }
+    }
+    await add(docData);
     setNote("");
+    setSyncToCalendar(false);
   };
 
   return (
@@ -50,6 +68,12 @@ function TopicLogs({ topicId }) {
           新增紀錄
         </button>
       </form>
+      {isConnected && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginTop: -8, marginBottom: 16, cursor: "pointer" }}>
+          <input type="checkbox" checked={syncToCalendar} onChange={(e) => setSyncToCalendar(e.target.checked)} />
+          這筆紀錄同步到 Google 行事曆
+        </label>
+      )}
 
       {sorted.length === 0 && (
         <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有討論紀錄</div>
@@ -67,7 +91,14 @@ function TopicLogs({ topicId }) {
           <div className="mono" style={{ fontSize: 12, color: "var(--muted)", width: 56, flexShrink: 0 }}>
             {formatDate(log.date)}
           </div>
-          <div style={{ fontSize: 13, flex: 1 }}>{log.note}</div>
+          <div style={{ fontSize: 13, flex: 1 }}>
+            {log.note}
+            {log.googleEventLink && (
+              <div>
+                <a href={log.googleEventLink} target="_blank" rel="noreferrer" style={{ fontSize: 11 }}>📅 在行事曆開啟</a>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => remove(log.id)}
             style={{
@@ -194,7 +225,7 @@ export default function Topics() {
             </div>
           </form>
 
-          {editingId && <TopicLogs topicId={editingId} />}
+          {editingId && <TopicLogs topicId={editingId} topicTitle={form.title} />}
         </div>
       )}
 

@@ -87,6 +87,10 @@ export default function Dashboard() {
           <div className="value">{trackingCases.length}</div>
         </div>
         <div className="panel kpi">
+          <div className="label">成交案件</div>
+          <div className="value">{closedCases.length}</div>
+        </div>
+        <div className="panel kpi">
           <div className="label">近 14 天里程碑</div>
           <div className="value">{upcomingMilestones.length}</div>
         </div>

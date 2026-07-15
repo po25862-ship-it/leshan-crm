@@ -155,6 +155,25 @@ export function GoogleAuthProvider({ children }) {
     [authedFetch]
   );
 
+  const listEvents = useCallback(
+    async (timeMinISO, timeMaxISO) => {
+      const params = new URLSearchParams({
+        timeMin: timeMinISO,
+        timeMax: timeMaxISO,
+        singleEvents: "true",
+        orderBy: "startTime",
+        maxResults: "250",
+      });
+      const res = await authedFetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`
+      );
+      if (!res.ok) throw new Error("讀取行事曆失敗");
+      const data = await res.json();
+      return data.items || [];
+    },
+    [authedFetch]
+  );
+
   return (
     <GoogleAuthContext.Provider
       value={{
@@ -165,6 +184,7 @@ export function GoogleAuthProvider({ children }) {
         createEvent,
         updateEvent,
         deleteEvent,
+        listEvents,
         gsiReady,
       }}
     >

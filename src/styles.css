@@ -31,7 +31,7 @@ a{color:inherit;}
 
 main{padding:28px 32px 60px;max-width:1320px;margin:0 auto;}
 
-.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:28px;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px;margin-bottom:28px;}
 .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;}
 .kpi .label{font-size:13px;color:var(--muted);margin-bottom:8px;}
 .kpi .value{font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:500;}

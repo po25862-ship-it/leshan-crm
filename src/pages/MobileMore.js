@@ -8,6 +8,9 @@ export default function MobileMore() {
   return (
     <main>
       <div className="section-title">更多</div>
+      <Link to="/calendar" className="mobile-more-row">
+        行事曆 <span className="arrow">›</span>
+      </Link>
       <Link to="/needs" className="mobile-more-row">
         客需 <span className="arrow">›</span>
       </Link>

@@ -99,6 +99,9 @@ export default function Properties() {
     setEditingId(item.id);
     setOriginalTotalPrice(item.totalPrice);
     setShowForm(true);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   };
 
   const addCustomField = () => {
@@ -482,13 +485,13 @@ export default function Properties() {
 
       {/* 狀態切換 */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => setViewMode("active")}>
+        <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => { setViewMode("active"); setShowForm(false); }}>
           在售（{activeItems.length}）
         </button>
-        <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => setViewMode("onHold")}>
+        <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("onHold"); setShowForm(false); }}>
           暫時不賣（{onHoldItems.length}）
         </button>
-        <button className={viewMode === "sold" ? "btn" : "btn ghost"} onClick={() => setViewMode("sold")}>
+        <button className={viewMode === "sold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("sold"); setShowForm(false); }}>
           已售出（{soldItems.length}）
         </button>
       </div>
@@ -501,7 +504,7 @@ export default function Properties() {
             background: activeCategory === "全部" ? "var(--accent)" : "var(--accent-soft)",
             color: activeCategory === "全部" ? "#fff" : "var(--accent)",
           }}
-          onClick={() => setActiveCategory("全部")}
+          onClick={() => { setActiveCategory("全部"); setShowForm(false); }}
         >
           全部（{pool.length}）
         </button>
@@ -513,7 +516,7 @@ export default function Properties() {
               background: activeCategory === c ? "var(--accent)" : "var(--accent-soft)",
               color: activeCategory === c ? "#fff" : "var(--accent)",
             }}
-            onClick={() => setActiveCategory(c)}
+            onClick={() => { setActiveCategory(c); setShowForm(false); }}
           >
             {c}（{categoryCounts[c] || 0}）
           </button>

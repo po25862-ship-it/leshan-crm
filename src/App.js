@@ -7,6 +7,7 @@ import Topics from "./pages/Topics";
 import Properties from "./pages/Properties";
 import Needs from "./pages/Needs";
 import Settings from "./pages/Settings";
+import CalendarPage from "./pages/Calendar";
 import MobileMore from "./pages/MobileMore";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
@@ -45,6 +46,9 @@ function DesktopHeader() {
         <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
           設定
         </NavLink>
+        <NavLink to="/calendar" className={({ isActive }) => (isActive ? "active" : "")}>
+          行事曆
+        </NavLink>
         <button className="btn ghost" onClick={logout} style={{ marginLeft: 8 }}>
           登出
         </button>
@@ -63,6 +67,7 @@ function AppRoutes() {
       <Route path="/needs" element={<Needs />} />
       <Route path="/topics" element={<Topics />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/calendar" element={<CalendarPage />} />
       <Route path="/more" element={<MobileMore />} />
     </Routes>
   );

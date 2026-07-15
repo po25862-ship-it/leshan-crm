@@ -228,6 +228,7 @@ export default function Contacts() {
               <div className="panel">
                 <ContactInteractions
                   contactId={editingId}
+                  contactName={form.name}
                   onLogged={() => update(editingId, { lastContactDate: todayStr() })}
                 />
               </div>

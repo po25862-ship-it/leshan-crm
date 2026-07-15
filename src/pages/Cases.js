@@ -16,18 +16,19 @@ function timingBucket(dateStr) {
   return "更晚";
 }
 
-function nextMilestone(item) {
+function nextMilestoneInfo(item) {
   const list = item.milestones || [];
   const undone = list.filter((m) => !m.done);
-  if (list.length === 0) return "未設定里程碑";
-  if (undone.length === 0) return "已完成";
+  if (list.length === 0) return { label: "未設定里程碑", milestone: null };
+  if (undone.length === 0) return { label: "已完成", milestone: null };
   const sorted = [...undone].sort((a, b) => {
     if (!a.date && !b.date) return 0;
     if (!a.date) return 1;
     if (!b.date) return -1;
     return a.date < b.date ? -1 : 1;
   });
-  return sorted[0].label || "未命名里程碑";
+  const m = sorted[0];
+  return { label: m.label || "未命名里程碑", milestone: m };
 }
 
 const emptyTrackingForm = {
@@ -40,6 +41,9 @@ const emptyTrackingForm = {
   agentName: "",
   nextContactDate: "",
   nextContactContent: "",
+  nextContactSyncToCalendar: false,
+  nextContactGoogleEventId: null,
+  nextContactGoogleEventLink: null,
   notes: "",
 };
 
@@ -146,6 +150,33 @@ export default function Cases() {
       setSyncing(false);
     }
 
+    if (form.type === "tracking" && isConnected && form.nextContactDate) {
+      setSyncing(true);
+      const payload = {
+        title: `${form.title}・下次聯絡`,
+        date: form.nextContactDate,
+        notes: form.nextContactContent,
+      };
+      try {
+        if (form.nextContactSyncToCalendar) {
+          if (form.nextContactGoogleEventId) {
+            await updateEvent(form.nextContactGoogleEventId, payload);
+          } else {
+            const created = await createEvent(payload);
+            workingForm.nextContactGoogleEventId = created.id;
+            workingForm.nextContactGoogleEventLink = created.htmlLink;
+          }
+        } else if (form.nextContactGoogleEventId) {
+          await deleteEvent(form.nextContactGoogleEventId);
+          workingForm.nextContactGoogleEventId = null;
+          workingForm.nextContactGoogleEventLink = null;
+        }
+      } catch (err) {
+        console.error("Google 行事曆同步失敗", err);
+      }
+      setSyncing(false);
+    }
+
     if (editingId) {
       await update(editingId, workingForm);
     } else {
@@ -165,6 +196,13 @@ export default function Cases() {
             // 行事曆刪不掉也不擋
           }
         }
+      }
+    }
+    if (form.type === "tracking" && form.nextContactGoogleEventId) {
+      try {
+        await deleteEvent(form.nextContactGoogleEventId);
+      } catch {
+        // 行事曆刪不掉也不擋
       }
     }
     await remove(editingId);
@@ -192,7 +230,7 @@ export default function Cases() {
       }
     } else {
       list.forEach((item) => {
-        const key = nextMilestone(item);
+        const key = nextMilestoneInfo(item).label;
         if (!map[key]) map[key] = [];
         map[key].push(item);
       });
@@ -293,6 +331,32 @@ export default function Cases() {
                   <label>下次聯絡內容</label>
                   <textarea rows="2" value={form.nextContactContent} onChange={(e) => setForm({ ...form, nextContactContent: e.target.value })} placeholder="要聊什麼、要確認什麼…" />
                 </div>
+                {form.nextContactDate && (
+                  <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px" }}>
+                    {isConnected ? (
+                      <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={form.nextContactSyncToCalendar}
+                          onChange={(e) => setForm({ ...form, nextContactSyncToCalendar: e.target.checked })}
+                        />
+                        <span>
+                          <strong>同步到 Google 行事曆</strong>
+                          <br />
+                          <span style={{ color: "var(--muted)", fontSize: 11 }}>你自己選擇要不要把這個提醒放進行事曆</span>
+                        </span>
+                      </label>
+                    ) : (
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未連結 Google 帳號，前往「設定」頁面連結後可同步</div>
+                    )}
+                    {form.nextContactGoogleEventLink && (
+                      <div style={{ marginTop: 8, fontSize: 12 }}>
+                        ✓ 已同步・
+                        <a href={form.nextContactGoogleEventLink} target="_blank" rel="noreferrer">在 Google 行事曆開啟</a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <div className="form-field">
@@ -367,10 +431,15 @@ export default function Cases() {
               <div className="col-head">
                 {tag} <span>{colItems.length}</span>
               </div>
-              {colItems.map((item) => (
+              {colItems.map((item) => {
+                const { label: nextLabel, milestone: nextM } = item.type === "closed" ? nextMilestoneInfo(item) : { label: null, milestone: null };
+                return (
                 <div className="card" key={item.id} onClick={() => openEdit(item)} style={{ cursor: "pointer" }}>
-                  <div className="name">{item.title}</div>
+                  <div className="name">
+                    {item.type === "closed" && nextM ? `${nextM.label}${nextM.date ? " " + formatDate(nextM.date) : ""}` : item.title}
+                  </div>
                   <div className="meta">
+                    {item.type === "closed" && <>案件：{item.title}<br /></>}
                     {item.contactName && <>客戶：{item.contactName}<br /></>}
                     {item.propertyTitle && <>物件：{item.propertyTitle}<br /></>}
                     {item.agentName && <>業務：{item.agentName}<br /></>}
@@ -392,7 +461,8 @@ export default function Cases() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </div>

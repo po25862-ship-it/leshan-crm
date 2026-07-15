@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
+import { useGoogleAuth } from "../GoogleAuthContext";
 
 const emptyPropertyRow = "";
 
-export default function ContactInteractions({ contactId, onLogged }) {
+export default function ContactInteractions({ contactId, contactName, onLogged }) {
+  const { isConnected, createEvent } = useGoogleAuth();
   const { items: interactions, add, remove } = useCollection(
     `contacts/${contactId}/interactions`,
     "date"
@@ -15,6 +17,7 @@ export default function ContactInteractions({ contactId, onLogged }) {
   const [propertyInputs, setPropertyInputs] = useState([emptyPropertyRow]);
   const [feedback, setFeedback] = useState("");
   const [communication, setCommunication] = useState("");
+  const [syncToCalendar, setSyncToCalendar] = useState(false);
 
   const sorted = [...interactions].sort((a, b) => (a.date < b.date ? 1 : -1));
 
@@ -40,18 +43,37 @@ export default function ContactInteractions({ contactId, onLogged }) {
     e.preventDefault();
     if (!feedback.trim() && !communication.trim() && resolveProperties().length === 0) return;
 
-    await add({
+    const docData = {
       date,
       properties: resolveProperties(),
       feedback,
       communication,
-    });
+      googleEventId: null,
+      googleEventLink: null,
+    };
+
+    if (syncToCalendar && isConnected) {
+      try {
+        const created = await createEvent({
+          title: `互動紀錄・${contactName || ""}`,
+          date,
+          notes: [communication, feedback].filter(Boolean).join(" / "),
+        });
+        docData.googleEventId = created.id;
+        docData.googleEventLink = created.htmlLink;
+      } catch (err) {
+        console.error("Google 行事曆同步失敗", err);
+      }
+    }
+
+    await add(docData);
 
     if (onLogged) onLogged();
 
     setPropertyInputs([emptyPropertyRow]);
     setFeedback("");
     setCommunication("");
+    setSyncToCalendar(false);
   };
 
   return (
@@ -149,6 +171,13 @@ export default function ContactInteractions({ contactId, onLogged }) {
           />
         </div>
 
+        {isConnected && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={syncToCalendar} onChange={(e) => setSyncToCalendar(e.target.checked)} />
+            同步到 Google 行事曆
+          </label>
+        )}
+
         <button className="btn" type="submit">
           新增互動紀錄
         </button>
@@ -173,6 +202,11 @@ export default function ContactInteractions({ contactId, onLogged }) {
               刪除
             </button>
           </div>
+          {log.googleEventLink && (
+            <div style={{ marginTop: 4 }}>
+              <a href={log.googleEventLink} target="_blank" rel="noreferrer" style={{ fontSize: 11 }}>📅 在行事曆開啟</a>
+            </div>
+          )}
           {(log.properties || []).length > 0 && (
             <div style={{ marginTop: 4 }}>
               {log.properties.map((p, i) => (
