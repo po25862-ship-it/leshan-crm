@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { todayStr } from "../lib/dates";
+import { withAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 
 const CATEGORIES = [
@@ -643,7 +644,7 @@ export default function Properties() {
                   onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
                 />
                 {form.websiteUrl && (
-                  <a href={form.websiteUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
+                  <a href={withAgid(form.websiteUrl)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                     開啟網頁
                   </a>
                 )}
@@ -754,7 +755,7 @@ export default function Properties() {
             </div>
             <div className="actions" onClick={(e) => e.stopPropagation()}>
               {p.websiteUrl && (
-                <a href={p.websiteUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                <a href={withAgid(p.websiteUrl)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   開啟網頁
                 </a>
               )}
