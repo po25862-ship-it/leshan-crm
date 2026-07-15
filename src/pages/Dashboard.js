@@ -23,15 +23,32 @@ export default function Dashboard() {
     [contacts, reminderDays]
   );
 
-  const upcomingKeyDates = useMemo(
+  const trackingCases = useMemo(() => cases.filter((c) => (c.type || "tracking") === "tracking"), [cases]);
+  const closedCases = useMemo(() => cases.filter((c) => c.type === "closed"), [cases]);
+
+  const dueTrackingCases = useMemo(
     () =>
-      cases
-        .filter((c) => c.keyDate)
-        .map((c) => ({ ...c, until: daysUntil(c.keyDate) }))
-        .filter((c) => c.until !== null && c.until >= -1 && c.until <= 14)
+      trackingCases
+        .filter((c) => c.nextContactDate)
+        .map((c) => ({ ...c, until: daysUntil(c.nextContactDate) }))
+        .filter((c) => c.until !== null && c.until <= 0)
         .sort((a, b) => a.until - b.until),
-    [cases]
+    [trackingCases]
   );
+
+  const upcomingMilestones = useMemo(() => {
+    const result = [];
+    closedCases.forEach((c) => {
+      (c.milestones || []).forEach((m) => {
+        if (!m.date || m.done) return;
+        const until = daysUntil(m.date);
+        if (until !== null && until >= -1 && until <= 14) {
+          result.push({ id: `${c.id}-${m.label}`, caseTitle: c.title, label: m.label, date: m.date, until });
+        }
+      });
+    });
+    return result.sort((a, b) => a.until - b.until);
+  }, [closedCases]);
 
   const activeNeeds = useMemo(
     () => needs.filter((n) => (n.statusTag || "") === "正在找"),
@@ -66,16 +83,16 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="panel kpi">
-          <div className="label">進行中案件</div>
-          <div className="value">{cases.length}</div>
+          <div className="label">追蹤案件</div>
+          <div className="value">{trackingCases.length}</div>
         </div>
         <div className="panel kpi">
-          <div className="label">近 14 天關鍵日期</div>
-          <div className="value">{upcomingKeyDates.length}</div>
+          <div className="label">近 14 天里程碑</div>
+          <div className="value">{upcomingMilestones.length}</div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginBottom: 28 }}>
         <div>
           <div className="section-title">跟進提醒</div>
           <div className="panel">
@@ -104,22 +121,45 @@ export default function Dashboard() {
         </div>
 
         <div>
-          <div className="section-title">近期關鍵日期</div>
+          <div className="section-title">案件待聯絡</div>
           <div className="panel">
-            {upcomingKeyDates.length === 0 && (
-              <div className="empty-state">近 14 天內沒有委託到期／簽約等關鍵日期</div>
+            {dueTrackingCases.length === 0 && (
+              <div className="empty-state">目前沒有今天或已過期要聯絡的追蹤案件</div>
             )}
-            {upcomingKeyDates.map((c) => (
+            {dueTrackingCases.map((c) => (
               <div className="reminder" key={c.id}>
+                <div className="dot"></div>
+                <div className="txt">
+                  <div className="t1">{c.title}</div>
+                  <div className="t2">
+                    {c.until === 0 ? "今天要聯絡" : `已過期 ${-c.until} 天`}
+                    {c.nextContactContent && `・${c.nextContactContent}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop: 14 }}>
+              <Link to="/cases" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
+                前往案件看板
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="section-title">近期里程碑</div>
+          <div className="panel">
+            {upcomingMilestones.length === 0 && (
+              <div className="empty-state">近 14 天內沒有成交案件的里程碑</div>
+            )}
+            {upcomingMilestones.map((m) => (
+              <div className="reminder" key={m.id}>
                 <div className="dot" style={{ background: "var(--brass)" }}></div>
                 <div className="txt">
                   <div className="t1">
-                    {c.title}・{c.keyDateLabel}
+                    {m.caseTitle}・{m.label}
                   </div>
-                  <div className="t2">
-                    {formatDate(c.keyDate)}
-                    {c.keyTime && ` ${c.keyTime}`}
-                  </div>
+                  <div className="t2">{formatDate(m.date)}</div>
                 </div>
               </div>
             ))}
