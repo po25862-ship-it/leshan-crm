@@ -7,8 +7,8 @@ import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
-import ContactAppointments from "./ContactAppointments";
 import ContactInteractions from "./ContactInteractions";
+import SellerAppointments from "./SellerAppointments";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -350,7 +350,7 @@ export default function SellerDetail() {
           </div>
 
           <div className="panel">
-            <ContactAppointments contactId={contactId} contactName={ownerForm.name} />
+            <SellerAppointments contactId={contactId} listingId={listingId} listingTitle={form.title} />
           </div>
           <div className="panel">
             <ContactInteractions contactId={contactId} contactName={ownerForm.name} onLogged={() => saveContact({ lastContactDate: todayStr() })} />

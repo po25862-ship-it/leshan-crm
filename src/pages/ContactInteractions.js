@@ -5,6 +5,21 @@ import { useGoogleAuth } from "../GoogleAuthContext";
 
 const emptyPropertyRow = "";
 
+// 把文字裡的網址自動變成可點擊連結
+function linkify(text) {
+  if (!text) return null;
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noreferrer">
+        {part}
+      </a>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    )
+  );
+}
+
 export default function ContactInteractions({ contactId, contactName, onLogged }) {
   const { isConnected, createEvent } = useGoogleAuth();
   const { items: interactions, add, remove } = useCollection(
@@ -219,13 +234,13 @@ export default function ContactInteractions({ contactId, contactName, onLogged }
           {log.feedback && (
             <div style={{ marginTop: 6 }}>
               <span style={{ fontWeight: 700 }}>回饋：</span>
-              {log.feedback}
+              {linkify(log.feedback)}
             </div>
           )}
           {log.communication && (
             <div style={{ marginTop: 4 }}>
               <span style={{ fontWeight: 700 }}>溝通：</span>
-              {log.communication}
+              {linkify(log.communication)}
             </div>
           )}
         </div>
