@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, Briefcase, Building2, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, KeyRound, Users, Briefcase, MoreHorizontal } from "lucide-react";
 import { useAuth } from "./AuthContext";
 
 export function MobileTopBar() {
@@ -21,14 +21,14 @@ export function MobileBottomNav() {
       <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
         <LayoutDashboard size={20} strokeWidth={2.2} />總覽
       </NavLink>
-      <NavLink to="/contacts" className={({ isActive }) => (isActive ? "active" : "")}>
-        <Users size={20} strokeWidth={2.2} />客戶
+      <NavLink to="/sellers" className={({ isActive }) => (isActive ? "active" : "")}>
+        <KeyRound size={20} strokeWidth={2.2} />賣方
+      </NavLink>
+      <NavLink to="/buyers" className={({ isActive }) => (isActive ? "active" : "")}>
+        <Users size={20} strokeWidth={2.2} />買方
       </NavLink>
       <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
         <Briefcase size={20} strokeWidth={2.2} />案件
-      </NavLink>
-      <NavLink to="/properties" className={({ isActive }) => (isActive ? "active" : "")}>
-        <Building2 size={20} strokeWidth={2.2} />物件
       </NavLink>
       <NavLink to="/more" className={({ isActive }) => (isActive ? "active" : "")}>
         <MoreHorizontal size={20} strokeWidth={2.2} />更多

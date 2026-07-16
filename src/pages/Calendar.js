@@ -97,7 +97,7 @@ export default function CalendarPage() {
           title: `帶看${a.propertyLabel ? "・" + a.propertyLabel : ""}`,
           detail: a.notes || "",
           source: "system",
-          link: "/contacts",
+          link: "/buyers",
         });
       }
     });

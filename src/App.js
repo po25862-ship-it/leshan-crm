@@ -1,7 +1,9 @@
 import React from "react";
 import { HashRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
-import Contacts from "./pages/Contacts";
+import Sellers from "./pages/Sellers";
+import SellerDetail from "./pages/SellerDetail";
+import Buyers from "./pages/Buyers";
 import Cases from "./pages/Cases";
 import Topics from "./pages/Topics";
 import Properties from "./pages/Properties";
@@ -28,8 +30,11 @@ function DesktopHeader() {
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
           總覽
         </NavLink>
-        <NavLink to="/contacts" className={({ isActive }) => (isActive ? "active" : "")}>
-          客戶
+        <NavLink to="/sellers" className={({ isActive }) => (isActive ? "active" : "")}>
+          賣方
+        </NavLink>
+        <NavLink to="/buyers" className={({ isActive }) => (isActive ? "active" : "")}>
+          買方
         </NavLink>
         <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
           案件
@@ -43,11 +48,11 @@ function DesktopHeader() {
         <NavLink to="/topics" className={({ isActive }) => (isActive ? "active" : "")}>
           商談事項
         </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          設定
-        </NavLink>
         <NavLink to="/calendar" className={({ isActive }) => (isActive ? "active" : "")}>
           行事曆
+        </NavLink>
+        <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+          設定
         </NavLink>
         <button className="btn ghost" onClick={logout} style={{ marginLeft: 8 }}>
           登出
@@ -61,7 +66,9 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />
-      <Route path="/contacts" element={<Contacts />} />
+      <Route path="/sellers" element={<Sellers />} />
+      <Route path="/sellers/:contactId/:listingId" element={<SellerDetail />} />
+      <Route path="/buyers" element={<Buyers />} />
       <Route path="/cases" element={<Cases />} />
       <Route path="/properties" element={<Properties />} />
       <Route path="/needs" element={<Needs />} />

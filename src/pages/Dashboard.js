@@ -117,7 +117,7 @@ export default function Dashboard() {
               </div>
             ))}
             <div style={{ marginTop: 14 }}>
-              <Link to="/contacts" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
+              <Link to="/buyers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                 前往客戶名單
               </Link>
             </div>
@@ -241,7 +241,7 @@ export default function Dashboard() {
               </div>
             ))}
             <div style={{ marginTop: 12 }}>
-              <Link to="/contacts" className="btn ghost" style={{ textDecoration: "none", display: "inline-block", fontSize: 12 }}>
+              <Link to="/buyers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block", fontSize: 12 }}>
                 前往客戶名單
               </Link>
             </div>
