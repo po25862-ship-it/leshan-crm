@@ -1,19 +1,27 @@
 import React, { useState } from "react";
+import { doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { storage } from "../firebase";
+import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
+import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
 
 const emptyListing = {
   title: "",
+  propertyId: null,
+  category: PROPERTY_CATEGORIES[0],
+  store: PROPERTY_STORES[3],
   propertyUrl: "",
   propertyAddress: "",
   price: "",
   status: "tracking",
   listingNo: "",
+  agreementType: "一般",
+  agreementStartDate: "",
+  agreementEndDate: "",
   askingPrice: "",
   floorPrice: "",
   adPlatforms: [],
@@ -90,10 +98,12 @@ function ProgressLog({ contactId, listingId }) {
 
 export default function SellerListings({ contactId }) {
   const { items, add, update, remove } = useCollection(`contacts/${contactId}/listings`, "createdAt");
+  const { items: properties } = useCollection("properties", "title");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyListing);
   const [uploading, setUploading] = useState(false);
+  const [syncingProperty, setSyncingProperty] = useState(false);
 
   const openNew = () => {
     setForm(emptyListing);
@@ -117,16 +127,79 @@ export default function SellerListings({ contactId }) {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
+
+    // 如果標題剛好對到現有物件的案名，自動視為連結（沒對到就維持獨立輸入）
+    let resolvedForm = { ...form };
+    if (!resolvedForm.propertyId) {
+      const match = properties.find((p) => p.title === form.title.trim());
+      if (match) resolvedForm.propertyId = match.id;
+    }
+
     if (editingId) {
-      await update(editingId, form);
+      await update(editingId, resolvedForm);
+      if (resolvedForm.status === "listed") {
+        try {
+          await syncToPropertyDatabase(resolvedForm, editingId);
+        } catch (err) {
+          console.error("同步到物件資料庫失敗", err);
+        }
+      }
     } else {
-      await add(form);
+      const ref2 = await add(resolvedForm);
+      if (resolvedForm.status === "listed") {
+        try {
+          await syncToPropertyDatabase(resolvedForm, ref2.id);
+        } catch (err) {
+          console.error("同步到物件資料庫失敗", err);
+        }
+      }
     }
     setShowForm(false);
   };
 
+  const syncToPropertyDatabase = async (listing, listingId) => {
+    const propertyData = {
+      title: listing.title,
+      address: listing.propertyAddress,
+      totalPrice: listing.askingPrice || listing.price || "",
+      listingNo: listing.listingNo,
+      websiteUrl: listing.propertyUrl,
+      category: listing.category || PROPERTY_CATEGORIES[0],
+      store: listing.store || PROPERTY_STORES[3],
+      status: "active",
+    };
+    if (listing.propertyId) {
+      await updateDoc(doc(db, "properties", listing.propertyId), propertyData);
+      return listing.propertyId;
+    }
+    const newRef = await addDoc(collection(db, "properties"), {
+      ...propertyData,
+      statusChangedAt: todayStr(),
+      lastPriceChange: null,
+      customFields: [],
+      createdAt: serverTimestamp(),
+    });
+    await addDoc(collection(db, `properties/${newRef.id}/statusLogs`), {
+      status: "active",
+      date: todayStr(),
+      note: "由賣方委託自動建立",
+      createdAt: serverTimestamp(),
+    });
+    await update(listingId, { propertyId: newRef.id });
+    return newRef.id;
+  };
+
   const changeStatus = async (item, status) => {
     await update(item.id, { status });
+    if (status === "listed") {
+      setSyncingProperty(true);
+      try {
+        await syncToPropertyDatabase({ ...item, status }, item.id);
+      } catch (err) {
+        console.error("同步到物件資料庫失敗", err);
+      }
+      setSyncingProperty(false);
+    }
     if (editingId === item.id) setForm((f) => ({ ...f, status }));
   };
 
@@ -174,8 +247,32 @@ export default function SellerListings({ contactId }) {
       {showForm && (
         <form onSubmit={onSubmit} style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
           <div className="form-field">
-            <label>物件名稱／案名</label>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            <label>物件名稱／案名（打字時若跟現有物件案名一致會自動連結，也可以先自由輸入）</label>
+            <input list="seller-property-options" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            <datalist id="seller-property-options">
+              {properties.map((p) => (
+                <option key={p.id} value={p.title} />
+              ))}
+            </datalist>
+            {form.propertyId && (
+              <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 4 }}>
+                ✓ 已連結物件資料庫裡的既有物件
+              </div>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div className="form-field">
+              <label>類別</label>
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                {PROPERTY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-field">
+              <label>店名</label>
+              <select value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })}>
+                {PROPERTY_STORES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
           <div className="form-field">
             <label>物件地址</label>
@@ -197,13 +294,18 @@ export default function SellerListings({ contactId }) {
           <div className="form-field">
             <label>狀態</label>
             {editingId ? (
-              <select value={form.status} onChange={(e) => changeStatus({ id: editingId }, e.target.value)}>
+              <select value={form.status} onChange={(e) => changeStatus(form, e.target.value)}>
                 {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
               </select>
             ) : (
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
               </select>
+            )}
+            {form.status !== "listed" && (
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                轉為「已委託」時，會自動在【物件】資料庫建立或更新對應的物件資料
+              </div>
             )}
           </div>
 
@@ -212,6 +314,23 @@ export default function SellerListings({ contactId }) {
               <div className="form-field">
                 <label>委託書編號</label>
                 <input value={form.listingNo} onChange={(e) => setForm({ ...form, listingNo: e.target.value })} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+                <div className="form-field">
+                  <label>委託形式</label>
+                  <select value={form.agreementType} onChange={(e) => setForm({ ...form, agreementType: e.target.value })}>
+                    <option value="一般">一般</option>
+                    <option value="專任">專任</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>委託起始日</label>
+                  <input type="date" value={form.agreementStartDate} onChange={(e) => setForm({ ...form, agreementStartDate: e.target.value })} />
+                </div>
+                <div className="form-field">
+                  <label>委託到期日</label>
+                  <input type="date" value={form.agreementEndDate} onChange={(e) => setForm({ ...form, agreementEndDate: e.target.value })} />
+                </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div className="form-field">
@@ -265,7 +384,9 @@ export default function SellerListings({ contactId }) {
           </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-            <button className="btn" type="submit">{editingId ? "儲存變更" : "新增委託物件"}</button>
+            <button className="btn" type="submit" disabled={syncingProperty}>
+              {syncingProperty ? "同步物件資料中…" : editingId ? "儲存變更" : "新增委託物件"}
+            </button>
             <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
             {editingId && (
               <button
@@ -300,6 +421,8 @@ export default function SellerListings({ contactId }) {
             {item.propertyAddress}
             {item.price && <>　價格：{item.price} 萬</>}
             {item.askingPrice && <>　開價：{item.askingPrice} 萬</>}
+            {item.agreementType && item.status === "listed" && <>　{item.agreementType}委託</>}
+            {item.agreementEndDate && item.status === "listed" && <>　到期：{formatDate(item.agreementEndDate)}</>}
           </div>
         </div>
       ))}

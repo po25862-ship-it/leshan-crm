@@ -7,13 +7,7 @@ import { useCollection } from "../hooks/useCollection";
 import { todayStr } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
-
-const CATEGORIES = [
-  "公寓", "電梯大樓", "套房", "別墅", "透天厝", "建地", "店面",
-  "工廠", "辦公", "建物類其他", "工業地", "農地", "農舍", "廠辦", "土地類其他",
-];
-
-const STORES = ["長庚直營店", "長庚捷運直營店", "文青捷運直營店", "捷運樂善直營店"];
+import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
