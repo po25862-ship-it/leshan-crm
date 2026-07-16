@@ -3,6 +3,7 @@ import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
 import ContactInteractions from "./ContactInteractions";
 import ContactAppointments from "./ContactAppointments";
+import SellerListings from "./SellerListings";
 
 const emptyForm = {
   name: "",
@@ -222,6 +223,11 @@ export default function Contacts() {
 
           {editingId && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {form.tags.includes("賣方") && (
+                <div className="panel">
+                  <SellerListings contactId={editingId} />
+                </div>
+              )}
               <div className="panel">
                 <ContactAppointments contactId={editingId} contactName={form.name} />
               </div>
