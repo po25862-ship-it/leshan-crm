@@ -9,6 +9,27 @@ import { formatDate, todayStr } from "../lib/dates";
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
 
+function SellerCard({ l, navigate }) {
+  return (
+    <div
+      className="card compact"
+      onClick={() => navigate(`/sellers/${l.contactId}/${l.id}`)}
+      style={{ cursor: "pointer" }}
+    >
+      <div className="name">{l.title || "（尚未命名）"}</div>
+      <div className="meta">
+        {l.owner && <>{l.owner.name}{l.owner.phone ? `・${l.owner.phone}` : ""}</>}
+        {l.propertyAddress && <>　｜　{l.propertyAddress}</>}
+        <br />
+        {l.price && <>價格 {l.price}萬　</>}
+        {l.askingPrice && <>開價 {l.askingPrice}萬　</>}
+        {l.floorPrice && <>底價 {l.floorPrice}萬　</>}
+        {l.agreementEndDate && l.status === "listed" && <>到期 {formatDate(l.agreementEndDate)}</>}
+      </div>
+    </div>
+  );
+}
+
 export default function Sellers() {
   const navigate = useNavigate();
   const { items: contacts, add: addContact } = useCollection("contacts", "name");
@@ -194,31 +215,21 @@ export default function Sellers() {
             點右上角「＋ 新增委託」開始建檔
           </div>
         </div>
-      ) : (
+      ) : statusFilter === "全部" ? (
         <div className="board">
-          {Object.entries(columns).map(([label, items]) => (
+          {Object.entries(columns).map(([label, colItems]) => (
             <div key={label}>
-              <div className="col-head">{label} <span>{items.length}</span></div>
-              {items.map((l) => (
-                <div
-                  className="card compact"
-                  key={`${l.contactId}-${l.id}`}
-                  onClick={() => navigate(`/sellers/${l.contactId}/${l.id}`)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <div className="name">{l.title || "（尚未命名）"}</div>
-                  <div className="meta">
-                    {l.owner && <>{l.owner.name}{l.owner.phone ? `・${l.owner.phone}` : ""}</>}
-                    {l.propertyAddress && <>　｜　{l.propertyAddress}</>}
-                    <br />
-                    {l.price && <>價格 {l.price}萬　</>}
-                    {l.askingPrice && <>開價 {l.askingPrice}萬　</>}
-                    {l.floorPrice && <>底價 {l.floorPrice}萬　</>}
-                    {l.agreementEndDate && l.status === "listed" && <>到期 {formatDate(l.agreementEndDate)}</>}
-                  </div>
-                </div>
+              <div className="col-head">{label} <span>{colItems.length}</span></div>
+              {colItems.map((l) => (
+                <SellerCard key={`${l.contactId}-${l.id}`} l={l} navigate={navigate} />
               ))}
             </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12, alignItems: "start" }}>
+          {filtered.map((l) => (
+            <SellerCard key={`${l.contactId}-${l.id}`} l={l} navigate={navigate} />
           ))}
         </div>
       )}

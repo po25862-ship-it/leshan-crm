@@ -105,14 +105,17 @@ export default function SellerDetail() {
       websiteUrl: withAgid(data.propertyUrl),
       category: data.category || PROPERTY_CATEGORIES[0],
       store: data.store || PROPERTY_STORES[3],
-      status: "active",
     };
+    if (data.status === "listed") {
+      propertyData.status = "active";
+    }
     if (data.propertyId) {
       await updateDoc(doc(db, "properties", data.propertyId), propertyData);
       return data.propertyId;
     }
     const newRef = await addDoc(collection(db, "properties"), {
       ...propertyData,
+      status: propertyData.status || "active",
       statusChangedAt: todayStr(),
       lastPriceChange: null,
       customFields: [],
