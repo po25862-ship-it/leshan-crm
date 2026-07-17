@@ -62,6 +62,11 @@ export default function Dashboard() {
 
   const activePropertiesCount = properties.filter((p) => (p.status || "active") !== "sold").length;
 
+  const buyerContacts = contacts.filter((c) => (c.tags || []).includes("買方"));
+  const sellerContacts = contacts.filter((c) => (c.tags || []).includes("賣方"));
+  const recentBuyers = recentContacts.filter((c) => (c.tags || []).includes("買方"));
+  const recentSellers = recentContacts.filter((c) => (c.tags || []).includes("賣方"));
+
   return (
     <main>
       <div className="kpi-row">
@@ -135,7 +140,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
             客需・正在找 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{activeNeeds.length}</span>
@@ -185,23 +190,43 @@ export default function Dashboard() {
 
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
-            客戶・共 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{contacts.length}</span>
+            買方・共 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{buyerContacts.length}</span>
           </div>
           <div className="panel">
-            {recentContacts.length === 0 && (
-              <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有客戶資料</div>
+            {recentBuyers.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有買方客戶</div>
             )}
-            {recentContacts.slice(0, 5).map((c) => (
+            {recentBuyers.slice(0, 5).map((c) => (
               <div key={c.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
                 <div style={{ fontWeight: 700 }}>{c.name}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {(c.tags || []).join("、") || "—"}
-                </div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.phone || "—"}</div>
               </div>
             ))}
             <div style={{ marginTop: 12 }}>
               <Link to="/buyers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block", fontSize: 12 }}>
-                前往客戶名單
+                前往買方名單
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="section-title" style={{ fontSize: 14 }}>
+            賣方・共 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{sellerContacts.length}</span>
+          </div>
+          <div className="panel">
+            {recentSellers.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有賣方客戶</div>
+            )}
+            {recentSellers.slice(0, 5).map((c) => (
+              <div key={c.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+                <div style={{ fontWeight: 700 }}>{c.name}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.phone || "—"}</div>
+              </div>
+            ))}
+            <div style={{ marginTop: 12 }}>
+              <Link to="/sellers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block", fontSize: 12 }}>
+                前往賣方名單
               </Link>
             </div>
           </div>
