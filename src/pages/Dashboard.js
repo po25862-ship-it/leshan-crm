@@ -23,18 +23,7 @@ export default function Dashboard() {
     [contacts, reminderDays]
   );
 
-  const trackingCases = useMemo(() => cases.filter((c) => (c.type || "tracking") === "tracking"), [cases]);
-  const closedCases = useMemo(() => cases.filter((c) => c.type === "closed"), [cases]);
-
-  const dueTrackingCases = useMemo(
-    () =>
-      trackingCases
-        .filter((c) => c.nextContactDate)
-        .map((c) => ({ ...c, until: daysUntil(c.nextContactDate) }))
-        .filter((c) => c.until !== null && c.until <= 0)
-        .sort((a, b) => a.until - b.until),
-    [trackingCases]
-  );
+  const closedCases = cases;
 
   const upcomingMilestones = useMemo(() => {
     const result = [];
@@ -83,10 +72,6 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="panel kpi">
-          <div className="label">追蹤案件</div>
-          <div className="value">{trackingCases.length}</div>
-        </div>
-        <div className="panel kpi">
           <div className="label">成交案件</div>
           <div className="value">{closedCases.length}</div>
         </div>
@@ -96,7 +81,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
         <div>
           <div className="section-title">跟進提醒</div>
           <div className="panel">
@@ -119,32 +104,6 @@ export default function Dashboard() {
             <div style={{ marginTop: 14 }}>
               <Link to="/buyers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                 前往客戶名單
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className="section-title">案件待聯絡</div>
-          <div className="panel">
-            {dueTrackingCases.length === 0 && (
-              <div className="empty-state">目前沒有今天或已過期要聯絡的追蹤案件</div>
-            )}
-            {dueTrackingCases.map((c) => (
-              <div className="reminder" key={c.id}>
-                <div className="dot"></div>
-                <div className="txt">
-                  <div className="t1">{c.title}</div>
-                  <div className="t2">
-                    {c.until === 0 ? "今天要聯絡" : `已過期 ${-c.until} 天`}
-                    {c.nextContactContent && `・${c.nextContactContent}`}
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div style={{ marginTop: 14 }}>
-              <Link to="/cases" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
-                前往案件看板
               </Link>
             </div>
           </div>

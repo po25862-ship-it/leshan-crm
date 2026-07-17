@@ -37,7 +37,7 @@ function DesktopHeader() {
           買方
         </NavLink>
         <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
-          案件
+          成交案件
         </NavLink>
         <NavLink to="/properties" className={({ isActive }) => (isActive ? "active" : "")}>
           物件

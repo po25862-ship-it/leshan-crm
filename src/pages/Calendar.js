@@ -62,32 +62,21 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, monthCursor]);
 
-  // ---- 整合系統事件（追蹤案件下次聯絡、成交案件里程碑、客戶約看）----
+  // ---- 整合系統事件（成交案件里程碑、客戶約看）----
   const systemEvents = useMemo(() => {
     const list = [];
     cases.forEach((c) => {
-      if ((c.type || "tracking") === "tracking" && c.nextContactDate) {
-        list.push({
-          date: c.nextContactDate,
-          title: `${c.title}・下次聯絡`,
-          detail: c.nextContactContent || "",
-          source: "system",
-          link: "/cases",
-        });
-      }
-      if (c.type === "closed") {
-        (c.milestones || []).forEach((m) => {
-          if (m.date && !m.done) {
-            list.push({
-              date: m.date,
-              title: `${c.title}・${m.label}`,
-              detail: "",
-              source: "system",
-              link: "/cases",
-            });
-          }
-        });
-      }
+      (c.milestones || []).forEach((m) => {
+        if (m.date && !m.done) {
+          list.push({
+            date: m.date,
+            title: `${c.title}・${m.label}`,
+            detail: "",
+            source: "system",
+            link: "/cases",
+          });
+        }
+      });
     });
     appointments.forEach((a) => {
       if (a.date) {

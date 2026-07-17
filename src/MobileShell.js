@@ -28,7 +28,7 @@ export function MobileBottomNav() {
         <Users size={20} strokeWidth={2.2} />買方
       </NavLink>
       <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
-        <Briefcase size={20} strokeWidth={2.2} />案件
+        <Briefcase size={20} strokeWidth={2.2} />成交案件
       </NavLink>
       <NavLink to="/more" className={({ isActive }) => (isActive ? "active" : "")}>
         <MoreHorizontal size={20} strokeWidth={2.2} />更多
