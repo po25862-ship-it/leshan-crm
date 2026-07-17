@@ -62,6 +62,7 @@ const emptyForm = {
 
 export default function Properties() {
   const { items, add, update, remove } = useCollection("properties", "createdAt");
+  const { items: linkedCases } = useCollection("cases", "createdAt");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -805,8 +806,30 @@ export default function Properties() {
           </div>
 
           {editingId && (
-            <div className="panel">
-              <PropertyHistory propertyId={editingId} createdAt={form.createdAt} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {(() => {
+                const usedIn = linkedCases.filter((c) => c.propertyId === editingId);
+                if (usedIn.length === 0) return null;
+                return (
+                  <div className="panel">
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                      使用於成交案件（{usedIn.length}）
+                    </div>
+                    {usedIn.map((c) => (
+                      <div key={c.id} style={{ fontSize: 13, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                        {c.title}
+                        {c.contactName && <span style={{ color: "var(--muted)" }}>　客戶：{c.contactName}</span>}
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
+                      前往「成交案件」頁面可以編輯
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="panel">
+                <PropertyHistory propertyId={editingId} createdAt={form.createdAt} />
+              </div>
             </div>
           )}
         </div>

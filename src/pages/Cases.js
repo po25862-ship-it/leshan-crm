@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate } from "../lib/dates";
+import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 
 function nextMilestoneInfo(item) {
@@ -191,6 +192,24 @@ export default function Cases() {
                   <option key={p.id} value={p.id}>{p.title}{p.address ? `（${p.address}）` : ""}</option>
                 ))}
               </select>
+              {form.propertyId && (() => {
+                const linked = properties.find((p) => p.id === form.propertyId);
+                if (!linked) return null;
+                return (
+                  <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginTop: 8, fontSize: 12 }}>
+                    <div style={{ color: "var(--muted)" }}>
+                      即時同步自物件資料庫，改物件那邊的資料，這裡會自動跟著更新：
+                    </div>
+                    {linked.address && <div style={{ marginTop: 4 }}>地址：{linked.address}</div>}
+                    {linked.totalPrice && <div>總價：{linked.totalPrice} 萬</div>}
+                    {linked.websiteUrl && (
+                      <div style={{ marginTop: 4 }}>
+                        <a href={withAgid(linked.websiteUrl)} target="_blank" rel="noreferrer">開啟物件網頁</a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="form-field">
               <label>物件名稱（未選擇時可手動輸入）</label>
@@ -282,7 +301,16 @@ export default function Cases() {
                     <div className="meta">
                       案件：{item.title}<br />
                       {item.contactName && <>客戶：{item.contactName}<br /></>}
-                      {item.propertyTitle && <>物件：{item.propertyTitle}<br /></>}
+                      {item.propertyTitle && (
+                        <>
+                          物件：{item.propertyTitle}
+                          {item.propertyId && (() => {
+                            const linked = properties.find((p) => p.id === item.propertyId);
+                            return linked?.address ? `（${linked.address}）` : "";
+                          })()}
+                          <br />
+                        </>
+                      )}
                       {item.agentName && <>業務：{item.agentName}<br /></>}
                       {(item.milestones || []).filter((m) => m.date).map((m, i) => (
                         <span key={i}>
