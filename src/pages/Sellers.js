@@ -201,21 +201,20 @@ export default function Sellers() {
               <div className="col-head">{label} <span>{items.length}</span></div>
               {items.map((l) => (
                 <div
-                  className="card"
+                  className="card compact"
                   key={`${l.contactId}-${l.id}`}
                   onClick={() => navigate(`/sellers/${l.contactId}/${l.id}`)}
                   style={{ cursor: "pointer" }}
                 >
                   <div className="name">{l.title || "（尚未命名）"}</div>
                   <div className="meta">
-                    {l.owner && <>屋主：{l.owner.name}{l.owner.phone ? `・${l.owner.phone}` : ""}<br /></>}
-                    {l.propertyAddress && <>{l.propertyAddress}<br /></>}
-                    {l.price && <>價格：{l.price} 萬　</>}
-                    {l.askingPrice && <>開價：{l.askingPrice} 萬　</>}
-                    {l.floorPrice && <>底價：{l.floorPrice} 萬</>}
-                    {l.agreementEndDate && l.status === "listed" && (
-                      <><br />委託到期：{formatDate(l.agreementEndDate)}</>
-                    )}
+                    {l.owner && <>{l.owner.name}{l.owner.phone ? `・${l.owner.phone}` : ""}</>}
+                    {l.propertyAddress && <>　｜　{l.propertyAddress}</>}
+                    <br />
+                    {l.price && <>價格 {l.price}萬　</>}
+                    {l.askingPrice && <>開價 {l.askingPrice}萬　</>}
+                    {l.floorPrice && <>底價 {l.floorPrice}萬　</>}
+                    {l.agreementEndDate && l.status === "listed" && <>到期 {formatDate(l.agreementEndDate)}</>}
                   </div>
                 </div>
               ))}

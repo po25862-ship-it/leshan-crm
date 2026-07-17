@@ -130,7 +130,7 @@ export default function SellerDetail() {
       const match = properties.find((p) => p.title === (form.title || "").trim());
       if (match) resolved.propertyId = match.id;
     }
-    if (resolved.status === "listed") {
+    if (resolved.propertyId || resolved.status === "listed") {
       setSyncing(true);
       try {
         const pid = await syncToPropertyDatabase(resolved);
@@ -260,12 +260,35 @@ export default function SellerDetail() {
 
           <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
             <div className="form-field">
-              <label>物件名稱／案名（打字若跟現有物件案名一致會自動連結）</label>
-              <input list="seller-detail-property-options" value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              <label>物件名稱／案名（打字若跟現有物件案名一致，離開欄位時會自動帶入該物件資料）</label>
+              <input
+                list="seller-detail-property-options"
+                value={form.title || ""}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                onBlur={() => {
+                  if (form.propertyId) return; // 已經連結過了，不要覆蓋你後續手動改過的內容
+                  const match = properties.find((p) => p.title === (form.title || "").trim());
+                  if (match) {
+                    setForm((f) => ({
+                      ...f,
+                      propertyId: match.id,
+                      propertyAddress: match.address || f.propertyAddress,
+                      propertyUrl: match.websiteUrl || f.propertyUrl,
+                      price: match.totalPrice || f.price,
+                      category: match.category || f.category,
+                      store: match.store || f.store,
+                    }));
+                  }
+                }}
+              />
               <datalist id="seller-detail-property-options">
                 {properties.map((p) => <option key={p.id} value={p.title} />)}
               </datalist>
-              {form.propertyId && <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 4 }}>✓ 已連結物件資料庫</div>}
+              {form.propertyId && (
+                <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 4 }}>
+                  ✓ 已連結物件資料庫，之後改這裡的地址/網址/價格，存檔時會同步回物件那邊
+                </div>
+              )}
             </div>
             <div className="form-field">
               <label>物件地址</label>

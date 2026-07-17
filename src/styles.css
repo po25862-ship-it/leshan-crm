@@ -66,6 +66,9 @@ main{padding:28px 32px 60px;max-width:1320px;margin:0 auto;}
 .card{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px;margin-bottom:12px;}
 .card .name{font-weight:700;font-size:14px;margin-bottom:4px;}
 .card .meta{font-size:12px;color:var(--muted);line-height:1.7;}
+.card.compact{padding:9px 12px;margin-bottom:8px;}
+.card.compact .name{font-size:12.5px;margin-bottom:2px;}
+.card.compact .meta{font-size:11px;line-height:1.5;}
 
 .reminder{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
 .reminder:last-child{border-bottom:none;}
