@@ -79,6 +79,7 @@ export default function Properties() {
   const [activeCategory, setActiveCategory] = useState("全部");
   const [viewMode, setViewMode] = useState("active"); // active | onHold | sold
   const [importing, setImporting] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [uploadingSheet, setUploadingSheet] = useState(false);
 
   const openNew = () => {
@@ -113,13 +114,15 @@ export default function Properties() {
     e.preventDefault();
     if (!form.title.trim()) return;
 
+    const formToSave = { ...form, websiteUrl: withAgid(form.websiteUrl) };
+
     if (editingId) {
       const priceChanged =
         form.totalPrice !== "" &&
         String(form.totalPrice) !== String(originalTotalPrice) &&
         originalTotalPrice !== null &&
         originalTotalPrice !== "";
-      const updates = { ...form };
+      const updates = { ...formToSave };
       if (priceChanged) {
         updates.lastPriceChange = {
           oldPrice: originalTotalPrice,
@@ -137,7 +140,7 @@ export default function Properties() {
         });
       }
     } else {
-      const ref2 = await add(form);
+      const ref2 = await add(formToSave);
       await addDoc(collection(db, `properties/${ref2.id}/statusLogs`), {
         status: form.status,
         date: todayStr(),
@@ -268,7 +271,7 @@ export default function Properties() {
             occupancy: String(r[12] || ""),
             laneWidth: String(r[13] || ""),
             agentInfo: String(r[14] || ""),
-            websiteUrl: String(r[15] || ""),
+            websiteUrl: withAgid(String(r[15] || "")),
             notes: String(r[17] || ""),
             category: cat,
           });
@@ -448,6 +451,34 @@ export default function Properties() {
     XLSX.writeFile(wb, `物件總表_匯出_${todayStr()}.xlsx`);
   };
 
+  // ---- 一次性補齊所有既有物件的 agid（給還沒補到的舊資料用）----
+  const handleBackfillAgid = async () => {
+    const targets = items.filter((p) => p.websiteUrl && !p.websiteUrl.includes("agid="));
+    if (targets.length === 0) {
+      alert("所有物件的網址都已經有 agid 了，不需要補。");
+      return;
+    }
+    if (!window.confirm(`即將幫 ${targets.length} 筆物件（含在售與已售出）的網址補上 agid，確定要繼續嗎？`)) {
+      return;
+    }
+    setBackfilling(true);
+    try {
+      const CHUNK = 400;
+      for (let i = 0; i < targets.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        targets.slice(i, i + CHUNK).forEach((p) => {
+          batch.update(doc(db, "properties", p.id), { websiteUrl: withAgid(p.websiteUrl) });
+        });
+        await batch.commit();
+      }
+      alert(`已完成，補上了 ${targets.length} 筆物件的 agid。`);
+    } catch (err) {
+      console.error(err);
+      alert("補齊失敗，請再試一次。");
+    }
+    setBackfilling(false);
+  };
+
   const fieldStyle2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
   const fieldStyle3 = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 };
 
@@ -460,6 +491,9 @@ export default function Properties() {
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn ghost" onClick={handleExport}>
             匯出 Excel
+          </button>
+          <button className="btn ghost" onClick={handleBackfillAgid} disabled={backfilling}>
+            {backfilling ? "補齊中…" : "補齊網址 agid"}
           </button>
           <label className="btn ghost" style={{ cursor: "pointer" }}>
             {importing ? "處理中…" : "匯入／更新 Excel"}

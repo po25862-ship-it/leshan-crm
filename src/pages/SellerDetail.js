@@ -6,6 +6,7 @@ import { db, storage } from "../firebase";
 import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
+import { withAgid } from "../lib/url";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 import ContactInteractions from "./ContactInteractions";
 import SellerAppointments from "./SellerAppointments";
@@ -99,7 +100,7 @@ export default function SellerDetail() {
       address: data.propertyAddress,
       totalPrice: data.askingPrice || data.price || "",
       listingNo: data.listingNo,
-      websiteUrl: data.propertyUrl,
+      websiteUrl: withAgid(data.propertyUrl),
       category: data.category || PROPERTY_CATEGORIES[0],
       store: data.store || PROPERTY_STORES[3],
       status: "active",
@@ -122,7 +123,7 @@ export default function SellerDetail() {
   };
 
   const onSave = async () => {
-    let resolved = { ...form };
+    let resolved = { ...form, propertyUrl: withAgid(form.propertyUrl) };
     if (!resolved.propertyId) {
       const match = properties.find((p) => p.title === (form.title || "").trim());
       if (match) resolved.propertyId = match.id;
