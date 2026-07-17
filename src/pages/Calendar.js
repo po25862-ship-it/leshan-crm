@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { collectionGroup, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
+import { useCollectionGroup } from "../hooks/useCollectionGroup";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate } from "../lib/dates";
 
@@ -34,6 +35,7 @@ function useAllAppointments() {
 export default function CalendarPage() {
   const { items: cases } = useCollection("cases", "createdAt");
   const appointments = useAllAppointments();
+  const listings = useCollectionGroup("listings");
   const { isConnected, listEvents } = useGoogleAuth();
 
   const [monthCursor, setMonthCursor] = useState(() => {
@@ -62,7 +64,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, monthCursor]);
 
-  // ---- 整合系統事件（成交案件里程碑、客戶約看）----
+  // ---- 整合系統事件（成交案件里程碑、委託到期日、客戶約看）----
   const systemEvents = useMemo(() => {
     const list = [];
     cases.forEach((c) => {
@@ -74,41 +76,63 @@ export default function CalendarPage() {
             detail: "",
             source: "system",
             link: "/cases",
+            googleEventId: m.googleEventId || null,
           });
         }
       });
     });
+    listings.forEach((l) => {
+      if (l.agreementEndDate) {
+        list.push({
+          date: l.agreementEndDate,
+          title: `${l.title || "委託"}・委託到期`,
+          detail: "",
+          source: "system",
+          link: `/sellers/${l.parentId}/${l.id}`,
+          googleEventId: l.agreementEndGoogleEventId || null,
+        });
+      }
+    });
     appointments.forEach((a) => {
       if (a.date) {
+        const isSellerAppt = a.content !== undefined;
         list.push({
           date: a.date,
           time: a.time,
-          title: `帶看${a.propertyLabel ? "・" + a.propertyLabel : ""}`,
+          title: isSellerAppt ? a.content : `帶看${a.propertyLabel ? "・" + a.propertyLabel : ""}`,
           detail: a.notes || "",
           source: "system",
-          link: "/buyers",
+          link: isSellerAppt ? "/sellers" : "/buyers",
+          googleEventId: a.googleEventId || null,
         });
       }
     });
     return list;
-  }, [cases, appointments]);
+  }, [cases, appointments, listings]);
 
   const monthSystemEvents = systemEvents.filter((e) => e.date >= toDateStr(monthStart) && e.date <= toDateStr(monthEnd));
 
-  const monthGoogleEvents = googleEvents.map((ev) => {
-    const start = ev.start?.dateTime || ev.start?.date;
-    const dateStr = (ev.start?.dateTime || ev.start?.date || "").slice(0, 10);
-    const time = ev.start?.dateTime ? new Date(ev.start.dateTime).toTimeString().slice(0, 5) : null;
-    return {
-      date: dateStr,
-      time,
-      title: ev.summary || "（無標題）",
-      detail: ev.location || "",
-      source: "google",
-      link: ev.htmlLink,
-      _raw: start,
-    };
-  });
+  // 已經同步過的 Google 事件，系統這邊已經有對應項目了，避免重複顯示
+  const knownGoogleEventIds = new Set(
+    systemEvents.filter((e) => e.googleEventId).map((e) => e.googleEventId)
+  );
+
+  const monthGoogleEvents = googleEvents
+    .filter((ev) => !knownGoogleEventIds.has(ev.id))
+    .map((ev) => {
+      const start = ev.start?.dateTime || ev.start?.date;
+      const dateStr = (ev.start?.dateTime || ev.start?.date || "").slice(0, 10);
+      const time = ev.start?.dateTime ? new Date(ev.start.dateTime).toTimeString().slice(0, 5) : null;
+      return {
+        date: dateStr,
+        time,
+        title: ev.summary || "（無標題）",
+        detail: ev.location || "",
+        source: "google",
+        link: ev.htmlLink,
+        _raw: start,
+      };
+    });
 
   const allEvents = [...monthSystemEvents, ...monthGoogleEvents].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
