@@ -10,6 +10,7 @@ import { withAgid } from "../lib/url";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 import ContactInteractions from "./ContactInteractions";
 import SellerAppointments from "./SellerAppointments";
+import { useGoogleAuth } from "../GoogleAuthContext";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -70,6 +71,7 @@ export default function SellerDetail() {
   const { data: listing, save: saveListing } = useDoc(listingPath);
   const { data: contact, save: saveContact } = useDoc(`contacts/${contactId}`);
   const { items: properties } = useCollection("properties", "title");
+  const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
 
   const [form, setForm] = useState(null);
   const [ownerForm, setOwnerForm] = useState(null);
@@ -138,6 +140,34 @@ export default function SellerDetail() {
       }
       setSyncing(false);
     }
+
+    if (isConnected && resolved.agreementEndDate) {
+      setSyncing(true);
+      const payload = {
+        title: `${resolved.title || "委託"}・委託到期`,
+        date: resolved.agreementEndDate,
+        notes: `委託形式：${resolved.agreementType || ""}`,
+      };
+      try {
+        if (resolved.agreementEndSyncToCalendar) {
+          if (resolved.agreementEndGoogleEventId) {
+            await updateEvent(resolved.agreementEndGoogleEventId, payload);
+          } else {
+            const created = await createEvent(payload);
+            resolved.agreementEndGoogleEventId = created.id;
+            resolved.agreementEndGoogleEventLink = created.htmlLink;
+          }
+        } else if (resolved.agreementEndGoogleEventId) {
+          await deleteEvent(resolved.agreementEndGoogleEventId);
+          resolved.agreementEndGoogleEventId = null;
+          resolved.agreementEndGoogleEventLink = null;
+        }
+      } catch (err) {
+        console.error("Google 行事曆同步失敗", err);
+      }
+      setSyncing(false);
+    }
+
     await saveListing(resolved);
     setForm(resolved);
     alert("已儲存");
@@ -150,6 +180,13 @@ export default function SellerDetail() {
 
   const onDelete = async () => {
     if (!window.confirm("確定要刪除這筆委託物件嗎？")) return;
+    if (form.agreementEndGoogleEventId) {
+      try {
+        await deleteEvent(form.agreementEndGoogleEventId);
+      } catch {
+        // 行事曆刪不掉也不擋
+      }
+    }
     await deleteDoc(doc(db, listingPath));
     navigate("/sellers");
   };
@@ -318,6 +355,33 @@ export default function SellerDetail() {
                 <input type="date" value={form.agreementEndDate || ""} onChange={(e) => setForm({ ...form, agreementEndDate: e.target.value })} />
               </div>
             </div>
+
+            {form.agreementEndDate && (
+              <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+                {isConnected ? (
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!form.agreementEndSyncToCalendar}
+                      onChange={(e) => setForm({ ...form, agreementEndSyncToCalendar: e.target.checked })}
+                    />
+                    <span>
+                      <strong>委託到期日同步到 Google 行事曆</strong>
+                      <br />
+                      <span style={{ color: "var(--muted)", fontSize: 11 }}>存檔時會建立/更新提醒事件</span>
+                    </span>
+                  </label>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未連結 Google 帳號，前往「設定」頁面連結後可同步</div>
+                )}
+                {form.agreementEndGoogleEventLink && (
+                  <div style={{ marginTop: 8, fontSize: 12 }}>
+                    ✓ 已同步・
+                    <a href={form.agreementEndGoogleEventLink} target="_blank" rel="noreferrer">在 Google 行事曆開啟</a>
+                  </div>
+                )}
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <div className="form-field">
                 <label>開價（萬）</label>
