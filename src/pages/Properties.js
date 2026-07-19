@@ -7,6 +7,7 @@ import { useCollection } from "../hooks/useCollection";
 import { todayStr } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
+import PropertyShare from "./PropertyShare";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
@@ -80,6 +81,17 @@ export default function Properties() {
   const [activeCategory, setActiveCategory] = useState("全部");
   const [viewMode, setViewMode] = useState("active"); // active | onHold | sold
   const [importing, setImporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showShare, setShowShare] = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const [backfilling, setBackfilling] = useState(false);
   const [uploadingSheet, setUploadingSheet] = useState(false);
 
@@ -512,6 +524,21 @@ export default function Properties() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
+          <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>已選 {selectedIds.size} 筆物件</span>
+          <button className="btn" onClick={() => setShowShare(true)}>分享給客人</button>
+          <button className="btn ghost" onClick={() => setSelectedIds(new Set())}>清除選取</button>
+        </div>
+      )}
+
+      {showShare && (
+        <PropertyShare
+          properties={items.filter((p) => selectedIds.has(p.id))}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+
       {/* 狀態切換 */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => { setViewMode("active"); setShowForm(false); }}>
@@ -844,7 +871,15 @@ export default function Properties() {
         )}
         {filtered.map((p) => (
           <div className="list-row" key={p.id} onClick={() => openEdit(p)} style={{ cursor: "pointer" }}>
-            <div>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.has(p.id)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => toggleSelect(p.id)}
+                style={{ marginTop: 4, width: 16, height: 16, flexShrink: 0 }}
+              />
+              <div>
               <div className="name">
                 {p.title} <span className="tag">{p.category}</span>
                 {p.sheetFileUrl && <span title="已上傳資料表"> 📄</span>}
@@ -864,6 +899,7 @@ export default function Properties() {
                   💰 已調整：{p.lastPriceChange.oldPrice} 萬 → {p.lastPriceChange.newPrice} 萬（{p.lastPriceChange.date}）
                 </div>
               )}
+            </div>
             </div>
             <div className="actions" onClick={(e) => e.stopPropagation()}>
               {p.websiteUrl && (
