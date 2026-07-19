@@ -3,6 +3,7 @@ import { useCollection } from "../hooks/useCollection";
 import { formatDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
+import RocDateHint from "./RocDateHint";
 
 function nextMilestoneInfo(item) {
   const list = item.milestones || [];
@@ -234,7 +235,8 @@ export default function Cases() {
                     <input type="date" value={m.date} onChange={(e) => updateMilestone(idx, "date", e.target.value)} style={{ width: 150 }} />
                     <button type="button" className="btn ghost" onClick={() => removeMilestone(idx)}>刪除</button>
                   </div>
-                  <div style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 12 }}>
+                  <div style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
+                    <RocDateHint date={m.date} />
                     <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                       <input type="checkbox" checked={m.done} onChange={(e) => updateMilestone(idx, "done", e.target.checked)} />
                       已完成

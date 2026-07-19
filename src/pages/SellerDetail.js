@@ -11,6 +11,7 @@ import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 import ContactInteractions from "./ContactInteractions";
 import SellerAppointments from "./SellerAppointments";
 import { useGoogleAuth } from "../GoogleAuthContext";
+import RocDateHint from "./RocDateHint";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -375,10 +376,12 @@ export default function SellerDetail() {
               <div className="form-field">
                 <label>委託起始日</label>
                 <input type="date" value={form.agreementStartDate || ""} onChange={(e) => setForm({ ...form, agreementStartDate: e.target.value })} />
+                <RocDateHint date={form.agreementStartDate} />
               </div>
               <div className="form-field">
                 <label>委託到期日</label>
                 <input type="date" value={form.agreementEndDate || ""} onChange={(e) => setForm({ ...form, agreementEndDate: e.target.value })} />
+                <RocDateHint date={form.agreementEndDate} />
               </div>
             </div>
 

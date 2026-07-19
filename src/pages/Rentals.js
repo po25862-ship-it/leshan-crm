@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { serverTimestamp } from "firebase/firestore";
 import { useCollection } from "../hooks/useCollection";
-import { formatDate } from "../lib/dates";
+import { formatDateRoc } from "../lib/dates";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
 const STATUS_ORDER = ["seeking", "leased", "idle"];
@@ -99,7 +99,7 @@ export default function Rentals() {
         {r.tenantName && <>房客 {r.tenantName}　</>}
         {r.rent && <>租金 {r.rent}元/月　</>}
         {r.deposit && <>押金 {r.deposit}{r.depositReturned ? "（已退）" : ""}　</>}
-        {r.leaseEndDate && r.status === "leased" && <>租期至 {formatDate(r.leaseEndDate)}</>}
+        {r.leaseEndDate && r.status === "leased" && <>租期至 {formatDateRoc(r.leaseEndDate)}</>}
         {r.status === "seeking" && (r.adPlatforms || []).length > 0 && (
           <>已刊登 {r.adPlatforms.length} 個平台</>
         )}

@@ -4,6 +4,7 @@ import { daysSince, formatDate, todayStr } from "../lib/dates";
 import ContactInteractions from "./ContactInteractions";
 import ContactAppointments from "./ContactAppointments";
 import BuyerNeeds from "./BuyerNeeds";
+import RocDateHint from "./RocDateHint";
 
 const emptyForm = {
   name: "",
@@ -137,6 +138,7 @@ export default function Buyers() {
               <div className="form-field">
                 <label>最後聯絡日期</label>
                 <input type="date" value={form.lastContactDate} onChange={(e) => setForm({ ...form, lastContactDate: e.target.value })} />
+                <RocDateHint date={form.lastContactDate} />
               </div>
               <div className="form-field">
                 <label>備註</label>

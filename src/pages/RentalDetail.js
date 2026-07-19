@@ -8,6 +8,7 @@ import { useCollection } from "../hooks/useCollection";
 import { formatDate, nextMonthlyDueDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
+import RocDateHint from "./RocDateHint";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
 const STATUS_ORDER = ["seeking", "leased", "idle"];
@@ -316,10 +317,12 @@ export default function RentalDetail() {
               <div className="form-field">
                 <label>租期開始</label>
                 <input type="date" value={form.leaseStartDate || ""} onChange={(e) => setForm({ ...form, leaseStartDate: e.target.value })} />
+                <RocDateHint date={form.leaseStartDate} />
               </div>
               <div className="form-field">
                 <label>租期結束</label>
                 <input type="date" value={form.leaseEndDate || ""} onChange={(e) => setForm({ ...form, leaseEndDate: e.target.value })} />
+                <RocDateHint date={form.leaseEndDate} />
               </div>
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginBottom: 14 }}>
