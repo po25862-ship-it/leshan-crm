@@ -166,7 +166,7 @@ export default function RentalDetail() {
 
     await saveRental(resolved);
     setForm(resolved);
-    alert("已儲存");
+    navigate(-1);
   };
 
   const onDelete = async () => {

@@ -173,7 +173,7 @@ export default function SellerDetail() {
 
     await saveListing(resolved);
     setForm(resolved);
-    alert("已儲存");
+    navigate(-1);
   };
 
   const onSaveOwner = async () => {
