@@ -90,7 +90,8 @@ export function GoogleAuthProvider({ children }) {
     [isConnected, session]
   );
 
-  const buildEventBody = ({ title, date, time, durationMinutes = 60, notes }) => {
+  const buildEventBody = ({ title, date, time, durationMinutes = 60, notes, recurrence }) => {
+    let body;
     if (time) {
       const startDateTime = `${date}T${time}:00`;
       const [h, m] = time.split(":").map(Number);
@@ -100,19 +101,24 @@ export function GoogleAuthProvider({ children }) {
       const endDateTime = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(
         endDate.getDate()
       )}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
-      return {
+      body = {
         summary: title,
         description: notes || "",
         start: { dateTime: startDateTime, timeZone: "Asia/Taipei" },
         end: { dateTime: endDateTime, timeZone: "Asia/Taipei" },
       };
+    } else {
+      body = {
+        summary: title,
+        description: notes || "",
+        start: { date },
+        end: { date },
+      };
     }
-    return {
-      summary: title,
-      description: notes || "",
-      start: { date },
-      end: { date },
-    };
+    if (recurrence) {
+      body.recurrence = recurrence; // 例如 ["RRULE:FREQ=MONTHLY"]
+    }
+    return body;
   };
 
   const createEvent = useCallback(

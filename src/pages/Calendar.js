@@ -5,7 +5,7 @@ import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
 import { useGoogleAuth } from "../GoogleAuthContext";
-import { formatDate } from "../lib/dates";
+import { formatDate, nextMonthlyDueDate } from "../lib/dates";
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -34,6 +34,7 @@ function useAllAppointments() {
 
 export default function CalendarPage() {
   const { items: cases } = useCollection("cases", "createdAt");
+  const { items: rentals } = useCollection("rentals", "createdAt");
   const appointments = useAllAppointments();
   const listings = useCollectionGroup("listings");
   const { isConnected, listEvents } = useGoogleAuth();
@@ -93,6 +94,18 @@ export default function CalendarPage() {
         });
       }
     });
+    rentals.forEach((r) => {
+      if (r.status === "leased" && r.rentDueDay) {
+        list.push({
+          date: nextMonthlyDueDate(r.rentDueDay),
+          title: `${r.title || "出租物件"}・房租收款`,
+          detail: r.tenantName ? `房客：${r.tenantName}` : "",
+          source: "system",
+          link: `/rentals/${r.id}`,
+          googleEventId: r.rentGoogleEventId || null,
+        });
+      }
+    });
     appointments.forEach((a) => {
       if (a.date) {
         const isSellerAppt = a.content !== undefined;
@@ -108,7 +121,7 @@ export default function CalendarPage() {
       }
     });
     return list;
-  }, [cases, appointments, listings]);
+  }, [cases, appointments, listings, rentals]);
 
   const monthSystemEvents = systemEvents.filter((e) => e.date >= toDateStr(monthStart) && e.date <= toDateStr(monthEnd));
 

@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { useDoc } from "../hooks/useDoc";
-import { daysSince, daysUntil, formatDate } from "../lib/dates";
+import { daysSince, daysUntil, formatDate, nextMonthlyDueDate } from "../lib/dates";
 
 export default function Dashboard() {
   const { items: contacts } = useCollection("contacts", "name");
@@ -11,6 +11,7 @@ export default function Dashboard() {
   const { items: needs } = useCollection("needs", "createdAt");
   const { items: topics } = useCollection("topics", "createdAt");
   const { items: properties } = useCollection("properties", "createdAt");
+  const { items: rentals } = useCollection("rentals", "createdAt");
   const { data: settings } = useDoc("settings/general", { reminderDays: 5 });
   const reminderDays = settings.reminderDays ?? 5;
 
@@ -38,6 +39,17 @@ export default function Dashboard() {
     });
     return result.sort((a, b) => a.until - b.until);
   }, [closedCases]);
+
+  const upcomingRentDue = useMemo(() => {
+    return rentals
+      .filter((r) => r.status === "leased" && r.rentDueDay)
+      .map((r) => {
+        const due = nextMonthlyDueDate(r.rentDueDay);
+        return { ...r, dueDate: due, until: daysUntil(due) };
+      })
+      .filter((r) => r.until !== null && r.until <= 3)
+      .sort((a, b) => a.until - b.until);
+  }, [rentals]);
 
   const activeNeeds = useMemo(
     () => needs.filter((n) => (n.statusTag || "") === "正在找"),
@@ -84,9 +96,13 @@ export default function Dashboard() {
           <div className="label">近 14 天里程碑</div>
           <div className="value">{upcomingMilestones.length}</div>
         </div>
+        <div className="panel kpi">
+          <div className="label">租賃中</div>
+          <div className="value">{rentals.filter((r) => r.status === "leased").length}</div>
+        </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginBottom: 28 }}>
         <div>
           <div className="section-title">跟進提醒</div>
           <div className="panel">
@@ -109,6 +125,32 @@ export default function Dashboard() {
             <div style={{ marginTop: 14 }}>
               <Link to="/buyers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                 前往客戶名單
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="section-title">租金提醒</div>
+          <div className="panel">
+            {upcomingRentDue.length === 0 && (
+              <div className="empty-state">近期沒有快到期的租金收款</div>
+            )}
+            {upcomingRentDue.map((r) => (
+              <div className="reminder" key={r.id}>
+                <div className="dot" style={{ background: r.until <= 0 ? "var(--danger)" : "var(--brass)" }}></div>
+                <div className="txt">
+                  <div className="t1">{r.title}</div>
+                  <div className="t2">
+                    {r.until === 0 ? "今天收租" : r.until < 0 ? `已過期 ${-r.until} 天` : `${r.until} 天後收租`}
+                    {r.tenantName && `・${r.tenantName}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop: 14 }}>
+              <Link to="/rentals" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
+                前往出租管理
               </Link>
             </div>
           </div>

@@ -4,6 +4,8 @@ import Dashboard from "./pages/Dashboard";
 import Sellers from "./pages/Sellers";
 import SellerDetail from "./pages/SellerDetail";
 import Buyers from "./pages/Buyers";
+import Rentals from "./pages/Rentals";
+import RentalDetail from "./pages/RentalDetail";
 import Cases from "./pages/Cases";
 import Topics from "./pages/Topics";
 import Properties from "./pages/Properties";
@@ -35,6 +37,9 @@ function DesktopHeader() {
         </NavLink>
         <NavLink to="/buyers" className={({ isActive }) => (isActive ? "active" : "")}>
           買方
+        </NavLink>
+        <NavLink to="/rentals" className={({ isActive }) => (isActive ? "active" : "")}>
+          出租
         </NavLink>
         <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
           成交案件
@@ -69,6 +74,8 @@ function AppRoutes() {
       <Route path="/sellers" element={<Sellers />} />
       <Route path="/sellers/:contactId/:listingId" element={<SellerDetail />} />
       <Route path="/buyers" element={<Buyers />} />
+      <Route path="/rentals" element={<Rentals />} />
+      <Route path="/rentals/:rentalId" element={<RentalDetail />} />
       <Route path="/cases" element={<Cases />} />
       <Route path="/properties" element={<Properties />} />
       <Route path="/needs" element={<Needs />} />
