@@ -138,10 +138,11 @@ export default function Topics() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
+    const dataToSave = { ...form, lastUpdatedDate: todayStr() };
     if (editingId) {
-      await update(editingId, form);
+      await update(editingId, dataToSave);
     } else {
-      await add(form);
+      await add(dataToSave);
     }
     setShowForm(false);
   };
@@ -176,6 +177,11 @@ export default function Topics() {
                 placeholder="例如：跟 OO 建設合作案洽談"
                 required
               />
+              {editingId && form.lastUpdatedDate && (
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                  最後更新：{formatDate(form.lastUpdatedDate)}（存檔後會更新成今天）
+                </div>
+              )}
             </div>
             <div className="form-field">
               <label>對方</label>
@@ -252,7 +258,8 @@ export default function Topics() {
                 >
                   <div className="name">{item.title}</div>
                   <div className="meta">
-                    {item.counterpart && <>對方：{item.counterpart}</>}
+                    {item.counterpart && <>對方：{item.counterpart}<br /></>}
+                    {item.lastUpdatedDate && <span className="mono" style={{ fontSize: 11 }}>最後更新：{formatDate(item.lastUpdatedDate)}</span>}
                   </div>
                 </div>
               ))}
