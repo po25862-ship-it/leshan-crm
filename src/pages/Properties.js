@@ -55,9 +55,7 @@ const emptyForm = {
   status: "active",
   statusChangedAt: todayStr(),
   lastPriceChange: null,
-  sheetFileUrl: null,
-  sheetFileName: null,
-  sheetFileType: null,
+  sheetFiles: [],
   customFields: [],
 };
 
@@ -183,18 +181,22 @@ export default function Properties() {
   };
 
   const handleSheetUpload = async (e) => {
-    const file = e.target.files[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file || !editingId) return;
+    if (files.length === 0 || !editingId) return;
     setUploadingSheet(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `properties/${editingId}/sheet.${ext}`;
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      await update(editingId, { sheetFileUrl: url, sheetFileName: file.name, sheetFileType: file.type });
-      setForm((f) => ({ ...f, sheetFileUrl: url, sheetFileName: file.name, sheetFileType: file.type }));
+      const newFiles = [];
+      for (const file of files) {
+        const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fff]/g, "_");
+        const storageRef = ref(storage, `properties/${editingId}/sheets/${Date.now()}_${safeName}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        newFiles.push({ url, name: file.name, type: file.type });
+      }
+      const nextFiles = [...(form.sheetFiles || []), ...newFiles];
+      await update(editingId, { sheetFiles: nextFiles });
+      setForm((f) => ({ ...f, sheetFiles: nextFiles }));
     } catch (err) {
       console.error(err);
       alert("上傳失敗，請確認 Firebase Storage 是否已啟用。");
@@ -202,17 +204,21 @@ export default function Properties() {
     setUploadingSheet(false);
   };
 
-  const removeSheet = async () => {
-    if (!editingId || !form.sheetFileUrl) return;
+  const removeSheet = async (idx) => {
+    if (!editingId) return;
     if (!window.confirm("確定要移除這份資料表嗎？")) return;
+    const fileToRemove = (form.sheetFiles || [])[idx];
     try {
-      const ext = form.sheetFileName ? form.sheetFileName.split(".").pop() : "";
-      await deleteObject(ref(storage, `properties/${editingId}/sheet.${ext}`));
+      if (fileToRemove) {
+        const decoded = decodeURIComponent(fileToRemove.url.split("/o/")[1].split("?")[0]);
+        await deleteObject(ref(storage, decoded));
+      }
     } catch {
       // 檔案本體刪不掉也不擋
     }
-    await update(editingId, { sheetFileUrl: null, sheetFileName: null, sheetFileType: null });
-    setForm((f) => ({ ...f, sheetFileUrl: null, sheetFileName: null, sheetFileType: null }));
+    const nextFiles = (form.sheetFiles || []).filter((_, i) => i !== idx);
+    await update(editingId, { sheetFiles: nextFiles });
+    setForm((f) => ({ ...f, sheetFiles: nextFiles }));
   };
 
   // ---- 分類與狀態統計 ----
@@ -773,7 +779,7 @@ export default function Properties() {
             </div>
 
             <div className="form-field">
-              <label>物件資料表（PDF 或圖片，方便隨時查看、傳給客戶）</label>
+              <label>物件資料表（PDF 或圖片，可一次選多頁，方便隨時查看、傳給客戶）</label>
               {!editingId && (
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>
                   請先儲存這筆物件，之後點進來編輯就可以上傳資料表了
@@ -781,26 +787,26 @@ export default function Properties() {
               )}
               {editingId && (
                 <>
-                  {form.sheetFileUrl && (
-                    <div style={{ marginBottom: 10 }}>
-                      {form.sheetFileType && form.sheetFileType.startsWith("image/") ? (
-                        <img src={form.sheetFileUrl} alt="物件資料表" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }} />
+                  {(form.sheetFiles || []).map((f, idx) => (
+                    <div key={idx} style={{ marginBottom: 10, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
+                      {f.type && f.type.startsWith("image/") ? (
+                        <img src={f.url} alt={f.name} style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }} />
                       ) : (
-                        <div style={{ fontSize: 13, marginBottom: 8 }}>📄 {form.sheetFileName}</div>
+                        <div style={{ fontSize: 13, marginBottom: 8 }}>📄 {f.name}</div>
                       )}
                       <div style={{ display: "flex", gap: 8 }}>
-                        <a href={form.sheetFileUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
+                        <a href={f.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                           開啟／下載
                         </a>
-                        <button type="button" className="btn ghost" onClick={removeSheet}>
+                        <button type="button" className="btn ghost" onClick={() => removeSheet(idx)}>
                           移除
                         </button>
                       </div>
                     </div>
-                  )}
+                  ))}
                   <label className="btn ghost" style={{ cursor: "pointer", display: "inline-block" }}>
-                    {uploadingSheet ? "上傳中…" : form.sheetFileUrl ? "重新上傳" : "上傳資料表"}
-                    <input type="file" accept=".pdf,image/*" onChange={handleSheetUpload} style={{ display: "none" }} disabled={uploadingSheet} />
+                    {uploadingSheet ? "上傳中…" : "新增檔案"}
+                    <input type="file" accept=".pdf,image/*" multiple onChange={handleSheetUpload} style={{ display: "none" }} disabled={uploadingSheet} />
                   </label>
                 </>
               )}
@@ -882,7 +888,7 @@ export default function Properties() {
               <div>
               <div className="name">
                 {p.title} <span className="tag">{p.category}</span>
-                {p.sheetFileUrl && <span title="已上傳資料表"> 📄</span>}
+                {(p.sheetFiles || []).length > 0 && <span title="已上傳資料表"> 📄</span>}
               </div>
               <div className="meta">
                 {p.store}　{p.listingNo}　{p.address}

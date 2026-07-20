@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { collection, collectionGroup, getDocs, doc, writeBatch } from "firebase/firestore";
+import { db } from "../firebase";
 import { useDoc } from "../hooks/useDoc";
 import { useGoogleAuth } from "../GoogleAuthContext";
 
@@ -6,6 +8,8 @@ export default function Settings() {
   const { data, save } = useDoc("settings/general", { reminderDays: 5 });
   const [days, setDays] = useState(5);
   const { isConnected, email, connect, disconnect, gsiReady } = useGoogleAuth();
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState(null);
 
   useEffect(() => {
     setDays(data.reminderDays ?? 5);
@@ -14,6 +18,84 @@ export default function Settings() {
   const onSave = async () => {
     await save({ reminderDays: Number(days) });
     alert("已儲存");
+  };
+
+  const migrateOldFiles = async () => {
+    if (!window.confirm("這會把物件資料表、賣方委託資料、出租合約裡舊格式的單一檔案，轉成新的多檔案格式。確定要執行嗎？")) {
+      return;
+    }
+    setMigrating(true);
+    let counts = { properties: 0, listings: 0, rentals: 0 };
+    try {
+      // 物件資料表
+      const propSnap = await getDocs(collection(db, "properties"));
+      let batch = writeBatch(db);
+      let opCount = 0;
+      for (const d of propSnap.docs) {
+        const data = d.data();
+        if (data.sheetFileUrl && (!data.sheetFiles || data.sheetFiles.length === 0)) {
+          batch.update(doc(db, "properties", d.id), {
+            sheetFiles: [{ url: data.sheetFileUrl, name: data.sheetFileName || "檔案", type: data.sheetFileType || "" }],
+          });
+          counts.properties++;
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+      }
+      if (opCount > 0) await batch.commit();
+
+      // 賣方委託資料（跨所有客戶底下的 listings 子集合）
+      const listingSnap = await getDocs(collectionGroup(db, "listings"));
+      batch = writeBatch(db);
+      opCount = 0;
+      for (const d of listingSnap.docs) {
+        const data = d.data();
+        if (data.documentUrl && (!data.documents || data.documents.length === 0)) {
+          batch.update(d.ref, {
+            documents: [{ url: data.documentUrl, name: data.documentName || "檔案", type: data.documentType || "" }],
+          });
+          counts.listings++;
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+      }
+      if (opCount > 0) await batch.commit();
+
+      // 出租合約／照片
+      const rentalSnap = await getDocs(collection(db, "rentals"));
+      batch = writeBatch(db);
+      opCount = 0;
+      for (const d of rentalSnap.docs) {
+        const data = d.data();
+        if (data.documentUrl && (!data.documents || data.documents.length === 0)) {
+          batch.update(doc(db, "rentals", d.id), {
+            documents: [{ url: data.documentUrl, name: data.documentName || "檔案", type: data.documentType || "" }],
+          });
+          counts.rentals++;
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+      }
+      if (opCount > 0) await batch.commit();
+
+      setMigrateResult(counts);
+    } catch (err) {
+      console.error(err);
+      alert("搬移過程發生錯誤，請截圖錯誤訊息給我");
+    }
+    setMigrating(false);
   };
 
   return (
@@ -74,6 +156,21 @@ export default function Settings() {
               {gsiReady ? "連結 Google 帳號" : "載入中…"}
             </button>
           </>
+        )}
+      </div>
+
+      <div className="section-title">舊版檔案格式搬移</div>
+      <div className="panel" style={{ maxWidth: 420 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
+          之前上傳過的物件資料表、賣方委託資料、出租合約，因為升級成「可上傳多個檔案」，需要把舊格式轉一次。<b style={{ color: "var(--ink)" }}>資料本身沒有不見，只是要轉換一下參照方式。可以重複點擊，已經轉過的不會重複處理。</b>
+        </div>
+        <button className="btn" onClick={migrateOldFiles} disabled={migrating}>
+          {migrating ? "搬移中…" : "搬移舊版檔案"}
+        </button>
+        {migrateResult && (
+          <div style={{ marginTop: 12, fontSize: 12, color: "var(--accent)" }}>
+            完成：物件 {migrateResult.properties} 筆、賣方委託 {migrateResult.listings} 筆、出租 {migrateResult.rentals} 筆
+          </div>
         )}
       </div>
     </main>

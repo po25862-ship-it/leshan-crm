@@ -134,9 +134,7 @@ export default function Sellers() {
         askingPrice: "",
         floorPrice: "",
         adPlatforms: [],
-        documentUrl: null,
-        documentName: null,
-        documentType: null,
+        documents: [],
         createdAt: serverTimestamp(),
       });
       navigate(`/sellers/${contactId}/${listingRef.id}`);

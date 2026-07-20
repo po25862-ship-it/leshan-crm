@@ -184,16 +184,20 @@ export default function RentalDetail() {
   };
 
   const handleUpload = async (e) => {
-    const file = e.target.files[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const storageRef = ref(storage, `rentals/${rentalId}/document.${ext}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      const next = { ...form, documentUrl: url, documentName: file.name, documentType: file.type };
+      const newDocs = [];
+      for (const file of files) {
+        const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fff]/g, "_");
+        const storageRef = ref(storage, `rentals/${rentalId}/documents/${Date.now()}_${safeName}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        newDocs.push({ url, name: file.name, type: file.type });
+      }
+      const next = { ...form, documents: [...(form.documents || []), ...newDocs] };
       setForm(next);
       await saveRental(next);
     } catch (err) {
@@ -203,14 +207,17 @@ export default function RentalDetail() {
     setUploading(false);
   };
 
-  const removeDocument = async () => {
+  const removeDocument = async (idx) => {
+    const docToRemove = (form.documents || [])[idx];
     try {
-      const ext = form.documentName ? form.documentName.split(".").pop() : "";
-      await deleteObject(ref(storage, `rentals/${rentalId}/document.${ext}`));
+      if (docToRemove) {
+        const decoded = decodeURIComponent(docToRemove.url.split("/o/")[1].split("?")[0]);
+        await deleteObject(ref(storage, decoded));
+      }
     } catch {
       // 檔案本體刪不掉也不擋
     }
-    const next = { ...form, documentUrl: null, documentName: null, documentType: null };
+    const next = { ...form, documents: (form.documents || []).filter((_, i) => i !== idx) };
     setForm(next);
     await saveRental(next);
   };
@@ -280,23 +287,23 @@ export default function RentalDetail() {
 
           <div style={{ marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
             <div className="form-field">
-              <label>租賃合約／照片</label>
-              {form.documentUrl && (
-                <div style={{ marginBottom: 10 }}>
-                  {form.documentType && form.documentType.startsWith("image/") ? (
-                    <img src={form.documentUrl} alt="租賃資料" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }} />
+              <label>租賃合約／照片（可以一次選多個檔案，或分好幾次上傳）</label>
+              {(form.documents || []).map((doc, idx) => (
+                <div key={idx} style={{ marginBottom: 10, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
+                  {doc.type && doc.type.startsWith("image/") ? (
+                    <img src={doc.url} alt={doc.name} style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }} />
                   ) : (
-                    <div style={{ fontSize: 13 }}>📄 {form.documentName}</div>
+                    <div style={{ fontSize: 13 }}>📄 {doc.name}</div>
                   )}
                   <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                    <a href={form.documentUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟／下載</a>
-                    <button className="btn ghost" onClick={removeDocument}>移除</button>
+                    <a href={doc.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟／下載</a>
+                    <button className="btn ghost" onClick={() => removeDocument(idx)}>移除</button>
                   </div>
                 </div>
-              )}
+              ))}
               <label className="btn ghost" style={{ cursor: "pointer", display: "inline-block" }}>
-                {uploading ? "上傳中…" : form.documentUrl ? "重新上傳" : "上傳資料"}
-                <input type="file" accept=".pdf,image/*" onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
+                {uploading ? "上傳中…" : "新增檔案"}
+                <input type="file" accept=".pdf,image/*" multiple onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
               </label>
             </div>
           </div>

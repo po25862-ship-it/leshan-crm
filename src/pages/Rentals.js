@@ -29,9 +29,7 @@ const emptyRental = {
   rentGoogleEventId: null,
   rentGoogleEventLink: null,
   adPlatforms: [],
-  documentUrl: null,
-  documentName: null,
-  documentType: null,
+  documents: [],
   notes: "",
 };
 
