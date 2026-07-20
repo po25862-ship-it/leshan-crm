@@ -61,6 +61,12 @@ export default function Dashboard() {
     [topics]
   );
 
+  const latestTopicUpdate = useMemo(() => {
+    const dates = activeTopics.map((t) => t.lastUpdatedDate).filter(Boolean);
+    if (dates.length === 0) return null;
+    return dates.sort().slice(-1)[0];
+  }, [activeTopics]);
+
   const propertyStatusCounts = useMemo(() => {
     const map = {};
     properties
@@ -211,6 +217,11 @@ export default function Dashboard() {
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
             商談事項・進行中 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{activeTopics.length}</span>
+            {latestTopicUpdate && (
+              <span className="mono" style={{ marginLeft: 10, fontSize: 11, color: "var(--brass)", fontWeight: 400 }}>
+                最新更新：{formatDate(latestTopicUpdate)}
+              </span>
+            )}
           </div>
           <div className="panel">
             {activeTopics.length === 0 && (
@@ -220,6 +231,7 @@ export default function Dashboard() {
               <div key={t.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
                 <div style={{ fontWeight: 700 }}>{t.title}</div>
                 {t.counterpart && <div style={{ fontSize: 11, color: "var(--muted)" }}>對方：{t.counterpart}</div>}
+                {t.lastUpdatedDate && <div style={{ fontSize: 11, color: "var(--muted)" }}>更新於 {formatDate(t.lastUpdatedDate)}</div>}
               </div>
             ))}
             <div style={{ marginTop: 12 }}>
