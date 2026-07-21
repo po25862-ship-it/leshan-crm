@@ -79,6 +79,8 @@ export default function Properties() {
   const [activeCategory, setActiveCategory] = useState("全部");
   const [viewMode, setViewMode] = useState("active"); // active | onHold | sold
   const [importing, setImporting] = useState(false);
+  const [importAnalysis, setImportAnalysis] = useState(null);
+  const [importDecisions, setImportDecisions] = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showShare, setShowShare] = useState(false);
 
@@ -257,7 +259,7 @@ export default function Properties() {
   });
 
   // ---- 匯入 Excel（智慧更新：用委託書編號比對新增/更新，並標記消失的物件）----
-  const handleImportFile = async (e) => {
+  const analyzeImportFile = async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
     if (!file) return;
@@ -307,86 +309,161 @@ export default function Properties() {
         if (p.listingNo) existingByListingNo[p.listingNo] = p;
       });
 
-      const seen = new Set();
-      let newCount = 0;
-      let updateCount = 0;
-      let priceChangedCount = 0;
-      const ops = []; // { ref, data, merge }
+      const matchedIds = new Set();
+      const clearRows = []; // { row, existing(可能undefined), relinked }
+      const leftoverRows = [];
 
+      // 第一輪：委託書編號比對 ＋ 嚴格交叉比對（案名/坪數/房型/總價都對得上）
       rowsToImport.forEach((row) => {
         if (!row.listingNo) return;
-        seen.add(row.listingNo);
-        const existing = existingByListingNo[row.listingNo];
+        let existing = existingByListingNo[row.listingNo];
+        let relinked = false;
 
         if (!existing) {
-          const newRef = doc(collection(db, "properties"));
-          ops.push({
-            ref: newRef,
-            data: {
-              ...row,
-              status: "active",
-              statusChangedAt: todayStr(),
-              lastPriceChange: null,
-              customFields: [],
-              createdAt: new Date(),
-            },
-            merge: false,
+          const candidate = items.find((p) => {
+            if (!p.listingNo || matchedIds.has(p.id)) return false;
+            if (existingByListingNo[row.listingNo]) return false;
+            if (!row.title || (p.title || "").trim() !== row.title.trim()) return false;
+            const pingDiff = Math.abs(Number(p.titlePing || 0) - Number(row.titlePing || 0));
+            if (pingDiff > 0.3) return false;
+            if (String(p.layout || "").trim() !== String(row.layout || "").trim()) return false;
+            const oldPrice = Number(p.totalPrice || 0);
+            const newPrice = Number(row.totalPrice || 0);
+            if (oldPrice && newPrice && Math.abs(newPrice - oldPrice) / oldPrice > 0.1) return false;
+            return true;
           });
-          ops.push({
-            ref: doc(collection(db, `properties/${newRef.id}/statusLogs`)),
-            data: { status: "active", date: todayStr(), createdAt: serverTimestamp() },
-            merge: false,
-          });
-          newCount++;
-        } else {
-          // 地址、備註保留你自己在系統裡填寫/修改過的內容，不被 Excel 覆蓋
-          const { address, notes, totalPrice, ...rest } = row;
-          const updates = { ...rest };
-          const priceChanged = totalPrice !== "" && String(totalPrice) !== String(existing.totalPrice);
-          if (priceChanged) {
-            updates.totalPrice = totalPrice;
-            updates.lastPriceChange = { oldPrice: existing.totalPrice, newPrice: totalPrice, date: todayStr() };
-            ops.push({
-              ref: doc(collection(db, `properties/${existing.id}/priceLogs`)),
-              data: { oldPrice: existing.totalPrice, newPrice: totalPrice, date: todayStr(), createdAt: serverTimestamp() },
-              merge: false,
-            });
-            priceChangedCount++;
+          if (candidate) {
+            existing = candidate;
+            relinked = true;
           }
-          ops.push({ ref: doc(db, "properties", existing.id), data: updates, merge: true });
-          updateCount++;
+        }
+
+        if (existing) {
+          matchedIds.add(existing.id);
+          clearRows.push({ row, existing, relinked });
+        } else {
+          leftoverRows.push(row);
         }
       });
 
-      // 這次 Excel 沒出現、但資料庫裡還標記「在售」的物件，自動標為「暫時不賣」
-      const missing = items.filter(
-        (p) => p.listingNo && !seen.has(p.listingNo) && (p.status || "active") === "active"
+      // 第二輪：剩下的行，只用「案名一樣」做寬鬆比對，抓出可能是同一間、但其他條件對不齊的
+      const ambiguousPairs = [];
+      const newRows = [];
+      leftoverRows.forEach((row) => {
+        const candidate = items.find(
+          (p) => p.listingNo && !matchedIds.has(p.id) && row.title && (p.title || "").trim() === row.title.trim()
+        );
+        if (candidate) {
+          matchedIds.add(candidate.id); // 先佔位，避免同一筆existing被兩個ambiguous row搶
+          ambiguousPairs.push({ row, existing: candidate });
+        } else {
+          newRows.push(row);
+        }
+      });
+
+      const missingCandidates = items.filter(
+        (p) => p.listingNo && !matchedIds.has(p.id) && (p.status || "active") === "active"
       );
-      missing.forEach((p) => {
+
+      setImportAnalysis({ clearRows, newRows, ambiguousPairs, missingCandidates });
+      const initialDecisions = {};
+      ambiguousPairs.forEach((_, idx) => (initialDecisions[idx] = "separate"));
+      setImportDecisions(initialDecisions);
+
+      if (ambiguousPairs.length === 0) {
+        await commitImport({ clearRows, newRows, ambiguousPairs: [], missingCandidates }, {});
+      }
+    } catch (err) {
+      console.error(err);
+      alert("匯入失敗，請確認檔案格式是否跟範本一致。");
+    }
+  };
+
+  const commitImport = async (analysis, decisions) => {
+    const { clearRows, newRows, ambiguousPairs, missingCandidates } = analysis;
+    const ops = [];
+    let newCount = 0;
+    let updateCount = 0;
+    let priceChangedCount = 0;
+    let relinkedCount = 0;
+    const finalMatchedIds = new Set();
+
+    const applyUpdate = (row, existing, relinked) => {
+      finalMatchedIds.add(existing.id);
+      const { address, notes, totalPrice, ...rest } = row;
+      const updates = { ...rest };
+      const priceChanged = totalPrice !== "" && String(totalPrice) !== String(existing.totalPrice);
+      if (priceChanged) {
+        updates.totalPrice = totalPrice;
+        updates.lastPriceChange = { oldPrice: existing.totalPrice, newPrice: totalPrice, date: todayStr() };
         ops.push({
-          ref: doc(db, "properties", p.id),
-          data: { status: "onHold", statusChangedAt: todayStr() },
-          merge: true,
+          ref: doc(collection(db, `properties/${existing.id}/priceLogs`)),
+          data: { oldPrice: existing.totalPrice, newPrice: totalPrice, date: todayStr(), createdAt: serverTimestamp() },
+          merge: false,
         });
+        priceChangedCount++;
+      }
+      if (relinked) {
         ops.push({
-          ref: doc(collection(db, `properties/${p.id}/statusLogs`)),
+          ref: doc(collection(db, `properties/${existing.id}/statusLogs`)),
           data: {
-            status: "onHold",
+            status: existing.status || "active",
             date: todayStr(),
-            note: "Excel 更新後未再出現，系統自動標記",
+            note: `委託書編號由 ${existing.listingNo || "（無）"} 換成 ${row.listingNo}，判斷為同一物件`,
             createdAt: serverTimestamp(),
           },
           merge: false,
         });
+        relinkedCount++;
+      }
+      ops.push({ ref: doc(db, "properties", existing.id), data: updates, merge: true });
+      updateCount++;
+    };
+
+    const applyNew = (row) => {
+      const newRef = doc(collection(db, "properties"));
+      ops.push({
+        ref: newRef,
+        data: { ...row, status: "active", statusChangedAt: todayStr(), lastPriceChange: null, customFields: [], createdAt: new Date() },
+        merge: false,
       });
+      ops.push({
+        ref: doc(collection(db, `properties/${newRef.id}/statusLogs`)),
+        data: { status: "active", date: todayStr(), createdAt: serverTimestamp() },
+        merge: false,
+      });
+      newCount++;
+    };
 
-      const confirmMsg =
-        `這次匯入：\n新增 ${newCount} 筆\n更新 ${updateCount} 筆（其中 ${priceChangedCount} 筆總價異動）\n` +
-        `${missing.length} 筆物件這次沒出現在檔案裡，將自動標記為「暫時不賣」\n\n` +
-        `地址與備註不會被覆蓋，會保留你在系統裡填寫的內容。確定要繼續嗎？`;
-      if (!window.confirm(confirmMsg)) return;
+    clearRows.forEach(({ row, existing, relinked }) => applyUpdate(row, existing, relinked));
+    newRows.forEach((row) => applyNew(row));
 
-      setImporting(true);
+    ambiguousPairs.forEach((pair, idx) => {
+      if (decisions[idx] === "merge") {
+        applyUpdate(pair.row, pair.existing, true);
+      } else {
+        applyNew(pair.row);
+        // existing 沒被合併，維持在 missingCandidates 名單裡，等下會被標記暫時不賣
+      }
+    });
+
+    const missing = missingCandidates.filter((p) => !finalMatchedIds.has(p.id));
+    missing.forEach((p) => {
+      ops.push({ ref: doc(db, "properties", p.id), data: { status: "onHold", statusChangedAt: todayStr() }, merge: true });
+      ops.push({
+        ref: doc(collection(db, `properties/${p.id}/statusLogs`)),
+        data: { status: "onHold", date: todayStr(), note: "Excel 更新後未再出現，系統自動標記", createdAt: serverTimestamp() },
+        merge: false,
+      });
+    });
+
+    const confirmMsg =
+      `這次匯入：\n新增 ${newCount} 筆\n更新 ${updateCount} 筆（其中 ${priceChangedCount} 筆總價異動、${relinkedCount} 筆換委託書編號）\n` +
+      `${missing.length} 筆物件將自動標記為「暫時不賣」\n\n地址與備註不會被覆蓋。確定要繼續嗎？`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setImporting(true);
+    try {
       const CHUNK = 450;
       for (let i = 0; i < ops.length; i += CHUNK) {
         const batch = writeBatch(db);
@@ -396,15 +473,14 @@ export default function Properties() {
         });
         await batch.commit();
       }
-      setImporting(false);
-      alert(
-        `匯入完成：新增 ${newCount} 筆、更新 ${updateCount} 筆（${priceChangedCount} 筆調價）、自動標記暫時不賣 ${missing.length} 筆。`
-      );
+      alert(`匯入完成：新增 ${newCount} 筆、更新 ${updateCount} 筆（含 ${relinkedCount} 筆換委託書編號）、暫時不賣 ${missing.length} 筆。`);
     } catch (err) {
       console.error(err);
-      setImporting(false);
-      alert("匯入失敗，請確認檔案格式是否跟範本一致。");
+      alert("匯入失敗，請再試一次。");
     }
+    setImporting(false);
+    setImportAnalysis(null);
+    setImportDecisions({});
   };
 
   // ---- 匯出 Excel（維持原始檔案的分頁與欄位格式）----
@@ -519,7 +595,7 @@ export default function Properties() {
             <input
               type="file"
               accept=".xlsx,.xls"
-              onChange={handleImportFile}
+              onChange={analyzeImportFile}
               style={{ display: "none" }}
               disabled={importing}
             />
@@ -543,6 +619,58 @@ export default function Properties() {
           properties={items.filter((p) => selectedIds.has(p.id))}
           onClose={() => setShowShare(false)}
         />
+      )}
+
+      {importAnalysis && importAnalysis.ambiguousPairs.length > 0 && (
+        <div className="panel" style={{ marginBottom: 20, border: "1.5px solid var(--brass)" }}>
+          <div className="section-title" style={{ fontSize: 15 }}>
+            有 {importAnalysis.ambiguousPairs.length} 筆案名相同、但其他資料對不齊，請確認是不是同一間
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 16 }}>
+            預設是「當作不同物件」（比較安全，不會誤合併）。確認完按最下面「確認並匯入」才會真正寫入。
+          </div>
+          {importAnalysis.ambiguousPairs.map((pair, idx) => (
+            <div key={idx} style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{pair.row.title}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 10 }}>
+                <div>
+                  <div style={{ color: "var(--muted)", fontWeight: 700, marginBottom: 4 }}>資料庫裡現有的</div>
+                  委託書編號：{pair.existing.listingNo || "—"}<br />
+                  權狀坪：{pair.existing.titlePing || "—"}　格局：{pair.existing.layout || "—"}<br />
+                  總價：{pair.existing.totalPrice || "—"} 萬
+                </div>
+                <div>
+                  <div style={{ color: "var(--brass)", fontWeight: 700, marginBottom: 4 }}>Excel 這次的</div>
+                  委託書編號：{pair.row.listingNo || "—"}<br />
+                  權狀坪：{pair.row.titlePing || "—"}　格局：{pair.row.layout || "—"}<br />
+                  總價：{pair.row.totalPrice || "—"} 萬
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className={importDecisions[idx] === "merge" ? "btn" : "btn ghost"}
+                  onClick={() => setImportDecisions({ ...importDecisions, [idx]: "merge" })}
+                >
+                  視為同一物件（合併）
+                </button>
+                <button
+                  className={importDecisions[idx] === "separate" ? "btn" : "btn ghost"}
+                  onClick={() => setImportDecisions({ ...importDecisions, [idx]: "separate" })}
+                >
+                  當作不同物件（分開）
+                </button>
+              </div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+            <button className="btn" disabled={importing} onClick={() => commitImport(importAnalysis, importDecisions)}>
+              {importing ? "匯入中…" : "確認並匯入"}
+            </button>
+            <button className="btn ghost" onClick={() => { setImportAnalysis(null); setImportDecisions({}); }}>
+              取消這次匯入
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 狀態切換 */}
