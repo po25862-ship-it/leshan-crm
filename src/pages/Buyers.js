@@ -177,7 +177,7 @@ export default function Buyers() {
                 <ContactInteractions
                   contactId={editingId}
                   contactName={form.name}
-                  onLogged={() => update(editingId, { lastContactDate: todayStr() })}
+                  onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })}
                 />
               </div>
             </div>
@@ -204,6 +204,11 @@ export default function Buyers() {
                   {days !== null && <span className="mono"> （{days} 天前）</span>}
                   {item.source && <>　來源：{item.source}</>}
                 </div>
+                {item.lastContactNote && (
+                  <div className="meta" style={{ marginTop: 2 }}>
+                    內容：{item.lastContactNote}
+                  </div>
+                )}
                 <div style={{ marginTop: 6 }}>
                   {(item.tags || []).map((t) => (
                     <span key={t} className={`tag ${t === "買方" ? "buyer" : ""}`}>{t}</span>

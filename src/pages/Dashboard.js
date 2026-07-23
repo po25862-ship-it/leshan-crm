@@ -124,6 +124,7 @@ export default function Dashboard() {
                   <div className="t1">{c.name}</div>
                   <div className="t2">
                     已 <span className="num">{c.days}</span> 天未聯絡
+                    {c.lastContactNote && `・${c.lastContactNote}`}
                   </div>
                 </div>
               </div>

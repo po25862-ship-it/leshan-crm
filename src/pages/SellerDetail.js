@@ -455,7 +455,7 @@ export default function SellerDetail() {
             <SellerAppointments contactId={contactId} listingId={listingId} listingTitle={form.title} />
           </div>
           <div className="panel">
-            <ContactInteractions contactId={contactId} contactName={ownerForm.name} onLogged={() => saveContact({ lastContactDate: todayStr() })} />
+            <ContactInteractions contactId={contactId} contactName={ownerForm.name} onLogged={({ date, summary }) => saveContact({ lastContactDate: date, lastContactNote: summary })} />
           </div>
         </div>
       </div>

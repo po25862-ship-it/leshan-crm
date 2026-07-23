@@ -83,7 +83,10 @@ export default function ContactInteractions({ contactId, contactName, onLogged }
 
     await add(docData);
 
-    if (onLogged) onLogged();
+    if (onLogged) {
+      const summary = communication.trim() || feedback.trim() || "";
+      onLogged({ date, summary });
+    }
 
     setPropertyInputs([emptyPropertyRow]);
     setFeedback("");
