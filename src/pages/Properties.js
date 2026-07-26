@@ -84,6 +84,15 @@ export default function Properties() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showShare, setShowShare] = useState(false);
 
+  const copyUrl = async (url) => {
+    try {
+      await navigator.clipboard.writeText(withAgid(url));
+      alert("已複製網址（含 agid），可以直接貼給客人");
+    } catch {
+      alert("複製失敗，請手動選取網址複製");
+    }
+  };
+
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -899,6 +908,11 @@ export default function Properties() {
                     開啟網頁
                   </a>
                 )}
+                {form.websiteUrl && (
+                  <button type="button" className="btn ghost" style={{ whiteSpace: "nowrap" }} onClick={() => copyUrl(form.websiteUrl)}>
+                    複製網址
+                  </button>
+                )}
               </div>
             </div>
             <div className="form-field">
@@ -1040,6 +1054,11 @@ export default function Properties() {
                 <a href={withAgid(p.websiteUrl)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   開啟網頁
                 </a>
+              )}
+              {p.websiteUrl && (
+                <button className="btn ghost" onClick={() => copyUrl(p.websiteUrl)}>
+                  複製網址
+                </button>
               )}
               <select
                 value={p.status || "active"}
