@@ -8,7 +8,7 @@ import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
-import ContactInteractions from "./ContactInteractions";
+import SellerInteractions from "./SellerInteractions";
 import SellerAppointments from "./SellerAppointments";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
@@ -200,7 +200,7 @@ export default function SellerDetail() {
     next[idx] = { ...next[idx], [key]: val };
     setForm({ ...form, adPlatforms: next });
   };
-  const addPlatform = () => setForm({ ...form, adPlatforms: [...form.adPlatforms, { name: "", url: "", expiryDate: "" }] });
+  const addPlatform = () => setForm({ ...form, adPlatforms: [...form.adPlatforms, { name: "", url: "", expiryDate: "", note: "" }] });
   const removePlatform = (idx) => setForm({ ...form, adPlatforms: form.adPlatforms.filter((_, i) => i !== idx) });
 
   const handleUpload = async (e) => {
@@ -432,17 +432,25 @@ export default function SellerDetail() {
 
             {isListed && (
               <div className="form-field">
-                <label>廣告網站</label>
+                <label>廣告方式（線上平台或發傳單/OP等實體方式都可以自由新增）</label>
                 {(form.adPlatforms || []).map((p, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                    <input value={p.name} onChange={(e) => updatePlatform(idx, "name", e.target.value)} placeholder="平台名稱" style={{ width: 100 }} />
-                    <input value={p.url} onChange={(e) => updatePlatform(idx, "url", e.target.value)} placeholder="廣告網址" style={{ flex: 1 }} />
-                    {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>}
-                    <input type="date" value={p.expiryDate} onChange={(e) => updatePlatform(idx, "expiryDate", e.target.value)} style={{ width: 140 }} />
-                    <button type="button" className="btn ghost" onClick={() => removePlatform(idx)}>刪除</button>
+                  <div key={idx} style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                      <input value={p.name} onChange={(e) => updatePlatform(idx, "name", e.target.value)} placeholder="方式，例如：591／發傳單／OP／FB" style={{ width: 140 }} />
+                      <input value={p.url} onChange={(e) => updatePlatform(idx, "url", e.target.value)} placeholder="廣告網址（線上才需要）" style={{ flex: 1 }} />
+                      {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>}
+                      <input type="date" value={p.expiryDate} onChange={(e) => updatePlatform(idx, "expiryDate", e.target.value)} style={{ width: 140 }} />
+                      <button type="button" className="btn ghost" onClick={() => removePlatform(idx)}>刪除</button>
+                    </div>
+                    <input
+                      value={p.note || ""}
+                      onChange={(e) => updatePlatform(idx, "note", e.target.value)}
+                      placeholder="數量／說明，例如：發傳單 1200份 文化七路附近"
+                      style={{ width: "100%" }}
+                    />
                   </div>
                 ))}
-                <button type="button" className="btn ghost" onClick={addPlatform}>＋ 新增廣告平台</button>
+                <button type="button" className="btn ghost" onClick={addPlatform}>＋ 新增廣告方式</button>
               </div>
             )}
           </div>
@@ -455,7 +463,12 @@ export default function SellerDetail() {
             <SellerAppointments contactId={contactId} listingId={listingId} listingTitle={form.title} />
           </div>
           <div className="panel">
-            <ContactInteractions contactId={contactId} contactName={ownerForm.name} onLogged={({ date, summary }) => saveContact({ lastContactDate: date, lastContactNote: summary })} />
+            <SellerInteractions
+              contactId={contactId}
+              listingId={listingId}
+              listingTitle={form.title}
+              onLogged={({ date, summary }) => saveContact({ lastContactDate: date, lastContactNote: summary })}
+            />
           </div>
         </div>
       </div>
