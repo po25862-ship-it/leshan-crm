@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
-import ContactInteractions from "./ContactInteractions";
-import ContactAppointments from "./ContactAppointments";
+import BuyerActivityLog from "./BuyerActivityLog";
 import BuyerNeeds from "./BuyerNeeds";
 import RocDateHint from "./RocDateHint";
 
@@ -192,10 +191,7 @@ export default function Buyers() {
                 <BuyerNeeds contactId={editingId} contactName={form.name} />
               </div>
               <div className="panel">
-                <ContactAppointments contactId={editingId} contactName={form.name} />
-              </div>
-              <div className="panel">
-                <ContactInteractions
+                <BuyerActivityLog
                   contactId={editingId}
                   contactName={form.name}
                   onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })}
