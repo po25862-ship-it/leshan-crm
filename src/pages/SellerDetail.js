@@ -8,8 +8,7 @@ import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
-import SellerInteractions from "./SellerInteractions";
-import SellerAppointments from "./SellerAppointments";
+import SellerActivityLog from "./SellerActivityLog";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 
@@ -25,43 +24,6 @@ function linkify(text) {
     ) : (
       <React.Fragment key={i}>{part}</React.Fragment>
     )
-  );
-}
-
-function ProgressLog({ contactId, listingId }) {
-  const { items, add, remove } = useCollection(`contacts/${contactId}/listings/${listingId}/progressLogs`, "date");
-  const [date, setDate] = useState(todayStr());
-  const [content, setContent] = useState("");
-  const sorted = [...items].sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  const onAdd = async (e) => {
-    e.preventDefault();
-    if (!content.trim()) return;
-    await add({ date, content });
-    setContent("");
-  };
-
-  return (
-    <div>
-      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>銷售進度回報</div>
-      <form onSubmit={onAdd} style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 150, padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }} />
-        <input
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="例如：591 詢問度增加、屋主同意降價…（含網址會自動變連結）"
-          style={{ flex: 1, padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
-        />
-        <button className="btn" type="submit">新增</button>
-      </form>
-      {sorted.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有進度回報</div>}
-      {sorted.map((log) => (
-        <div key={log.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
-          <div><span className="mono" style={{ color: "var(--muted)", marginRight: 10 }}>{formatDate(log.date)}</span>{linkify(log.content)}</div>
-          <button onClick={() => remove(log.id)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>刪除</button>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -456,14 +418,7 @@ export default function SellerDetail() {
           </div>
 
           <div className="panel">
-            <ProgressLog contactId={contactId} listingId={listingId} />
-          </div>
-
-          <div className="panel">
-            <SellerAppointments contactId={contactId} listingId={listingId} listingTitle={form.title} />
-          </div>
-          <div className="panel">
-            <SellerInteractions
+            <SellerActivityLog
               contactId={contactId}
               listingId={listingId}
               listingTitle={form.title}
