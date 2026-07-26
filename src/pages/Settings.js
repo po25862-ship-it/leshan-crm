@@ -20,6 +20,49 @@ export default function Settings() {
     alert("已儲存");
   };
 
+  const [migratingInteractions, setMigratingInteractions] = useState(false);
+  const [migrateInteractionsResult, setMigrateInteractionsResult] = useState(null);
+
+  const migrateOldSellerInteractions = async () => {
+    if (!window.confirm("這會把賣方客戶身上舊版的帶看/互動紀錄，搬移到對應的委託物件底下。確定要執行嗎？")) {
+      return;
+    }
+    setMigratingInteractions(true);
+    let movedCount = 0;
+    let skippedContacts = [];
+    try {
+      const contactsSnap = await getDocs(collection(db, "contacts"));
+      for (const contactDoc of contactsSnap.docs) {
+        const data = contactDoc.data();
+        if (!(data.tags || []).includes("賣方")) continue;
+
+        const oldInteractionsSnap = await getDocs(collection(db, `contacts/${contactDoc.id}/interactions`));
+        if (oldInteractionsSnap.empty) continue;
+
+        const listingsSnap = await getDocs(collection(db, `contacts/${contactDoc.id}/listings`));
+        if (listingsSnap.size !== 1) {
+          skippedContacts.push({ name: data.name || contactDoc.id, count: oldInteractionsSnap.size, listings: listingsSnap.size });
+          continue; // 有 0 筆或多筆委託物件時無法自動判斷要搬去哪一筆，先跳過
+        }
+
+        const listingId = listingsSnap.docs[0].id;
+        const batch = writeBatch(db);
+        oldInteractionsSnap.docs.forEach((d) => {
+          const newRef = doc(collection(db, `contacts/${contactDoc.id}/listings/${listingId}/interactions`));
+          batch.set(newRef, d.data());
+          batch.delete(d.ref);
+        });
+        await batch.commit();
+        movedCount += oldInteractionsSnap.size;
+      }
+      setMigrateInteractionsResult({ movedCount, skippedContacts });
+    } catch (err) {
+      console.error(err);
+      alert("搬移過程發生錯誤，請截圖錯誤訊息給我");
+    }
+    setMigratingInteractions(false);
+  };
+
   const migrateOldFiles = async () => {
     if (!window.confirm("這會把物件資料表、賣方委託資料、出租合約裡舊格式的單一檔案，轉成新的多檔案格式。確定要執行嗎？")) {
       return;
@@ -156,6 +199,29 @@ export default function Settings() {
               {gsiReady ? "連結 Google 帳號" : "載入中…"}
             </button>
           </>
+        )}
+      </div>
+
+      <div className="section-title">賣方帶看紀錄搬移</div>
+      <div className="panel" style={{ maxWidth: 420, marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
+          之前賣方的帶看/互動紀錄，曾經存在「客戶本身」底下，後來改成存在「委託物件」底下。<b style={{ color: "var(--ink)" }}>如果某位賣方的舊紀錄在委託物件詳情頁看不到，點這個按鈕搬一次就會出現。</b>只有一筆委託物件的賣方會自動搬移；有 0 筆或多筆委託物件的賣方，因為不知道要搬去哪一筆，會列出來讓你知道，需要的話再跟我說個別處理。
+        </div>
+        <button className="btn" onClick={migrateOldSellerInteractions} disabled={migratingInteractions}>
+          {migratingInteractions ? "搬移中…" : "搬移賣方帶看紀錄"}
+        </button>
+        {migrateInteractionsResult && (
+          <div style={{ marginTop: 12, fontSize: 12 }}>
+            <div style={{ color: "var(--accent)" }}>完成：搬了 {migrateInteractionsResult.movedCount} 筆記錄</div>
+            {migrateInteractionsResult.skippedContacts.length > 0 && (
+              <div style={{ marginTop: 8, color: "var(--brass)" }}>
+                以下賣方跳過，需要手動處理：
+                {migrateInteractionsResult.skippedContacts.map((s, i) => (
+                  <div key={i}>・{s.name}（{s.count} 筆舊紀錄，目前有 {s.listings} 筆委託物件）</div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
