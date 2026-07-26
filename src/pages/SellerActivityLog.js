@@ -15,8 +15,8 @@ function linkify(text) {
   );
 }
 
-const TYPE_LABELS = { progress: "進度回報", appointment: "預約／處理", viewing: "帶看紀錄" };
-const TYPE_ICONS = { progress: "📢", appointment: "📅", viewing: "👀" };
+const TYPE_LABELS = { progress: "進度回報", appointment: "預約／處理", viewing: "帶看紀錄", legacy: "委託前洽談紀錄" };
+const TYPE_ICONS = { progress: "📢", appointment: "📅", viewing: "👀", legacy: "🗂️" };
 
 export default function SellerActivityLog({ contactId, listingId, listingTitle, onLogged }) {
   const { isConnected, createEvent } = useGoogleAuth();
@@ -54,7 +54,11 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
   const merged = [
     ...progressItems.map((i) => ({ ...i, _type: "progress" })),
     ...apptItems.map((i) => ({ ...i, _type: "appointment" })),
-    ...viewingItems.map((i) => ({ ...i, _type: "viewing" })),
+    ...viewingItems.map((i) => ({
+      ...i,
+      // 搬移過來的舊資料是用「看過的物件／回饋／溝通」這套舊格式，不是真正的帶看紀錄，獨立標示成「委託前洽談紀錄」
+      _type: i.customerBackground !== undefined || i.agentName !== undefined ? "viewing" : "legacy",
+    })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const submitProgress = async (e) => {
@@ -120,7 +124,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>委託物件紀錄</div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        {Object.entries(TYPE_LABELS).map(([key, label]) => (
+        {["progress", "appointment", "viewing"].map((key) => (
           <button
             key={key}
             type="button"
@@ -128,7 +132,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
             className={activeType === key ? "btn" : "btn ghost"}
             style={{ fontSize: 12 }}
           >
-            {TYPE_ICONS[key]} {label}
+            {TYPE_ICONS[key]} {TYPE_LABELS[key]}
           </button>
         ))}
       </div>
@@ -217,6 +221,20 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
                 </div>
               )}
               {item.feedback && <div style={{ marginTop: 2 }}>回饋：{linkify(item.feedback)}</div>}
+              {item.communication && <div style={{ marginTop: 2 }}>溝通：{linkify(item.communication)}</div>}
+            </div>
+          )}
+
+          {item._type === "legacy" && (
+            <div style={{ marginTop: 6 }}>
+              {(item.properties || []).length > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  {item.properties.map((p, i) => (
+                    <span key={i} className="tag" style={{ background: "#F3EFE6", color: "var(--brass)" }}>{p.label}</span>
+                  ))}
+                </div>
+              )}
+              {item.feedback && <div>回饋：{linkify(item.feedback)}</div>}
               {item.communication && <div style={{ marginTop: 2 }}>溝通：{linkify(item.communication)}</div>}
             </div>
           )}
