@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
 import ContactInteractions from "./ContactInteractions";
@@ -21,6 +22,7 @@ export default function Buyers() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [keyword, setKeyword] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const buyers = items.filter((c) => (c.tags || []).includes("買方"));
 
@@ -42,6 +44,25 @@ export default function Buyers() {
     setEditingId(item.id);
     setShowForm(true);
   };
+
+  // 支援用網址直接開啟指定客戶（?open=ID），或帶著待辦事項轉來的草稿內容開新表單（?draftNote=文字）
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    const draftNote = searchParams.get("draftNote");
+    if (openId) {
+      const found = items.find((c) => c.id === openId);
+      if (found) {
+        openEdit(found);
+        setSearchParams({}, { replace: true });
+      }
+    } else if (draftNote) {
+      setForm({ ...emptyForm, notes: draftNote });
+      setEditingId(null);
+      setShowForm(true);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, searchParams]);
 
   const toggleTag = (tag) => {
     setForm((f) => ({

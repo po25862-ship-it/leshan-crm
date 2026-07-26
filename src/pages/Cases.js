@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
@@ -61,6 +62,19 @@ export default function Cases() {
     setEditingId(item.id);
     setShowForm(true);
   };
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) {
+      const found = items.find((c) => c.id === openId);
+      if (found) {
+        openEdit(found);
+        setSearchParams({}, { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, searchParams]);
 
   const updateMilestone = (idx, key, val) => {
     const next = [...form.milestones];

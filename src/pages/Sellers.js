@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
@@ -43,6 +43,24 @@ export default function Sellers() {
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [creating, setCreating] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // 支援用網址直接搜尋某個賣方（?q=姓名），或直接開啟新增委託表單（?newSeller=1，可選帶 draftNote 帶入姓名欄位）
+  useEffect(() => {
+    const q = searchParams.get("q");
+    const newSeller = searchParams.get("newSeller");
+    const draftNote = searchParams.get("draftNote");
+    if (q) {
+      setKeyword(q);
+      setSearchParams({}, { replace: true });
+    } else if (newSeller) {
+      setShowNewForm(true);
+      setNewMode("new");
+      if (draftNote) setNewName(draftNote);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const sellerContacts = contacts.filter((c) => (c.tags || []).includes("賣方"));
   const contactMap = useMemo(() => {

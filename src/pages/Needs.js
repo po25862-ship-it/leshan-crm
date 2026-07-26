@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
@@ -51,6 +52,19 @@ export default function Needs() {
     setEditingId(item.id);
     setShowForm(true);
   };
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) {
+      const found = items.find((n) => n.id === openId);
+      if (found) {
+        openEdit(found);
+        setSearchParams({}, { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, searchParams]);
 
   const onContactChange = (id) => {
     const c = contacts.find((x) => x.id === id);

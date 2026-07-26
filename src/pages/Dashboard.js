@@ -1,10 +1,12 @@
-import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { useDoc } from "../hooks/useDoc";
 import { daysSince, daysUntil, formatDate, nextMonthlyDueDate } from "../lib/dates";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const [contactMenuId, setContactMenuId] = useState(null);
   const { items: contacts } = useCollection("contacts", "name");
   const { items: recentContacts } = useCollection("contacts", "createdAt");
   const { items: cases } = useCollection("cases", "createdAt");
@@ -33,7 +35,7 @@ export default function Dashboard() {
         if (!m.date || m.done) return;
         const until = daysUntil(m.date);
         if (until !== null && until >= -1 && until <= 14) {
-          result.push({ id: `${c.id}-${m.label}`, caseTitle: c.title, label: m.label, date: m.date, until });
+          result.push({ id: `${c.id}-${m.label}`, caseId: c.id, caseTitle: c.title, label: m.label, date: m.date, until });
         }
       });
     });
@@ -85,6 +87,21 @@ export default function Dashboard() {
   const recentBuyers = recentContacts.filter((c) => (c.tags || []).includes("買方"));
   const recentSellers = recentContacts.filter((c) => (c.tags || []).includes("賣方"));
 
+  // 點客戶名字時，判斷要去買方頁面還是賣方頁面（賣方是搜尋結果，因為可能有好幾筆委託）
+  const goToContact = (contact) => {
+    const isBuyer = (contact.tags || []).includes("買方");
+    const isSeller = (contact.tags || []).includes("賣方");
+    if (isBuyer && isSeller) {
+      setContactMenuId(contactMenuId === contact.id ? null : contact.id);
+      return;
+    }
+    if (isSeller) {
+      navigate(`/sellers?q=${encodeURIComponent(contact.name)}`);
+    } else {
+      navigate(`/buyers?open=${contact.id}`);
+    }
+  };
+
   return (
     <main>
       <div className="kpi-row">
@@ -118,15 +135,23 @@ export default function Dashboard() {
               </div>
             )}
             {overdueContacts.map((c) => (
-              <div className="reminder" key={c.id}>
-                <div className="dot"></div>
-                <div className="txt">
-                  <div className="t1">{c.name}</div>
-                  <div className="t2">
-                    已 <span className="num">{c.days}</span> 天未聯絡
-                    {c.lastContactNote && `・${c.lastContactNote}`}
+              <div key={c.id} style={{ position: "relative" }}>
+                <div className="reminder" onClick={() => goToContact(c)} style={{ cursor: "pointer" }}>
+                  <div className="dot"></div>
+                  <div className="txt">
+                    <div className="t1">{c.name}</div>
+                    <div className="t2">
+                      已 <span className="num">{c.days}</span> 天未聯絡
+                      {c.lastContactNote && `・${c.lastContactNote}`}
+                    </div>
                   </div>
                 </div>
+                {contactMenuId === c.id && (
+                  <div style={{ display: "flex", gap: 8, padding: "0 0 10px 18px" }}>
+                    <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => navigate(`/buyers?open=${c.id}`)}>前往買方頁面</button>
+                    <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => navigate(`/sellers?q=${encodeURIComponent(c.name)}`)}>前往賣方頁面</button>
+                  </div>
+                )}
               </div>
             ))}
             <div style={{ marginTop: 14 }}>
@@ -144,7 +169,7 @@ export default function Dashboard() {
               <div className="empty-state">近期沒有快到期的租金收款</div>
             )}
             {upcomingRentDue.map((r) => (
-              <div className="reminder" key={r.id}>
+              <div className="reminder" key={r.id} onClick={() => navigate(`/rentals/${r.id}`)} style={{ cursor: "pointer" }}>
                 <div className="dot" style={{ background: r.until <= 0 ? "var(--danger)" : "var(--brass)" }}></div>
                 <div className="txt">
                   <div className="t1">{r.title}</div>
@@ -170,7 +195,7 @@ export default function Dashboard() {
               <div className="empty-state">近 14 天內沒有成交案件的里程碑</div>
             )}
             {upcomingMilestones.map((m) => (
-              <div className="reminder" key={m.id}>
+              <div className="reminder" key={m.id} onClick={() => navigate(`/cases?open=${m.caseId}`)} style={{ cursor: "pointer" }}>
                 <div className="dot" style={{ background: "var(--brass)" }}></div>
                 <div className="txt">
                   <div className="t1">
@@ -199,7 +224,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 13, color: "var(--muted)" }}>目前沒有「正在找」的客需</div>
             )}
             {activeNeeds.slice(0, 5).map((n) => (
-              <div key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <div key={n.id} onClick={() => navigate(`/needs?open=${n.id}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
                 <div style={{ fontWeight: 700 }}>{n.title}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>
                   {n.contactName}
@@ -229,7 +254,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 13, color: "var(--muted)" }}>目前沒有「進行中」的商談事項</div>
             )}
             {activeTopics.slice(0, 5).map((t) => (
-              <div key={t.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <div key={t.id} onClick={() => navigate(`/topics?open=${t.id}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
                 <div style={{ fontWeight: 700 }}>{t.title}</div>
                 {t.counterpart && <div style={{ fontSize: 11, color: "var(--muted)" }}>對方：{t.counterpart}</div>}
                 {t.lastUpdatedDate && <div style={{ fontSize: 11, color: "var(--muted)" }}>更新於 {formatDate(t.lastUpdatedDate)}</div>}
@@ -252,7 +277,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有買方客戶</div>
             )}
             {recentBuyers.slice(0, 5).map((c) => (
-              <div key={c.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <div key={c.id} onClick={() => navigate(`/buyers?open=${c.id}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
                 <div style={{ fontWeight: 700 }}>{c.name}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.phone || "—"}</div>
               </div>
@@ -274,7 +299,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有賣方客戶</div>
             )}
             {recentSellers.slice(0, 5).map((c) => (
-              <div key={c.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <div key={c.id} onClick={() => navigate(`/sellers?q=${encodeURIComponent(c.name)}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
                 <div style={{ fontWeight: 700 }}>{c.name}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.phone || "—"}</div>
               </div>

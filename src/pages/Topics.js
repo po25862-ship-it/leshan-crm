@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { useGoogleAuth } from "../GoogleAuthContext";
@@ -134,6 +135,25 @@ export default function Topics() {
     setEditingId(item.id);
     setShowForm(true);
   };
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    const draftNote = searchParams.get("draftNote");
+    if (openId) {
+      const found = items.find((t) => t.id === openId);
+      if (found) {
+        openEdit(found);
+        setSearchParams({}, { replace: true });
+      }
+    } else if (draftNote) {
+      setForm({ ...emptyForm, title: draftNote });
+      setEditingId(null);
+      setShowForm(true);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, searchParams]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
