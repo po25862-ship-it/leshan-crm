@@ -8,6 +8,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [contactMenuId, setContactMenuId] = useState(null);
   const { items: contacts } = useCollection("contacts", "name");
+  const { items: quickNotes, update: updateNote, remove: removeNote } = useCollection("quickNotes", "createdAt");
   const { items: recentContacts } = useCollection("contacts", "createdAt");
   const { items: cases } = useCollection("cases", "createdAt");
   const { items: needs } = useCollection("needs", "createdAt");
@@ -87,6 +88,17 @@ export default function Dashboard() {
   const recentBuyers = recentContacts.filter((c) => (c.tags || []).includes("買方"));
   const recentSellers = recentContacts.filter((c) => (c.tags || []).includes("賣方"));
 
+  const pendingNotes = quickNotes.filter((n) => !n.done);
+  const [noteMoveMenuId, setNoteMoveMenuId] = useState(null);
+
+  const moveNoteTo = async (note, destination) => {
+    const encoded = encodeURIComponent(note.text);
+    await removeNote(note.id);
+    if (destination === "buyer") navigate(`/buyers?draftNote=${encoded}`);
+    else if (destination === "seller") navigate(`/sellers?newSeller=1&draftNote=${encoded}`);
+    else if (destination === "topic") navigate(`/topics?draftNote=${encoded}`);
+  };
+
   // 點客戶名字時，判斷要去買方頁面還是賣方頁面（賣方是搜尋結果，因為可能有好幾筆委託）
   const goToContact = (contact) => {
     const isBuyer = (contact.tags || []).includes("買方");
@@ -112,6 +124,10 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="panel kpi">
+          <div className="label">待辦事項</div>
+          <div className="value">{pendingNotes.length}</div>
+        </div>
+        <div className="panel kpi">
           <div className="label">成交案件</div>
           <div className="value">{closedCases.length}</div>
         </div>
@@ -125,7 +141,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 24, marginBottom: 28 }}>
         <div>
           <div className="section-title">跟進提醒</div>
           <div className="panel">
@@ -157,6 +173,49 @@ export default function Dashboard() {
             <div style={{ marginTop: 14 }}>
               <Link to="/buyers" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                 前往客戶名單
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="section-title">
+            待辦事項 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{pendingNotes.length}</span>
+          </div>
+          <div className="panel">
+            {pendingNotes.length === 0 && <div className="empty-state">目前沒有待辦事項</div>}
+            {pendingNotes.slice(0, 6).map((n) => (
+              <div key={n.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <input type="checkbox" checked={false} onChange={() => updateNote(n.id, { done: true })} style={{ marginTop: 3 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13 }}>{n.text}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                      <button
+                        className="btn ghost"
+                        style={{ fontSize: 11, padding: "3px 8px" }}
+                        onClick={() => setNoteMoveMenuId(noteMoveMenuId === n.id ? null : n.id)}
+                      >
+                        移動到…
+                      </button>
+                      <button className="btn ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => removeNote(n.id)}>
+                        刪除
+                      </button>
+                    </div>
+                    {noteMoveMenuId === n.id && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                        <button className="btn" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => moveNoteTo(n, "buyer")}>買方</button>
+                        <button className="btn" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => moveNoteTo(n, "seller")}>賣方</button>
+                        <button className="btn" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => moveNoteTo(n, "topic")}>商談事項</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop: 14 }}>
+              <Link to="/quicknotes" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
+                前往待辦事項
               </Link>
             </div>
           </div>

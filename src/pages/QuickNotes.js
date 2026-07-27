@@ -3,16 +3,24 @@ import { useNavigate } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 
 export default function QuickNotes() {
-  const { items, update, remove } = useCollection("quickNotes", "createdAt");
+  const { items, add, update, remove } = useCollection("quickNotes", "createdAt");
   const navigate = useNavigate();
   const [moveMenuId, setMoveMenuId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [newText, setNewText] = useState("");
 
   const pending = items.filter((n) => !n.done);
   const done = items.filter((n) => n.done);
 
   const toggleDone = (item) => update(item.id, { done: !item.done });
+
+  const submitNew = async (e) => {
+    e.preventDefault();
+    if (!newText.trim()) return;
+    await add({ text: newText.trim(), done: false, source: "manual" });
+    setNewText("");
+  };
 
   const startEdit = (item) => {
     setEditingId(item.id);
@@ -56,6 +64,16 @@ export default function QuickNotes() {
       <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 18 }}>
         對 Siri 說「嗨 Siri，新增待辦」講內容，會自動出現在這裡。語音辨識有錯字的話，點「修改文字」可以直接編輯。點「移動到…」可以把這筆待辦轉成買方／賣方／商談事項的正式記錄。
       </div>
+
+      <form onSubmit={submitNew} style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <input
+          value={newText}
+          onChange={(e) => setNewText(e.target.value)}
+          placeholder="輸入待辦內容…"
+          style={{ flex: 1, maxWidth: 400, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        />
+        <button className="btn" type="submit">＋ 新增待辦</button>
+      </form>
 
       <div className="panel" style={{ marginBottom: 20 }}>
         {pending.length === 0 && <div className="empty-state">目前沒有待辦事項</div>}
