@@ -6,7 +6,7 @@ import { useGoogleAuth } from "../GoogleAuthContext";
 
 const emptyForm = { title: "", counterpart: "", statusTag: "進行中", notes: "" };
 
-function TopicLogs({ topicId, topicTitle }) {
+function TopicLogs({ topicId, topicTitle, onLogged }) {
   const { items: logs, add, remove } = useCollection(`topics/${topicId}/logs`, "date");
   const { isConnected, createEvent } = useGoogleAuth();
   const [date, setDate] = useState(todayStr());
@@ -33,6 +33,7 @@ function TopicLogs({ topicId, topicTitle }) {
       }
     }
     await add(docData);
+    if (onLogged) onLogged({ date, summary: note });
     setNote("");
     setSyncToCalendar(false);
   };
@@ -251,7 +252,13 @@ export default function Topics() {
             </div>
           </form>
 
-          {editingId && <TopicLogs topicId={editingId} topicTitle={form.title} />}
+          {editingId && (
+            <TopicLogs
+              topicId={editingId}
+              topicTitle={form.title}
+              onLogged={({ date, summary }) => update(editingId, { lastUpdatedDate: date, lastStatusNote: summary })}
+            />
+          )}
         </div>
       )}
 

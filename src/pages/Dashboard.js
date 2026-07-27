@@ -222,26 +222,26 @@ export default function Dashboard() {
         </div>
 
         <div>
-          <div className="section-title">租金提醒</div>
+          <div className="section-title">商談事項</div>
           <div className="panel">
-            {upcomingRentDue.length === 0 && (
-              <div className="empty-state">近期沒有快到期的租金收款</div>
+            {activeTopics.length === 0 && (
+              <div className="empty-state">目前沒有「進行中」的商談事項</div>
             )}
-            {upcomingRentDue.map((r) => (
-              <div className="reminder" key={r.id} onClick={() => navigate(`/rentals/${r.id}`)} style={{ cursor: "pointer" }}>
-                <div className="dot" style={{ background: r.until <= 0 ? "var(--danger)" : "var(--brass)" }}></div>
+            {activeTopics.slice(0, 5).map((t) => (
+              <div className="reminder" key={t.id} onClick={() => navigate(`/topics?open=${t.id}`)} style={{ cursor: "pointer" }}>
+                <div className="dot"></div>
                 <div className="txt">
-                  <div className="t1">{r.title}</div>
-                  <div className="t2">
-                    {r.until === 0 ? "今天收租" : r.until < 0 ? `已過期 ${-r.until} 天` : `${r.until} 天後收租`}
-                    {r.tenantName && `・${r.tenantName}`}
-                  </div>
+                  <div className="t1">{t.title}{t.counterpart && `・${t.counterpart}`}</div>
+                  {t.lastStatusNote && (
+                    <div style={{ fontSize: 15, color: "var(--ink)", fontWeight: 500, marginTop: 4 }}>{t.lastStatusNote}</div>
+                  )}
+                  {t.lastUpdatedDate && <div className="t2">更新於 {formatDate(t.lastUpdatedDate)}</div>}
                 </div>
               </div>
             ))}
             <div style={{ marginTop: 14 }}>
-              <Link to="/rentals" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
-                前往出租管理
+              <Link to="/topics" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
+                前往商談事項
               </Link>
             </div>
           </div>
@@ -301,27 +301,24 @@ export default function Dashboard() {
 
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
-            商談事項・進行中 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{activeTopics.length}</span>
-            {latestTopicUpdate && (
-              <span className="mono" style={{ marginLeft: 10, fontSize: 11, color: "var(--brass)", fontWeight: 400 }}>
-                最新更新：{formatDate(latestTopicUpdate)}
-              </span>
-            )}
+            租金提醒 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{upcomingRentDue.length}</span>
           </div>
           <div className="panel">
-            {activeTopics.length === 0 && (
-              <div style={{ fontSize: 13, color: "var(--muted)" }}>目前沒有「進行中」的商談事項</div>
+            {upcomingRentDue.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--muted)" }}>近期沒有快到期的租金收款</div>
             )}
-            {activeTopics.slice(0, 5).map((t) => (
-              <div key={t.id} onClick={() => navigate(`/topics?open=${t.id}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
-                <div style={{ fontWeight: 700 }}>{t.title}</div>
-                {t.counterpart && <div style={{ fontSize: 11, color: "var(--muted)" }}>對方：{t.counterpart}</div>}
-                {t.lastUpdatedDate && <div style={{ fontSize: 11, color: "var(--muted)" }}>更新於 {formatDate(t.lastUpdatedDate)}</div>}
+            {upcomingRentDue.slice(0, 5).map((r) => (
+              <div key={r.id} onClick={() => navigate(`/rentals/${r.id}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
+                <div style={{ fontWeight: 700 }}>{r.title}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                  {r.until === 0 ? "今天收租" : r.until < 0 ? `已過期 ${-r.until} 天` : `${r.until} 天後收租`}
+                  {r.tenantName && `・${r.tenantName}`}
+                </div>
               </div>
             ))}
             <div style={{ marginTop: 12 }}>
-              <Link to="/topics" className="btn ghost" style={{ textDecoration: "none", display: "inline-block", fontSize: 12 }}>
-                前往商談事項
+              <Link to="/rentals" className="btn ghost" style={{ textDecoration: "none", display: "inline-block", fontSize: 12 }}>
+                前往出租管理
               </Link>
             </div>
           </div>
