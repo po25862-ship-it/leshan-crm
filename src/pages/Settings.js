@@ -20,6 +20,41 @@ export default function Settings() {
     alert("已儲存");
   };
 
+  const [backfillingTopics, setBackfillingTopics] = useState(false);
+  const [backfillTopicsResult, setBackfillTopicsResult] = useState(null);
+
+  const backfillTopicStatus = async () => {
+    setBackfillingTopics(true);
+    let count = 0;
+    try {
+      const topicsSnap = await getDocs(collection(db, "topics"));
+      const batch = writeBatch(db);
+      let opCount = 0;
+      for (const topicDoc of topicsSnap.docs) {
+        const logsSnap = await getDocs(collection(db, `topics/${topicDoc.id}/logs`));
+        if (logsSnap.empty) continue;
+        const logs = logsSnap.docs.map((d) => d.data()).sort((a, b) => (a.date < b.date ? 1 : -1));
+        const latest = logs[0];
+        batch.update(doc(db, "topics", topicDoc.id), {
+          lastStatusNote: latest.note || "",
+          lastUpdatedDate: latest.date || topicDoc.data().lastUpdatedDate || "",
+        });
+        count++;
+        opCount++;
+        if (opCount >= 400) {
+          await batch.commit();
+          opCount = 0;
+        }
+      }
+      if (opCount > 0) await batch.commit();
+      setBackfillTopicsResult(count);
+    } catch (err) {
+      console.error(err);
+      alert("補齊失敗，請截圖錯誤訊息給我");
+    }
+    setBackfillingTopics(false);
+  };
+
   const [migratingInteractions, setMigratingInteractions] = useState(false);
   const [migrateInteractionsResult, setMigrateInteractionsResult] = useState(null);
 
@@ -199,6 +234,21 @@ export default function Settings() {
               {gsiReady ? "連結 Google 帳號" : "載入中…"}
             </button>
           </>
+        )}
+      </div>
+
+      <div className="section-title">商談事項最新狀況補齊</div>
+      <div className="panel" style={{ maxWidth: 420, marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
+          總覽頁「商談事項」的最新狀況，只有新增討論紀錄之後才會顯示。<b style={{ color: "var(--ink)" }}>點這個按鈕，會把每筆商談事項「原本已經有的最新一筆討論紀錄」抓出來補上</b>，之後就會在總覽頁看到。可以重複點，不會出錯。
+        </div>
+        <button className="btn" onClick={backfillTopicStatus} disabled={backfillingTopics}>
+          {backfillingTopics ? "補齊中…" : "補齊商談事項最新狀況"}
+        </button>
+        {backfillTopicsResult !== null && (
+          <div style={{ marginTop: 12, fontSize: 12, color: "var(--accent)" }}>
+            完成：補齊了 {backfillTopicsResult} 筆商談事項
+          </div>
         )}
       </div>
 
