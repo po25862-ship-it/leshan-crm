@@ -6,11 +6,25 @@ export default function QuickNotes() {
   const { items, update, remove } = useCollection("quickNotes", "createdAt");
   const navigate = useNavigate();
   const [moveMenuId, setMoveMenuId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
 
   const pending = items.filter((n) => !n.done);
   const done = items.filter((n) => n.done);
 
   const toggleDone = (item) => update(item.id, { done: !item.done });
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setEditText(item.text);
+    setMoveMenuId(null);
+  };
+  const saveEdit = async (item) => {
+    if (!editText.trim()) return;
+    await update(item.id, { text: editText.trim() });
+    setEditingId(null);
+  };
+  const cancelEdit = () => setEditingId(null);
 
   const formatTime = (ts) => {
     if (!ts) return "";
@@ -40,7 +54,7 @@ export default function QuickNotes() {
         <div className="section-title">待辦（{pending.length}）</div>
       </div>
       <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 18 }}>
-        對 Siri 說「嗨 Siri，新增待辦」講內容，會自動出現在這裡。點「移動到…」可以把這筆待辦轉成買方／賣方／商談事項的正式記錄。
+        對 Siri 說「嗨 Siri，新增待辦」講內容，會自動出現在這裡。語音辨識有錯字的話，點「修改文字」可以直接編輯。點「移動到…」可以把這筆待辦轉成買方／賣方／商談事項的正式記錄。
       </div>
 
       <div className="panel" style={{ marginBottom: 20 }}>
@@ -48,20 +62,45 @@ export default function QuickNotes() {
         {pending.map((n) => (
           <div key={n.id} className="list-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
             <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-              <div>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                  <input type="checkbox" checked={false} onChange={() => toggleDone(n)} />
-                  <span>
-                    <div className="name" style={{ fontSize: 14 }}>{n.text}</div>
-                    <div className="meta">{formatTime(n.createdAt)}{n.source === "siri" && "　🎙️ Siri"}</div>
-                  </span>
-                </label>
+              <div style={{ flex: 1 }}>
+                {editingId === n.id ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      autoFocus
+                      style={{ flex: 1, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEdit(n);
+                        if (e.key === "Escape") cancelEdit();
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={false} onChange={() => toggleDone(n)} />
+                    <span>
+                      <div className="name" style={{ fontSize: 14 }}>{n.text}</div>
+                      <div className="meta">{formatTime(n.createdAt)}{n.source === "siri" && "　🎙️ Siri"}</div>
+                    </span>
+                  </label>
+                )}
               </div>
               <div className="actions">
-                <button className="btn ghost" onClick={() => setMoveMenuId(moveMenuId === n.id ? null : n.id)}>
-                  移動到…
-                </button>
-                <button className="btn ghost" onClick={() => remove(n.id)}>刪除</button>
+                {editingId === n.id ? (
+                  <>
+                    <button className="btn" onClick={() => saveEdit(n)}>儲存</button>
+                    <button className="btn ghost" onClick={cancelEdit}>取消</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn ghost" onClick={() => startEdit(n)}>修改文字</button>
+                    <button className="btn ghost" onClick={() => setMoveMenuId(moveMenuId === n.id ? null : n.id)}>
+                      移動到…
+                    </button>
+                    <button className="btn ghost" onClick={() => remove(n.id)}>刪除</button>
+                  </>
+                )}
               </div>
             </div>
             {moveMenuId === n.id && (
