@@ -2,10 +2,12 @@ import React, { useState, useEffect } from "react";
 import { collection, collectionGroup, getDocs, doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { useDoc } from "../hooks/useDoc";
+import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 
 export default function Settings() {
   const { data, save } = useDoc("settings/general", { reminderDays: 5 });
+  const { items: activityLog } = useCollection("propertyActivityLog", "at");
   const [days, setDays] = useState(5);
   const { isConnected, email, connect, disconnect, gsiReady } = useGoogleAuth();
   const [migrating, setMigrating] = useState(false);
@@ -194,6 +196,35 @@ export default function Settings() {
             儲存設定
           </button>
         </div>
+      </div>
+
+      <div className="section-title">同事異動紀錄（物件管理網站）</div>
+      <div className="panel" style={{ maxWidth: 560, marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
+          同事在「物件管理」網站新增或編輯物件時，會自動記在這裡（只有你看得到）。
+        </div>
+        {activityLog.length === 0 && (
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>目前還沒有紀錄</div>
+        )}
+        {activityLog.slice(0, 30).map((log) => (
+          <div key={log.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>
+                <span style={{ fontWeight: 700 }}>{log.byEmail || "未知帳號"}</span>
+                　{log.action === "新增" ? "新增了" : "編輯了"}
+                　<span style={{ fontWeight: 700 }}>{log.title}</span>
+              </span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>
+                {log.at?.toDate ? log.at.toDate().toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+              </span>
+            </div>
+            {log.changes && log.changes.length > 0 && (
+              <div style={{ marginTop: 4, color: "var(--muted)" }}>
+                {log.changes.map((c, i) => <div key={i}>・{c}</div>)}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="section-title">Google 行事曆</div>

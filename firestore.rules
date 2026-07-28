@@ -1,6 +1,28 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 物件資料開放給所有登入過的員工帳號讀取/新增/編輯，刪除只限本人
+    match /properties/{propId} {
+      allow read, create, update: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
+
+      match /{subcollection}/{docId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // 同事異動紀錄：任何登入帳號都能新增一筆，但只有你能讀取（同事看不到彼此的紀錄，避免互相對照有壓力）
+    match /propertyActivityLog/{logId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
+    }
+
+    // 每個帳號自己的個人設定（例如自己的 agid），只有自己能讀寫
+    match /userSettings/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 其他所有資料維持只有本人可以讀寫
     match /{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }
