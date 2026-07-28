@@ -14,7 +14,7 @@ function formatTimestamp(ts) {
   }
 }
 
-export default function PropertyHistory({ propertyId, createdAt }) {
+export default function PropertyHistory({ propertyId, createdAt, updatedAt }) {
   const { items: statusLogs } = useCollection(`properties/${propertyId}/statusLogs`, "date");
   const { items: priceLogs } = useCollection(`properties/${propertyId}/priceLogs`, "date");
 
@@ -25,8 +25,13 @@ export default function PropertyHistory({ propertyId, createdAt }) {
   return (
     <div>
       {createdLabel && (
-        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 4 }}>
           建檔日期：<span className="mono">{createdLabel}</span>
+        </div>
+      )}
+      {updatedAt && (
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
+          最近更新：<span className="mono">{formatDate(updatedAt)}</span>
         </div>
       )}
 

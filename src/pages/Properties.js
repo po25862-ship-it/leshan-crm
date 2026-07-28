@@ -4,7 +4,7 @@ import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/f
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
-import { todayStr } from "../lib/dates";
+import { todayStr, formatDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
@@ -136,7 +136,7 @@ export default function Properties() {
     e.preventDefault();
     if (!form.title.trim()) return;
 
-    const formToSave = { ...form, websiteUrl: withAgid(form.websiteUrl) };
+    const formToSave = { ...form, websiteUrl: withAgid(form.websiteUrl), updatedAt: todayStr() };
 
     if (editingId) {
       const priceChanged =
@@ -400,7 +400,7 @@ export default function Properties() {
     const applyUpdate = (row, existing, relinked) => {
       finalMatchedIds.add(existing.id);
       const { address, notes, totalPrice, ...rest } = row;
-      const updates = { ...rest };
+      const updates = { ...rest, updatedAt: todayStr() };
       const priceChanged = totalPrice !== "" && String(totalPrice) !== String(existing.totalPrice);
       if (priceChanged) {
         updates.totalPrice = totalPrice;
@@ -433,7 +433,7 @@ export default function Properties() {
       const newRef = doc(collection(db, "properties"));
       ops.push({
         ref: newRef,
-        data: { ...row, status: "active", statusChangedAt: todayStr(), lastPriceChange: null, customFields: [], createdAt: new Date() },
+        data: { ...row, status: "active", statusChangedAt: todayStr(), updatedAt: todayStr(), lastPriceChange: null, customFields: [], createdAt: new Date() },
         merge: false,
       });
       ops.push({
@@ -1003,7 +1003,7 @@ export default function Properties() {
                 );
               })()}
               <div className="panel">
-                <PropertyHistory propertyId={editingId} createdAt={form.createdAt} />
+                <PropertyHistory propertyId={editingId} createdAt={form.createdAt} updatedAt={form.updatedAt} />
               </div>
             </div>
           )}
@@ -1046,6 +1046,9 @@ export default function Properties() {
                 <div className="meta" style={{ color: "var(--brass)" }}>
                   💰 已調整：{p.lastPriceChange.oldPrice} 萬 → {p.lastPriceChange.newPrice} 萬（{p.lastPriceChange.date}）
                 </div>
+              )}
+              {p.updatedAt && (
+                <div className="meta" style={{ fontSize: 11 }}>最近更新：{formatDate(p.updatedAt)}</div>
               )}
             </div>
             </div>

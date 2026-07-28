@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
+import { useCollectionGroup } from "../hooks/useCollectionGroup";
 import { useDoc } from "../hooks/useDoc";
 import { daysSince, daysUntil, formatDate, nextMonthlyDueDate } from "../lib/dates";
 
@@ -64,11 +65,26 @@ export default function Dashboard() {
     [topics]
   );
 
+  // 即時查詢所有商談事項的討論紀錄，不管一天新增幾筆，這裡都是當下最新的，不依賴寫入時才更新的欄位
+  const allTopicLogs = useCollectionGroup("logs");
+  const latestLogByTopic = useMemo(() => {
+    const map = {};
+    allTopicLogs.forEach((log) => {
+      const topicId = log.parentId;
+      if (!topicId) return;
+      const existing = map[topicId];
+      if (!existing || log.date > existing.date) {
+        map[topicId] = log;
+      }
+    });
+    return map;
+  }, [allTopicLogs]);
+
   const latestTopicUpdate = useMemo(() => {
-    const dates = activeTopics.map((t) => t.lastUpdatedDate).filter(Boolean);
+    const dates = activeTopics.map((t) => latestLogByTopic[t.id]?.date).filter(Boolean);
     if (dates.length === 0) return null;
     return dates.sort().slice(-1)[0];
-  }, [activeTopics]);
+  }, [activeTopics, latestLogByTopic]);
 
   const propertyStatusCounts = useMemo(() => {
     const map = {};
@@ -227,18 +243,25 @@ export default function Dashboard() {
             {activeTopics.length === 0 && (
               <div className="empty-state">目前沒有「進行中」的商談事項</div>
             )}
-            {activeTopics.slice(0, 5).map((t) => (
-              <div className="reminder" key={t.id} onClick={() => navigate(`/topics?open=${t.id}`)} style={{ cursor: "pointer" }}>
-                <div className="dot"></div>
-                <div className="txt">
-                  <div className="t1">{t.title}{t.counterpart && `・${t.counterpart}`}</div>
-                  {t.lastStatusNote && (
-                    <div style={{ fontSize: 15, color: "var(--ink)", fontWeight: 500, marginTop: 4 }}>{t.lastStatusNote}</div>
-                  )}
-                  {t.lastUpdatedDate && <div className="t2">更新於 {formatDate(t.lastUpdatedDate)}</div>}
+            {activeTopics.slice(0, 5).map((t) => {
+              const latestLog = latestLogByTopic[t.id];
+              return (
+                <div className="reminder" key={t.id} onClick={() => navigate(`/topics?open=${t.id}`)} style={{ cursor: "pointer" }}>
+                  <div className="dot"></div>
+                  <div className="txt">
+                    <div className="t1">{t.title}{t.counterpart && `・${t.counterpart}`}</div>
+                    {latestLog?.note && (
+                      <div style={{ fontSize: 15, color: "var(--ink)", fontWeight: 500, marginTop: 4 }}>
+                        <span className="mono" style={{ fontSize: 12, color: "var(--muted)", marginRight: 6 }}>
+                          {formatDate(latestLog.date)}
+                        </span>
+                        {latestLog.note}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div style={{ marginTop: 14 }}>
               <Link to="/topics" className="btn ghost" style={{ textDecoration: "none", display: "inline-block" }}>
                 前往商談事項
