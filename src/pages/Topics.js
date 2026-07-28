@@ -10,20 +10,25 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
   const { items: logs, add, remove } = useCollection(`topics/${topicId}/logs`, "date");
   const { isConnected, createEvent } = useGoogleAuth();
   const [date, setDate] = useState(todayStr());
+  const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [note, setNote] = useState("");
   const [syncToCalendar, setSyncToCalendar] = useState(false);
 
-  const sorted = [...logs].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const sorted = [...logs].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.time || "") < (a.time || "") ? -1 : 1;
+  });
 
   const onAdd = async (e) => {
     e.preventDefault();
     if (!note.trim()) return;
-    const docData = { date, note, googleEventId: null, googleEventLink: null };
+    const docData = { date, time, note, googleEventId: null, googleEventLink: null };
     if (syncToCalendar && isConnected) {
       try {
         const created = await createEvent({
           title: `商談・${topicTitle || ""}`,
           date,
+          time,
           notes: note,
         });
         docData.googleEventId = created.id;
@@ -48,6 +53,18 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
           onChange={(e) => setDate(e.target.value)}
           style={{
             width: 150,
+            padding: "9px 10px",
+            border: "1px solid var(--border)",
+            borderRadius: 7,
+            fontSize: 13,
+          }}
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          style={{
+            width: 110,
             padding: "9px 10px",
             border: "1px solid var(--border)",
             borderRadius: 7,
@@ -90,8 +107,8 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div className="mono" style={{ fontSize: 12, color: "var(--muted)", width: 56, flexShrink: 0 }}>
-            {formatDate(log.date)}
+          <div className="mono" style={{ fontSize: 12, color: "var(--muted)", width: 90, flexShrink: 0 }}>
+            {formatDate(log.date)}{log.time && ` ${log.time}`}
           </div>
           <div style={{ fontSize: 13, flex: 1 }}>
             {log.note}

@@ -73,7 +73,11 @@ export default function Dashboard() {
       const topicId = log.parentId;
       if (!topicId) return;
       const existing = map[topicId];
-      if (!existing || log.date > existing.date) {
+      const isNewer =
+        !existing ||
+        log.date > existing.date ||
+        (log.date === existing.date && (log.time || "") > (existing.time || ""));
+      if (isNewer) {
         map[topicId] = log;
       }
     });
@@ -253,7 +257,7 @@ export default function Dashboard() {
                     {latestLog?.note && (
                       <div style={{ fontSize: 15, color: "var(--ink)", fontWeight: 500, marginTop: 4 }}>
                         <span className="mono" style={{ fontSize: 12, color: "var(--muted)", marginRight: 6 }}>
-                          {formatDate(latestLog.date)}
+                          {formatDate(latestLog.date)}{latestLog.time && ` ${latestLog.time}`}
                         </span>
                         {latestLog.note}
                       </div>
