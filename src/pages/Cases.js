@@ -34,6 +34,7 @@ const emptyForm = {
   propertyId: "",
   propertyTitle: "",
   agentName: "",
+  dealAmount: "",
   milestones: defaultMilestones(),
   notes: "",
 };
@@ -231,6 +232,10 @@ export default function Cases() {
               <input value={form.propertyTitle} onChange={(e) => setForm({ ...form, propertyTitle: e.target.value })} />
             </div>
             <div className="form-field">
+              <label>成交金額（萬）</label>
+              <input value={form.dealAmount} onChange={(e) => setForm({ ...form, dealAmount: e.target.value })} placeholder="例如：1580" />
+            </div>
+            <div className="form-field">
               <label>業務負責（自由輸入，方便標註誰在跟進/合作）</label>
               <input value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} placeholder="例如：劉昭佑、與 OO 合作" />
             </div>
@@ -327,6 +332,7 @@ export default function Cases() {
                           <br />
                         </>
                       )}
+                      {item.dealAmount && <>成交金額：{item.dealAmount} 萬<br /></>}
                       {item.agentName && <>業務：{item.agentName}<br /></>}
                       {(item.milestones || []).filter((m) => m.date).map((m, i) => (
                         <span key={i}>
