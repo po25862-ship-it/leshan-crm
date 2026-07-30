@@ -174,14 +174,26 @@ export default function Properties() {
 
   const changeStatus = async (item, newStatus) => {
     const dateStr = todayStr();
-    await update(item.id, { status: newStatus, statusChangedAt: dateStr });
+    const updates = { status: newStatus, statusChangedAt: dateStr };
+    let logNote = "";
+
+    if (newStatus === "sold") {
+      const input = window.prompt("這筆物件的成交金額是多少（萬）？不知道可以直接按「確定」留空。", item.soldPrice || "");
+      if (input !== null && input.trim() !== "") {
+        updates.soldPrice = input.trim();
+        logNote = `成交金額：${input.trim()} 萬`;
+      }
+    }
+
+    await update(item.id, updates);
     await addDoc(collection(db, `properties/${item.id}/statusLogs`), {
       status: newStatus,
       date: dateStr,
+      note: logNote,
       createdAt: serverTimestamp(),
     });
     if (editingId === item.id) {
-      setForm((f) => ({ ...f, status: newStatus, statusChangedAt: dateStr }));
+      setForm((f) => ({ ...f, ...updates }));
     }
   };
 
@@ -812,7 +824,7 @@ export default function Properties() {
               <div className="form-field">
                 <label>狀態</label>
                 {editingId ? (
-                  <select value={form.status} onChange={(e) => changeStatus({ id: editingId }, e.target.value)}>
+                  <select value={form.status} onChange={(e) => changeStatus({ id: editingId, soldPrice: form.soldPrice }, e.target.value)}>
                     {STATUS_ORDER.map((s) => (
                       <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                     ))}
@@ -823,6 +835,12 @@ export default function Properties() {
                       <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                     ))}
                   </select>
+                )}
+                {form.status === "sold" && (
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ fontSize: 11 }}>成交金額（萬）</label>
+                    <input value={form.soldPrice || ""} onChange={(e) => setForm({ ...form, soldPrice: e.target.value })} placeholder="不知道可以留空" />
+                  </div>
                 )}
               </div>
             </div>
@@ -1045,6 +1063,11 @@ export default function Properties() {
               {p.lastPriceChange && (
                 <div className="meta" style={{ color: "var(--brass)" }}>
                   💰 已調整：{p.lastPriceChange.oldPrice} 萬 → {p.lastPriceChange.newPrice} 萬（{p.lastPriceChange.date}）
+                </div>
+              )}
+              {p.status === "sold" && p.soldPrice && (
+                <div className="meta" style={{ color: "var(--accent)", fontWeight: 700 }}>
+                  🎉 成交金額：{p.soldPrice} 萬
                 </div>
               )}
               {p.updatedAt && (
