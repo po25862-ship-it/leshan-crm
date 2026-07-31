@@ -11,6 +11,7 @@ import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 import SellerActivityLog from "./SellerActivityLog";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
+import { useAuth } from "../AuthContext";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -28,6 +29,7 @@ function linkify(text) {
 }
 
 export default function SellerDetail() {
+  const { user } = useAuth();
   const { contactId, listingId } = useParams();
   const navigate = useNavigate();
   const listingPath = `contacts/${contactId}/listings/${listingId}`;
@@ -134,13 +136,13 @@ export default function SellerDetail() {
       setSyncing(false);
     }
 
-    await saveListing(resolved);
+    await saveListing({ ...resolved, lastModifiedByUid: user.uid });
     setForm(resolved);
     navigate(-1);
   };
 
   const onSaveOwner = async () => {
-    await saveContact(ownerForm);
+    await saveContact({ ...ownerForm, lastModifiedByUid: user.uid });
     alert("屋主資料已儲存");
   };
 

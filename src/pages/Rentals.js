@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { serverTimestamp } from "firebase/firestore";
 import { useCollection } from "../hooks/useCollection";
 import { formatDateRoc } from "../lib/dates";
+import { useAuth } from "../AuthContext";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
 const STATUS_ORDER = ["seeking", "leased", "idle"];
@@ -34,6 +35,7 @@ const emptyRental = {
 };
 
 export default function Rentals() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { items, add } = useCollection("rentals", "createdAt");
 
@@ -78,7 +80,7 @@ export default function Rentals() {
   const startCreate = async () => {
     setCreating(true);
     try {
-      const ref = await add({ ...emptyRental, createdAt: serverTimestamp() });
+      const ref = await add({ ...emptyRental, ownerUid: user.uid, lastModifiedByUid: user.uid, sharedWith: [], createdAt: serverTimestamp() });
       navigate(`/rentals/${ref.id}`);
     } catch (err) {
       console.error(err);

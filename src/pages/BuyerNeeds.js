@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
+import { useAuth } from "../AuthContext";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -24,9 +25,11 @@ const makeEmptyForm = (contactId, contactName) => ({
   buyerTags: "",
   propertyTags: "",
   notes: "",
+  shared: false,
 });
 
 export default function BuyerNeeds({ contactId, contactName }) {
+  const { user } = useAuth();
   const { items, add, update, remove } = useCollection("needs", "createdAt");
   const myNeeds = items.filter((n) => n.contactId === contactId);
 
@@ -63,9 +66,9 @@ export default function BuyerNeeds({ contactId, contactName }) {
     e.preventDefault();
     if (!form.title.trim()) return;
     if (editingId) {
-      await update(editingId, form);
+      await update(editingId, { ...form, lastModifiedByUid: user.uid });
     } else {
-      await add(form);
+      await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
     }
     setShowForm(false);
   };
@@ -92,6 +95,12 @@ export default function BuyerNeeds({ contactId, contactName }) {
           <div className="form-field">
             <label>狀態標籤</label>
             <input value={form.statusTag} onChange={(e) => setForm({ ...form, statusTag: e.target.value })} />
+          </div>
+          <div className="form-field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} />
+              分享這筆客需給同事（開放後同事也能看到、協助介紹物件）
+            </label>
           </div>
           <div className="form-field">
             <label>區域（可新增多個）</label>

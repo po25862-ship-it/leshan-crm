@@ -5,6 +5,7 @@ import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
 import { formatDate, todayStr } from "../lib/dates";
+import { useAuth } from "../AuthContext";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -31,6 +32,7 @@ function SellerCard({ l, navigate }) {
 }
 
 export default function Sellers() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { items: contacts, add: addContact } = useCollection("contacts", "name");
   const listings = useCollectionGroup("listings");
@@ -126,6 +128,9 @@ export default function Sellers() {
           source: "",
           notes: "",
           lastContactDate: todayStr(),
+          ownerUid: user.uid,
+          lastModifiedByUid: user.uid,
+          sharedWith: [],
         });
         contactId = ref.id;
       }
@@ -153,6 +158,8 @@ export default function Sellers() {
         floorPrice: "",
         adPlatforms: [],
         documents: [],
+        ownerUid: user.uid,
+        lastModifiedByUid: user.uid,
         createdAt: serverTimestamp(),
       });
       navigate(`/sellers/${contactId}/${listingRef.id}`);

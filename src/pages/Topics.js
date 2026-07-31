@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { useGoogleAuth } from "../GoogleAuthContext";
+import { useAuth } from "../AuthContext";
 
 const emptyForm = { title: "", counterpart: "", statusTag: "進行中", notes: "" };
 
@@ -137,6 +138,7 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
 }
 
 export default function Topics() {
+  const { user } = useAuth();
   const { items, add, update, remove } = useCollection("topics", "createdAt");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -176,11 +178,11 @@ export default function Topics() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
-    const dataToSave = { ...form, lastUpdatedDate: todayStr() };
+    const dataToSave = { ...form, lastUpdatedDate: todayStr(), lastModifiedByUid: user.uid };
     if (editingId) {
       await update(editingId, dataToSave);
     } else {
-      await add(dataToSave);
+      await add({ ...dataToSave, ownerUid: user.uid, sharedWith: [] });
     }
     setShowForm(false);
   };

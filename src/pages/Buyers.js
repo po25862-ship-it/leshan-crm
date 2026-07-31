@@ -5,6 +5,7 @@ import { daysSince, formatDate, todayStr } from "../lib/dates";
 import BuyerActivityLog from "./BuyerActivityLog";
 import BuyerNeeds from "./BuyerNeeds";
 import RocDateHint from "./RocDateHint";
+import { useAuth } from "../AuthContext";
 
 const emptyForm = {
   name: "",
@@ -16,6 +17,7 @@ const emptyForm = {
 };
 
 export default function Buyers() {
+  const { user } = useAuth();
   const { items, add, update, remove } = useCollection("contacts", "name");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -75,14 +77,14 @@ export default function Buyers() {
     if (!form.name.trim()) return;
     const dataToSave = form.tags.includes("買方") ? form : { ...form, tags: [...form.tags, "買方"] };
     if (editingId) {
-      await update(editingId, dataToSave);
+      await update(editingId, { ...dataToSave, lastModifiedByUid: user.uid });
     } else {
-      await add(dataToSave);
+      await add({ ...dataToSave, ownerUid: user.uid, lastModifiedByUid: user.uid, sharedWith: [] });
     }
     setShowForm(false);
   };
 
-  const logFollowUp = (item) => update(item.id, { lastContactDate: todayStr() });
+  const logFollowUp = (item) => update(item.id, { lastContactDate: todayStr(), lastModifiedByUid: user.uid });
 
   const sorted = [...buyers].sort((a, b) => {
     const da = daysSince(a.lastContactDate) ?? -999;

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
+import { useAuth } from "../AuthContext";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -26,6 +27,7 @@ const emptyForm = {
   buyerTags: "",
   propertyTags: "",
   notes: "",
+  shared: false,
 };
 
 export default function Needs() {

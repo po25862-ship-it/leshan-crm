@@ -17,6 +17,12 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }
 
+    // 同事名冊：任何登入帳號都能讀（分享對象選單要用到），只有自己能寫自己的名字
+    match /colleagues/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // 每個帳號自己的個人設定（例如自己的 agid），只有自己能讀寫
     match /userSettings/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;

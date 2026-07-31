@@ -9,6 +9,7 @@ import { formatDate, nextMonthlyDueDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
+import { useAuth } from "../AuthContext";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
 const STATUS_ORDER = ["seeking", "leased", "idle"];
@@ -63,6 +64,7 @@ function ProgressLog({ rentalId }) {
 }
 
 export default function RentalDetail() {
+  const { user } = useAuth();
   const { rentalId } = useParams();
   const navigate = useNavigate();
   const rentalPath = `rentals/${rentalId}`;
@@ -165,7 +167,7 @@ export default function RentalDetail() {
       setSyncing(false);
     }
 
-    await saveRental(resolved);
+    await saveRental({ ...resolved, lastModifiedByUid: user.uid });
     setForm(resolved);
     navigate(-1);
   };

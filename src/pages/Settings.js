@@ -4,8 +4,10 @@ import { db } from "../firebase";
 import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
+import { useAuth } from "../AuthContext";
 
 export default function Settings() {
+  const { user } = useAuth();
   const { data, save } = useDoc("settings/general", { reminderDays: 5 });
   const { items: activityLog } = useCollection("propertyActivityLog", "at");
   const [days, setDays] = useState(5);
@@ -20,6 +22,48 @@ export default function Settings() {
   const onSave = async () => {
     await save({ reminderDays: Number(days) });
     alert("已儲存");
+  };
+
+  const [backfillingOwners, setBackfillingOwners] = useState(false);
+  const [backfillOwnersResult, setBackfillOwnersResult] = useState(null);
+
+  const backfillOwners = async () => {
+    if (!window.confirm("這會把買方/賣方/出租/商談事項/客需裡，還沒有「擁有者」的舊資料，全部標記成屬於你。確定要執行嗎？")) {
+      return;
+    }
+    setBackfillingOwners(true);
+    const counts = { contacts: 0, listings: 0, rentals: 0, topics: 0, needs: 0 };
+    try {
+      const applyBatch = async (snap, colName) => {
+        let batch = writeBatch(db);
+        let opCount = 0;
+        for (const d of snap.docs) {
+          const data = d.data();
+          if (data.ownerUid) continue; // 已經有擁有者的跳過
+          batch.update(d.ref, { ownerUid: user.uid, lastModifiedByUid: user.uid, sharedWith: data.sharedWith || [] });
+          counts[colName]++;
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+        if (opCount > 0) await batch.commit();
+      };
+
+      await applyBatch(await getDocs(collection(db, "contacts")), "contacts");
+      await applyBatch(await getDocs(collectionGroup(db, "listings")), "listings");
+      await applyBatch(await getDocs(collection(db, "rentals")), "rentals");
+      await applyBatch(await getDocs(collection(db, "topics")), "topics");
+      await applyBatch(await getDocs(collection(db, "needs")), "needs");
+
+      setBackfillOwnersResult(counts);
+    } catch (err) {
+      console.error(err);
+      alert("補齊失敗，請截圖錯誤訊息給我");
+    }
+    setBackfillingOwners(false);
   };
 
   const [backfillingTopics, setBackfillingTopics] = useState(false);
@@ -196,6 +240,22 @@ export default function Settings() {
             儲存設定
           </button>
         </div>
+      </div>
+
+      <div className="section-title">多人協作準備：補齊資料擁有者（第一階段）</div>
+      <div className="panel" style={{ maxWidth: 460, marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
+          之後要開放同事使用買方/賣方/出租/商談事項/客需，每筆資料都需要標記「擁有者」。<b style={{ color: "var(--ink)" }}>點這個按鈕，會把目前所有還沒有擁有者的舊資料，全部標記成屬於你。</b>可以重複點，已經標記過的不會重複處理，不會出錯。
+        </div>
+        <button className="btn" onClick={backfillOwners} disabled={backfillingOwners}>
+          {backfillingOwners ? "補齊中…" : "補齊資料擁有者"}
+        </button>
+        {backfillOwnersResult && (
+          <div style={{ marginTop: 12, fontSize: 12, color: "var(--accent)" }}>
+            完成：買方/賣方聯絡人 {backfillOwnersResult.contacts} 筆、委託物件 {backfillOwnersResult.listings} 筆、
+            出租 {backfillOwnersResult.rentals} 筆、商談事項 {backfillOwnersResult.topics} 筆、客需 {backfillOwnersResult.needs} 筆
+          </div>
+        )}
       </div>
 
       <div className="section-title">同事異動紀錄（物件管理網站）</div>
