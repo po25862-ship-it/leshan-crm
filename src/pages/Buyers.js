@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSharedCollection } from "../hooks/useSharedCollection";
+import { useCollection } from "../hooks/useCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
 import BuyerActivityLog from "./BuyerActivityLog";
 import BuyerNeeds from "./BuyerNeeds";
@@ -21,6 +22,12 @@ const emptyForm = {
 export default function Buyers() {
   const { user } = useAuth();
   const { items, add, update, remove } = useSharedCollection("contacts", "name", user.uid);
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const ownerName = (uid) => {
+    if (!uid) return "（尚未標記）";
+    if (uid === "KiYlsnWcChW5muRkG167r7Mi1132") return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "（未知帳號）";
+  };
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -44,6 +51,7 @@ export default function Buyers() {
       notes: item.notes || "",
       lastContactDate: item.lastContactDate || todayStr(),
       sharedWith: item.sharedWith || [],
+      ownerUid: item.ownerUid || "",
     });
     setEditingId(item.id);
     setShowForm(true);
@@ -168,6 +176,10 @@ export default function Buyers() {
               <div className="form-field">
                 <label>備註</label>
                 <textarea rows="3" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="需求、預算、偏好區域…" />
+              </div>
+              <div className="form-field">
+                <label>負責業務</label>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{ownerName(form.ownerUid)}</div>
               </div>
               <div className="form-field">
                 <label>分享給同事（勾選的同事也能看到、編輯這位客戶的所有資料）</label>

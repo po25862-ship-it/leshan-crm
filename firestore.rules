@@ -30,7 +30,11 @@ service cloud.firestore {
 
     // 買方／賣方聯絡人：擁有者、被分享的同事、或你（主要負責人）都能讀寫
     match /contacts/{contactId} {
-      allow read, update: if isOwnerOrShared(resource.data);
+      allow read, update: if request.auth != null && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        resource.data.ownerUid == request.auth.uid ||
+        (request.auth.uid in resource.data.sharedWith)
+      );
       allow create: if request.auth != null;
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
 
@@ -47,7 +51,11 @@ service cloud.firestore {
 
     // 出租：擁有者、被分享的同事、或你都能讀寫
     match /rentals/{rentalId} {
-      allow read, update: if isOwnerOrShared(resource.data);
+      allow read, update: if request.auth != null && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        resource.data.ownerUid == request.auth.uid ||
+        (request.auth.uid in resource.data.sharedWith)
+      );
       allow create: if request.auth != null;
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
       match /{subcollection}/{docId} {
@@ -57,7 +65,11 @@ service cloud.firestore {
 
     // 商談事項：擁有者、被分享的同事、或你都能讀寫
     match /topics/{topicId} {
-      allow read, update: if isOwnerOrShared(resource.data);
+      allow read, update: if request.auth != null && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        resource.data.ownerUid == request.auth.uid ||
+        (request.auth.uid in resource.data.sharedWith)
+      );
       allow create: if request.auth != null;
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
       match /{subcollection}/{docId} {
@@ -85,7 +97,7 @@ service cloud.firestore {
       return request.auth != null && (
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
         data.ownerUid == request.auth.uid ||
-        (data.sharedWith is list && request.auth.uid in data.sharedWith)
+        (request.auth.uid in data.sharedWith)
       );
     }
 
