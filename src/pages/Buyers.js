@@ -178,11 +178,10 @@ export default function Buyers() {
                 <textarea rows="3" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="需求、預算、偏好區域…" />
               </div>
               <div className="form-field">
-                <label>負責業務</label>
+                <label>建立資料</label>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{ownerName(form.ownerUid)}</div>
               </div>
               <div className="form-field">
-                <label>分享給同事（勾選的同事也能看到、編輯這位客戶的所有資料）</label>
                 <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
               </div>
               <div style={{ display: "flex", gap: 10 }}>
