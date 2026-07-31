@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { HashRouter, Routes, Route, NavLink } from "react-router-dom";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "./firebase";
+import { useDoc } from "./hooks/useDoc";
 import Dashboard from "./pages/Dashboard";
 import Sellers from "./pages/Sellers";
 import SellerDetail from "./pages/SellerDetail";
@@ -92,15 +95,64 @@ function AppRoutes() {
   );
 }
 
+function NamePrompt({ uid, email, onDone }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await setDoc(doc(db, "colleagues", uid), { name: name.trim(), email: email || "", createdAt: serverTimestamp() }, { merge: true });
+      onDone();
+    } catch (err) {
+      console.error(err);
+      alert("儲存失敗，請再試一次");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <main style={{ maxWidth: 380, margin: "80px auto" }}>
+      <div className="section-title">請設定你的姓名</div>
+      <div className="panel">
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
+          系統裡還沒有你的姓名資料（可能是上次註冊時漏掉了），補填一次就好，之後同事分享資料給你時才看得到是你。
+        </div>
+        <form className="form-grid" onSubmit={onSubmit}>
+          <div className="form-field">
+            <label>姓名</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          </div>
+          <button className="btn" type="submit" disabled={saving}>
+            {saving ? "儲存中…" : "儲存並繼續"}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
+
 function AppShell() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const { data: colleagueProfile, loading: profileLoading } = useDoc(
+    user ? `colleagues/${user.uid}` : "colleagues/_placeholder",
+    { name: "" }
+  );
 
   if (user === undefined) {
     return <main style={{ padding: 40 }}>載入中…</main>;
   }
   if (user === null) {
     return <Login />;
+  }
+  if (profileLoading) {
+    return <main style={{ padding: 40 }}>載入中…</main>;
+  }
+  if (!colleagueProfile.name) {
+    return <NamePrompt uid={user.uid} email={user.email} onDone={() => {}} />;
   }
 
   return (
