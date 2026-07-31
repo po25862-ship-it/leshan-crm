@@ -13,7 +13,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [contactMenuId, setContactMenuId] = useState(null);
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
-  const { items: quickNotes, update: updateNote, remove: removeNote } = useCollection("quickNotes", "createdAt");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const { items: quickNotes, update: updateNote, remove: removeNote } = useCollection("quickNotes", "createdAt", user.uid === MAIN_OWNER_UID);
   const { items: recentContacts } = useSharedCollection("contacts", "createdAt", user.uid);
   const { items: cases } = useCollection("cases", "createdAt");
   const { items: needs } = useNeedsCollection(user.uid);

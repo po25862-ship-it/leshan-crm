@@ -1,9 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
+import { useAuth } from "../AuthContext";
+
+const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
 
 export default function QuickNotes() {
-  const { items, add, update, remove } = useCollection("quickNotes", "createdAt");
+  const { user } = useAuth();
+  const isMainOwner = user.uid === MAIN_OWNER_UID;
+  const { items, add, update, remove } = useCollection("quickNotes", "createdAt", isMainOwner);
   const navigate = useNavigate();
   const [moveMenuId, setMoveMenuId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -55,6 +60,17 @@ export default function QuickNotes() {
       navigate(`/topics?draftNote=${encoded}`);
     }
   };
+
+  if (!isMainOwner) {
+    return (
+      <main>
+        <div className="section-title">待辦</div>
+        <div className="panel">
+          <div className="empty-state">這是主要負責人專用的個人待辦清單，你的帳號看不到這裡的內容。</div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main>

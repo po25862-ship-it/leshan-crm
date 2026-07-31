@@ -13,11 +13,17 @@ import {
 import { db } from "../firebase";
 
 // 監聽一個 Firestore collection，回傳即時資料與 CRUD 方法
-export function useCollection(name, orderField = "createdAt") {
+// enabled=false 時完全不會發出查詢（用在「這個人沒有權限看，乾脆不要問」的情況，避免權限錯誤）
+export function useCollection(name, orderField = "createdAt", enabled = true) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     const q = query(collection(db, name), orderBy(orderField, "desc"));
     const unsub = onSnapshot(
       q,
@@ -31,7 +37,8 @@ export function useCollection(name, orderField = "createdAt") {
       }
     );
     return () => unsub();
-  }, [name, orderField]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, orderField, enabled]);
 
   const add = (data) =>
     addDoc(collection(db, name), { ...data, createdAt: serverTimestamp() });

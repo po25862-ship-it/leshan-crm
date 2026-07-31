@@ -25,12 +25,13 @@ import { MobileTopBar, MobileBottomNav } from "./MobileShell";
 import "./mobile.css";
 
 function DesktopHeader() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const { data: profile } = useDoc(`colleagues/${user.uid}`, { name: "" });
   return (
     <header className="app-header">
       <div className="brand">
         <h1>案件控台</h1>
-        <span>劉昭佑 · 台灣房屋捷運樂善直營店</span>
+        <span>{profile.name || user.email} · 台灣房屋捷運樂善直營店</span>
       </div>
       <nav className="app-nav">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
