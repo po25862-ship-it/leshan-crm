@@ -1,21 +1,25 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
+import { useSharedCollection } from "../hooks/useSharedCollection";
+import { useNeedsCollection } from "../hooks/useNeedsCollection";
+import { useAuth } from "../AuthContext";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
 import { useDoc } from "../hooks/useDoc";
 import { daysSince, daysUntil, formatDate, nextMonthlyDueDate } from "../lib/dates";
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [contactMenuId, setContactMenuId] = useState(null);
-  const { items: contacts } = useCollection("contacts", "name");
+  const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const { items: quickNotes, update: updateNote, remove: removeNote } = useCollection("quickNotes", "createdAt");
-  const { items: recentContacts } = useCollection("contacts", "createdAt");
+  const { items: recentContacts } = useSharedCollection("contacts", "createdAt", user.uid);
   const { items: cases } = useCollection("cases", "createdAt");
-  const { items: needs } = useCollection("needs", "createdAt");
-  const { items: topics } = useCollection("topics", "createdAt");
+  const { items: needs } = useNeedsCollection(user.uid);
+  const { items: topics } = useSharedCollection("topics", "createdAt", user.uid);
   const { items: properties } = useCollection("properties", "createdAt");
-  const { items: rentals } = useCollection("rentals", "createdAt");
+  const { items: rentals } = useSharedCollection("rentals", "createdAt", user.uid);
   const { data: settings } = useDoc("settings/general", { reminderDays: 5 });
   const reminderDays = settings.reminderDays ?? 5;
 

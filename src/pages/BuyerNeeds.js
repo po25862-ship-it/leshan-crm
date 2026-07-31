@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useCollection } from "../hooks/useCollection";
+import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useAuth } from "../AuthContext";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
@@ -30,7 +30,7 @@ const makeEmptyForm = (contactId, contactName) => ({
 
 export default function BuyerNeeds({ contactId, contactName }) {
   const { user } = useAuth();
-  const { items, add, update, remove } = useCollection("needs", "createdAt");
+  const { items, add, update, remove } = useNeedsCollection(user.uid);
   const myNeeds = items.filter((n) => n.contactId === contactId);
 
   const [showForm, setShowForm] = useState(false);

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useCollection } from "../hooks/useCollection";
+import { useSharedCollection } from "../hooks/useSharedCollection";
 import { daysSince, formatDate, todayStr } from "../lib/dates";
 import BuyerActivityLog from "./BuyerActivityLog";
 import BuyerNeeds from "./BuyerNeeds";
 import RocDateHint from "./RocDateHint";
+import ShareWithPicker from "./ShareWithPicker";
 import { useAuth } from "../AuthContext";
 
 const emptyForm = {
@@ -14,11 +15,12 @@ const emptyForm = {
   source: "",
   notes: "",
   lastContactDate: todayStr(),
+  sharedWith: [],
 };
 
 export default function Buyers() {
   const { user } = useAuth();
-  const { items, add, update, remove } = useCollection("contacts", "name");
+  const { items, add, update, remove } = useSharedCollection("contacts", "name", user.uid);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -41,6 +43,7 @@ export default function Buyers() {
       source: item.source || "",
       notes: item.notes || "",
       lastContactDate: item.lastContactDate || todayStr(),
+      sharedWith: item.sharedWith || [],
     });
     setEditingId(item.id);
     setShowForm(true);
@@ -165,6 +168,10 @@ export default function Buyers() {
               <div className="form-field">
                 <label>備註</label>
                 <textarea rows="3" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="需求、預算、偏好區域…" />
+              </div>
+              <div className="form-field">
+                <label>分享給同事（勾選的同事也能看到、編輯這位客戶的所有資料）</label>
+                <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn" type="submit">{editingId ? "儲存變更" : "新增買方"}</button>

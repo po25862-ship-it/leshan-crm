@@ -4,6 +4,8 @@ import { collectionGroup, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
+import { useSharedCollection } from "../hooks/useSharedCollection";
+import { useAuth } from "../AuthContext";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate, nextMonthlyDueDate } from "../lib/dates";
 
@@ -33,8 +35,9 @@ function useAllAppointments() {
 }
 
 export default function CalendarPage() {
+  const { user } = useAuth();
   const { items: cases } = useCollection("cases", "createdAt");
-  const { items: rentals } = useCollection("rentals", "createdAt");
+  const { items: rentals } = useSharedCollection("rentals", "createdAt", user.uid);
   const appointments = useAllAppointments();
   const listings = useCollectionGroup("listings");
   const { isConnected, listEvents } = useGoogleAuth();

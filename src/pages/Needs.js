@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../hooks/useCollection";
+import { useNeedsCollection } from "../hooks/useNeedsCollection";
+import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
@@ -31,8 +33,9 @@ const emptyForm = {
 };
 
 export default function Needs() {
-  const { items, add, update, remove } = useCollection("needs", "createdAt");
-  const { items: contacts } = useCollection("contacts", "name");
+  const { user } = useAuth();
+  const { items, add, update, remove } = useNeedsCollection(user.uid);
+  const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyers = contacts.filter((c) => (c.tags || []).includes("買方"));
 
   const [showForm, setShowForm] = useState(false);
@@ -92,9 +95,9 @@ export default function Needs() {
     e.preventDefault();
     if (!form.title.trim()) return;
     if (editingId) {
-      await update(editingId, form);
+      await update(editingId, { ...form, lastModifiedByUid: user.uid });
     } else {
-      await add(form);
+      await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
     }
     setShowForm(false);
   };
@@ -161,6 +164,13 @@ export default function Needs() {
                 value={form.statusTag}
                 onChange={(e) => setForm({ ...form, statusTag: e.target.value })}
               />
+            </div>
+
+            <div className="form-field">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input type="checkbox" checked={!!form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} />
+                分享這筆客需給同事（開放後同事也能看到、協助介紹物件）
+              </label>
             </div>
 
             <div className="form-field">

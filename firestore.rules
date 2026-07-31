@@ -28,6 +28,67 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // 買方／賣方聯絡人：擁有者、被分享的同事、或你（主要負責人）都能讀寫
+    match /contacts/{contactId} {
+      allow read, update: if isOwnerOrShared(resource.data);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+
+      match /listings/{listingId} {
+        allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+        match /{subcollection}/{docId} {
+          allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+        }
+      }
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+      }
+    }
+
+    // 出租：擁有者、被分享的同事、或你都能讀寫
+    match /rentals/{rentalId} {
+      allow read, update: if isOwnerOrShared(resource.data);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/rentals/$(rentalId)).data);
+      }
+    }
+
+    // 商談事項：擁有者、被分享的同事、或你都能讀寫
+    match /topics/{topicId} {
+      allow read, update: if isOwnerOrShared(resource.data);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/topics/$(topicId)).data);
+      }
+    }
+
+    // 客需：擁有者、勾選「分享」之後任何登入帳號都能看，或你都能讀寫
+    match /needs/{needId} {
+      allow read: if request.auth != null && (
+        resource.data.ownerUid == request.auth.uid ||
+        resource.data.shared == true ||
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
+      );
+      allow update, delete: if request.auth != null && (
+        resource.data.ownerUid == request.auth.uid ||
+        resource.data.shared == true ||
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
+      );
+      allow create: if request.auth != null;
+    }
+
+    // 判斷是不是資料的擁有者、被分享的同事、或主要負責人
+    function isOwnerOrShared(data) {
+      return request.auth != null && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        data.ownerUid == request.auth.uid ||
+        (data.sharedWith is list && request.auth.uid in data.sharedWith)
+      );
+    }
+
     // 其他所有資料維持只有本人可以讀寫
     match /{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
