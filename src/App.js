@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { HashRouter, Routes, Route, NavLink } from "react-router-dom";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
@@ -142,6 +142,10 @@ function AppShell() {
     user ? `colleagues/${user.uid}` : "colleagues/_placeholder",
     { name: "" }
   );
+
+  useEffect(() => {
+    document.title = colleagueProfile.name ? `案件控台｜${colleagueProfile.name}` : "案件控台";
+  }, [colleagueProfile.name]);
 
   if (user === undefined) {
     return <main style={{ padding: 40 }}>載入中…</main>;
