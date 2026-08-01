@@ -83,16 +83,24 @@ service cloud.firestore {
       }
     }
 
-    // 客需：擁有者、勾選「分享」之後任何登入帳號都能看，或你都能讀寫
+    // 客需：擁有者、勾選「分享」之後任何登入帳號都能看，或你都能讀取
+    // 編輯：擁有者（或你）能改全部欄位；被分享到的同事只能動「推薦物件」那塊，其他欄位（需求/預算等）不能碰
     match /needs/{needId} {
       allow read: if request.auth != null && (
         resource.data.ownerUid == request.auth.uid ||
         resource.data.shared == true ||
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
       );
-      allow update, delete: if request.auth != null && (
+      allow update: if request.auth != null && (
         resource.data.ownerUid == request.auth.uid ||
-        resource.data.shared == true ||
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        (
+          resource.data.shared == true &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["recommendedProperties", "lastModifiedByUid"])
+        )
+      );
+      allow delete: if request.auth != null && (
+        resource.data.ownerUid == request.auth.uid ||
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
       );
       allow create: if request.auth != null;

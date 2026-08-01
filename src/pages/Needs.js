@@ -93,13 +93,19 @@ export default function Needs() {
   const addArea = () => setForm({ ...form, areas: [...form.areas, { ...emptyArea }] });
   const removeArea = (idx) => setForm({ ...form, areas: form.areas.filter((_, i) => i !== idx) });
 
+  const canEditFull = !editingId || form.ownerUid === user.uid || user.uid === "KiYlsnWcChW5muRkG167r7Mi1132";
+
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
-    if (editingId) {
-      await update(editingId, { ...form, lastModifiedByUid: user.uid });
+    if (canEditFull) {
+      if (!form.title.trim()) return;
+      if (editingId) {
+        await update(editingId, { ...form, lastModifiedByUid: user.uid });
+      } else {
+        await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
+      }
     } else {
-      await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
+      await update(editingId, { recommendedProperties: form.recommendedProperties, lastModifiedByUid: user.uid });
     }
     setShowForm(false);
   };
@@ -137,7 +143,13 @@ export default function Needs() {
 
       {showForm && (
         <div className="panel" style={{ marginBottom: 24, maxWidth: 680 }}>
+          {!canEditFull && (
+            <div style={{ background: "var(--accent-soft)", color: "var(--accent)", fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
+              唯讀：只有提供這筆客需的人可以修改內容，你可以協助標記下面的推薦物件。
+            </div>
+          )}
           <form className="form-grid" onSubmit={onSubmit}>
+            <div style={{ opacity: canEditFull ? 1 : 0.55, pointerEvents: canEditFull ? "auto" : "none" }}>
             <div className="form-field">
               <label>客需名稱</label>
               <input
@@ -337,6 +349,7 @@ export default function Needs() {
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </div>
+            </div>
 
             <div className="form-field">
               <RecommendedProperties
@@ -352,7 +365,7 @@ export default function Needs() {
               <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>
                 取消
               </button>
-              {editingId && (
+              {editingId && canEditFull && (
                 <button
                   className="btn danger"
                   type="button"

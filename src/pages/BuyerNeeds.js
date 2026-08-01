@@ -30,6 +30,8 @@ const makeEmptyForm = (contactId, contactName) => ({
   recommendedProperties: [],
 });
 
+const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+
 export default function BuyerNeeds({ contactId, contactName }) {
   const { user } = useAuth();
   const { items, add, update, remove } = useNeedsCollection(user.uid);
@@ -64,13 +66,20 @@ export default function BuyerNeeds({ contactId, contactName }) {
   const addArea = () => setForm({ ...form, areas: [...form.areas, { ...emptyArea }] });
   const removeArea = (idx) => setForm({ ...form, areas: form.areas.filter((_, i) => i !== idx) });
 
+  const canEditFull = !editingId || form.ownerUid === user.uid || user.uid === MAIN_OWNER_UID;
+
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
-    if (editingId) {
-      await update(editingId, { ...form, lastModifiedByUid: user.uid });
+    if (canEditFull) {
+      if (!form.title.trim()) return;
+      if (editingId) {
+        await update(editingId, { ...form, lastModifiedByUid: user.uid });
+      } else {
+        await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
+      }
     } else {
-      await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
+      // 不是提供人：只能更新推薦物件那塊，其他欄位不能碰
+      await update(editingId, { recommendedProperties: form.recommendedProperties, lastModifiedByUid: user.uid });
     }
     setShowForm(false);
   };
@@ -90,6 +99,12 @@ export default function BuyerNeeds({ contactId, contactName }) {
 
       {showForm && (
         <form onSubmit={onSubmit} style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+          {!canEditFull && (
+            <div style={{ background: "var(--accent-soft)", color: "var(--accent)", fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
+              唯讀：只有提供這筆客需的人可以修改內容，你可以協助標記下面的推薦物件。
+            </div>
+          )}
+          <div style={{ opacity: canEditFull ? 1 : 0.55, pointerEvents: canEditFull ? "auto" : "none" }}>
           <div className="form-field">
             <label>客需名稱</label>
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="例如：電梯大樓需求" required />
@@ -149,6 +164,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
             <label>其他補充</label>
             <textarea rows="2" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
+          </div>
           <div className="form-field">
             <RecommendedProperties
               value={form.recommendedProperties}
@@ -158,7 +174,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
           <div style={{ display: "flex", gap: 10 }}>
             <button className="btn" type="submit">{editingId ? "儲存變更" : "新增客需"}</button>
             <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
-            {editingId && (
+            {editingId && canEditFull && (
               <button className="btn danger" type="button" onClick={async () => { if (window.confirm("確定要刪除這筆客需嗎？")) { await remove(editingId); setShowForm(false); } }}>刪除</button>
             )}
           </div>
