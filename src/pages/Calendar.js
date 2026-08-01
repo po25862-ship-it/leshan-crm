@@ -5,6 +5,7 @@ import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
 import { useSharedCollectionGroup } from "../hooks/useSharedCollectionGroup";
+import { useListingsForContacts } from "../hooks/useListingsForContacts";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
 import { useGoogleAuth } from "../GoogleAuthContext";
@@ -46,8 +47,13 @@ export default function CalendarPage() {
   const { user } = useAuth();
   const { items: cases } = useCollection("cases", "createdAt");
   const { items: rentals } = useSharedCollection("rentals", "createdAt", user.uid);
+  const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
+  const sellerContactIds = useMemo(
+    () => contacts.filter((c) => (c.tags || []).includes("賣方")).map((c) => c.id),
+    [contacts]
+  );
   const appointments = useAllAppointments(user.uid);
-  const listings = useSharedCollectionGroup("listings", user.uid);
+  const listings = useListingsForContacts(sellerContactIds);
   const { isConnected, listEvents } = useGoogleAuth();
 
   const [monthCursor, setMonthCursor] = useState(() => {

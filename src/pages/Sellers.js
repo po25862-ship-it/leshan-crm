@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useSharedCollection } from "../hooks/useSharedCollection";
-import { useSharedCollectionGroup } from "../hooks/useSharedCollectionGroup";
+import { useListingsForContacts } from "../hooks/useListingsForContacts";
 import { formatDate, todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 
@@ -35,7 +35,11 @@ export default function Sellers() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { items: contacts, add: addContact } = useSharedCollection("contacts", "name", user.uid);
-  const listings = useSharedCollectionGroup("listings", user.uid);
+  const sellerContactIds = useMemo(
+    () => contacts.filter((c) => (c.tags || []).includes("賣方")).map((c) => c.id),
+    [contacts]
+  );
+  const listings = useListingsForContacts(sellerContactIds);
 
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
