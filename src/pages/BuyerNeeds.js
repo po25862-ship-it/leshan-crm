@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useAuth } from "../AuthContext";
+import RecommendedProperties from "./RecommendedProperties";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -26,6 +27,7 @@ const makeEmptyForm = (contactId, contactName) => ({
   propertyTags: "",
   notes: "",
   shared: false,
+  recommendedProperties: [],
 });
 
 export default function BuyerNeeds({ contactId, contactName }) {
@@ -146,6 +148,12 @@ export default function BuyerNeeds({ contactId, contactName }) {
           <div className="form-field">
             <label>其他補充</label>
             <textarea rows="2" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </div>
+          <div className="form-field">
+            <RecommendedProperties
+              value={form.recommendedProperties}
+              onChange={(recommendedProperties) => setForm({ ...form, recommendedProperties })}
+            />
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button className="btn" type="submit">{editingId ? "儲存變更" : "新增客需"}</button>

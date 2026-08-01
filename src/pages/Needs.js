@@ -4,6 +4,7 @@ import { useCollection } from "../hooks/useCollection";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
+import RecommendedProperties from "./RecommendedProperties";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -30,6 +31,7 @@ const emptyForm = {
   propertyTags: "",
   notes: "",
   shared: false,
+  recommendedProperties: [],
 };
 
 export default function Needs() {
@@ -333,6 +335,13 @@ export default function Needs() {
                 rows="2"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
+            </div>
+
+            <div className="form-field">
+              <RecommendedProperties
+                value={form.recommendedProperties}
+                onChange={(recommendedProperties) => setForm({ ...form, recommendedProperties })}
               />
             </div>
 
