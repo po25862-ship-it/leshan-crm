@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useCollection } from "../hooks/useCollection";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
@@ -9,8 +8,9 @@ import RecommendedProperties from "./RecommendedProperties";
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
 const MOTIVATIONS = ["投資", "自用"];
-
-const emptyArea = { city: "", district: "", road: "", community: "" };
+const STATUS_OPTIONS = ["正在找", "已成交", "暫緩"];
+const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+const emptyArea = { city: "", district: "", community: "" };
 
 const emptyForm = {
   title: "",
@@ -22,17 +22,14 @@ const emptyForm = {
   purposes: [],
   motivation: "",
   minMainArea: "",
-  minLandArea: "",
   minRooms: "",
-  maxAge: "",
-  parkingNeed: "不限",
   budget: "",
-  buyerTags: "",
-  propertyTags: "",
   notes: "",
   shared: false,
   recommendedProperties: [],
 };
+
+const areaLabel = (a) => [a.city, a.district].filter(Boolean).join("") + (a.community ? `・${a.community}` : "");
 
 export default function Needs() {
   const { user } = useAuth();
@@ -84,7 +81,6 @@ export default function Needs() {
       [field]: f[field].includes(val) ? f[field].filter((x) => x !== val) : [...f[field], val],
     }));
   };
-
   const updateArea = (idx, key, val) => {
     const next = [...form.areas];
     next[idx] = { ...next[idx], [key]: val };
@@ -93,7 +89,7 @@ export default function Needs() {
   const addArea = () => setForm({ ...form, areas: [...form.areas, { ...emptyArea }] });
   const removeArea = (idx) => setForm({ ...form, areas: form.areas.filter((_, i) => i !== idx) });
 
-  const canEditFull = !editingId || form.ownerUid === user.uid || user.uid === "KiYlsnWcChW5muRkG167r7Mi1132";
+  const canEditFull = !editingId || form.ownerUid === user.uid || user.uid === MAIN_OWNER_UID;
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -120,264 +116,123 @@ export default function Needs() {
     return map;
   }, [items]);
 
-  const fieldStyle = { display: "flex", gap: 8, marginBottom: 8 };
-  const chipBtn = (active) => ({
+  const chip = (active) => ({
     padding: "6px 12px",
     borderRadius: 20,
     fontSize: 12,
     fontWeight: 700,
-    border: "1px solid var(--border)",
+    border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
     background: active ? "var(--accent)" : "#fff",
     color: active ? "#fff" : "var(--ink)",
     cursor: "pointer",
   });
+  const fieldBox = { padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 };
 
   return (
     <main>
       <div className="top-actions">
         <div className="section-title">客需（{items.length}）</div>
-        <button className="btn" onClick={openNew}>
-          ＋ 新增客需
-        </button>
+        <button className="btn" onClick={openNew}>＋ 新增客需</button>
       </div>
 
       {showForm && (
-        <div className="panel" style={{ marginBottom: 24, maxWidth: 680 }}>
+        <div className="panel" style={{ marginBottom: 24, maxWidth: 620 }}>
           {!canEditFull && (
             <div style={{ background: "var(--accent-soft)", color: "var(--accent)", fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
               唯讀：只有提供這筆客需的人可以修改內容，你可以協助標記下面的推薦物件。
             </div>
           )}
-          <form className="form-grid" onSubmit={onSubmit}>
+          <form onSubmit={onSubmit}>
             <div style={{ opacity: canEditFull ? 1 : 0.55, pointerEvents: canEditFull ? "auto" : "none" }}>
-            <div className="form-field">
-              <label>客需名稱</label>
-              <input
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="例如：陳小姐・電梯大樓需求"
-                required
-              />
-            </div>
 
-            <div className="form-field">
-              <label>買方客戶</label>
-              <select value={form.contactId} onChange={(e) => onContactChange(e.target.value)}>
-                <option value="">— 選擇買方客戶 —</option>
-                {buyers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label>狀態標籤（自由輸入，例如：正在找／已成交／放棄）</label>
-              <input
-                value={form.statusTag}
-                onChange={(e) => setForm({ ...form, statusTag: e.target.value })}
-              />
-            </div>
-
-            <div className="form-field">
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input type="checkbox" checked={!!form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} />
-                分享這筆客需給同事（開放後同事也能看到、協助介紹物件）
-              </label>
-            </div>
-
-            <div className="form-field">
-              <label>區域（可新增多個）</label>
-              {form.areas.map((a, idx) => (
-                <div key={idx} style={fieldStyle}>
-                  <input
-                    value={a.city}
-                    onChange={(e) => updateArea(idx, "city", e.target.value)}
-                    placeholder="縣市"
-                    style={{ width: 90 }}
-                  />
-                  <input
-                    value={a.district}
-                    onChange={(e) => updateArea(idx, "district", e.target.value)}
-                    placeholder="鄉鎮市區"
-                    style={{ width: 90 }}
-                  />
-                  <input
-                    value={a.road}
-                    onChange={(e) => updateArea(idx, "road", e.target.value)}
-                    placeholder="路名（選填）"
-                    style={{ flex: 1 }}
-                  />
-                  <input
-                    value={a.community}
-                    onChange={(e) => updateArea(idx, "community", e.target.value)}
-                    placeholder="社區名稱（選填）"
-                    style={{ flex: 1 }}
-                  />
-                  {form.areas.length > 1 && (
-                    <button type="button" className="btn ghost" onClick={() => removeArea(idx)}>
-                      刪除
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button type="button" className="btn ghost" onClick={addArea}>
-                ＋ 新增區域
-              </button>
-            </div>
-
-            <div className="form-field">
-              <label>類型（可複選）</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {PROPERTY_TYPES.map((t) => (
-                  <button
-                    type="button"
-                    key={t}
-                    style={chipBtn(form.types.includes(t))}
-                    onClick={() => toggleArrItem("types", t)}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-field">
-              <label>用途（可複選）</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {PURPOSES.map((t) => (
-                  <button
-                    type="button"
-                    key={t}
-                    style={chipBtn(form.purposes.includes(t))}
-                    onClick={() => toggleArrItem("purposes", t)}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-field">
-              <label>動機</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {MOTIVATIONS.map((t) => (
-                  <button
-                    type="button"
-                    key={t}
-                    style={chipBtn(form.motivation === t)}
-                    onClick={() => setForm({ ...form, motivation: t })}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <div className="form-field">
-                <label>最低主建物坪數</label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <input
-                  value={form.minMainArea}
-                  onChange={(e) => setForm({ ...form, minMainArea: e.target.value })}
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="客需名稱，例如：陳小姐・電梯大樓需求"
+                  required
+                  style={{ ...fieldBox, flex: 1 }}
                 />
-              </div>
-              <div className="form-field">
-                <label>最低地坪</label>
-                <input
-                  value={form.minLandArea}
-                  onChange={(e) => setForm({ ...form, minLandArea: e.target.value })}
-                />
-              </div>
-              <div className="form-field">
-                <label>最小房數</label>
-                <input
-                  value={form.minRooms}
-                  onChange={(e) => setForm({ ...form, minRooms: e.target.value })}
-                />
-              </div>
-              <div className="form-field">
-                <label>最大屋齡（年）</label>
-                <input
-                  value={form.maxAge}
-                  onChange={(e) => setForm({ ...form, maxAge: e.target.value })}
-                />
-              </div>
-              <div className="form-field">
-                <label>車位需求</label>
                 <select
-                  value={form.parkingNeed}
-                  onChange={(e) => setForm({ ...form, parkingNeed: e.target.value })}
+                  value={form.statusTag}
+                  onChange={(e) => setForm({ ...form, statusTag: e.target.value })}
+                  style={{ ...fieldBox, width: 110 }}
                 >
-                  <option value="不限">不限</option>
-                  <option value="需要">需要</option>
-                  <option value="不需要">不需要</option>
+                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div className="form-field">
-                <label>預算（萬）</label>
-                <input
-                  value={form.budget}
-                  onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                />
+
+              <div style={{ marginBottom: 10 }}>
+                <select value={form.contactId} onChange={(e) => onContactChange(e.target.value)} style={{ ...fieldBox, width: "100%" }}>
+                  <option value="">— 選擇買方客戶（選填） —</option>
+                  {buyers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
-            </div>
 
-            <div className="form-field">
-              <label>買家標籤（自由輸入，逗號分隔，最多 2 個建議）</label>
-              <input
-                value={form.buyerTags}
-                onChange={(e) => setForm({ ...form, buyerTags: e.target.value })}
-                placeholder="例如：首購, 換屋"
-              />
-            </div>
-            <div className="form-field">
-              <label>物件標籤（自由輸入，逗號分隔，最多 2 個建議）</label>
-              <input
-                value={form.propertyTags}
-                onChange={(e) => setForm({ ...form, propertyTags: e.target.value })}
-                placeholder="例如：邊間, 採光佳"
-              />
-            </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>
+                <input type="checkbox" checked={!!form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} />
+                分享給同事（協助介紹物件）
+              </label>
 
-            <div className="form-field">
-              <label>其他補充</label>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>找房條件</div>
+
+              <div style={{ marginBottom: 10 }}>
+                {form.areas.map((a, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <input value={a.city} onChange={(e) => updateArea(idx, "city", e.target.value)} placeholder="縣市" style={{ ...fieldBox, width: 70 }} />
+                    <input value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} placeholder="鄉鎮市區" style={{ ...fieldBox, width: 80 }} />
+                    <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: 1 }} />
+                    {form.areas.length > 1 && (
+                      <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" className="btn ghost" onClick={addArea} style={{ fontSize: 12 }}>＋ 新增區域</button>
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {PROPERTY_TYPES.map((t) => (
+                  <button type="button" key={t} style={chip(form.types.includes(t))} onClick={() => toggleArrItem("types", t)}>{t}</button>
+                ))}
+                <span style={{ width: 1, background: "var(--border)", margin: "0 2px" }} />
+                {PURPOSES.map((t) => (
+                  <button type="button" key={t} style={chip(form.purposes.includes(t))} onClick={() => toggleArrItem("purposes", t)}>{t}</button>
+                ))}
+                <span style={{ width: 1, background: "var(--border)", margin: "0 2px" }} />
+                {MOTIVATIONS.map((t) => (
+                  <button type="button" key={t} style={chip(form.motivation === t)} onClick={() => setForm({ ...form, motivation: form.motivation === t ? "" : t })}>{t}</button>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+                <input value={form.minMainArea} onChange={(e) => setForm({ ...form, minMainArea: e.target.value })} placeholder="最低坪數" style={fieldBox} />
+                <input value={form.minRooms} onChange={(e) => setForm({ ...form, minRooms: e.target.value })} placeholder="最小房數" style={fieldBox} />
+                <input value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} placeholder="預算（萬）" style={fieldBox} />
+              </div>
+
               <textarea
                 rows="2"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="其他補充…"
+                style={{ ...fieldBox, width: "100%", fontFamily: "inherit", marginBottom: 4 }}
               />
             </div>
-            </div>
 
-            <div className="form-field">
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
               <RecommendedProperties
                 value={form.recommendedProperties}
                 onChange={(recommendedProperties) => setForm({ ...form, recommendedProperties })}
               />
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn" type="submit">
-                {editingId ? "儲存變更" : "新增客需"}
-              </button>
-              <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>
-                取消
-              </button>
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <button className="btn" type="submit">{editingId ? "儲存變更" : "新增客需"}</button>
+              <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
               {editingId && canEditFull && (
-                <button
-                  className="btn danger"
-                  type="button"
-                  onClick={async () => {
-                    if (window.confirm("確定要刪除這筆客需嗎？")) {
-                      await remove(editingId);
-                      setShowForm(false);
-                    }
-                  }}
-                >
-                  刪除
-                </button>
+                <button className="btn danger" type="button" onClick={async () => { if (window.confirm("確定要刪除這筆客需嗎？")) { await remove(editingId); setShowForm(false); } }}>刪除</button>
               )}
             </div>
           </form>
@@ -398,25 +253,55 @@ export default function Needs() {
               <div className="col-head">
                 {tag} <span>{list.length}</span>
               </div>
-              {list.map((item) => (
-                <div
-                  className="card"
-                  key={item.id}
-                  onClick={() => openEdit(item)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <div className="name">{item.title}</div>
-                  <div className="meta">
-                    {item.contactName && <>買方：{item.contactName}<br /></>}
-                    {(item.areas || [])
-                      .map((a) => [a.city, a.district].filter(Boolean).join(""))
-                      .filter(Boolean)
-                      .join("、")}
-                    {item.budget && <><br />預算：{item.budget} 萬</>}
-                    {(item.types || []).length > 0 && <><br />類型：{item.types.join("、")}</>}
+              {list.map((item) => {
+                const introducedCount = (item.recommendedProperties || []).filter((r) => r.introduced).length;
+                const totalCount = (item.recommendedProperties || []).length;
+                const stats = [
+                  item.budget && { value: `${item.budget}萬`, label: "預算上限" },
+                  item.minMainArea && { value: `${item.minMainArea}坪`, label: "最低坪數" },
+                  item.minRooms && { value: `${item.minRooms}房`, label: "最少房數" },
+                ].filter(Boolean);
+                const areaText = (item.areas || []).map(areaLabel).filter(Boolean).join("、");
+                return (
+                  <div className="card" key={item.id} onClick={() => openEdit(item)} style={{ cursor: "pointer" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div className="name">{item.title}</div>
+                      {item.shared && <span style={{ fontSize: 10, color: "var(--muted)" }}>已分享</span>}
+                    </div>
+                    {item.contactName && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>買方：{item.contactName}</div>}
+
+                    {stats.length > 0 && (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
+                          gap: 6,
+                          textAlign: "center",
+                          background: "#FAFAF8",
+                          borderRadius: 8,
+                          padding: "8px 0",
+                          margin: "8px 0",
+                        }}
+                      >
+                        {stats.map((s, i) => (
+                          <div key={i}>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>{s.value}</div>
+                            <div style={{ fontSize: 9, color: "var(--muted)" }}>{s.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {areaText && <div style={{ fontSize: 11, color: "var(--muted)" }}>{areaText}</div>}
+                    {(item.types || []).length > 0 && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{item.types.join("、")}</div>}
+                    {totalCount > 0 && (
+                      <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 6, fontWeight: 700 }}>
+                        推薦物件 {totalCount} 筆・已介紹 {introducedCount} 筆
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </div>
