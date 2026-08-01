@@ -5,6 +5,7 @@ import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useAuth } from "../AuthContext";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
+import { useLatestTopicLogs } from "../hooks/useLatestTopicLogs";
 import { useDoc } from "../hooks/useDoc";
 import { daysSince, daysUntil, formatDate, nextMonthlyDueDate } from "../lib/dates";
 
@@ -70,24 +71,9 @@ export default function Dashboard() {
     [topics]
   );
 
-  // 即時查詢所有商談事項的討論紀錄，不管一天新增幾筆，這裡都是當下最新的，不依賴寫入時才更新的欄位
-  const allTopicLogs = useCollectionGroup("logs");
-  const latestLogByTopic = useMemo(() => {
-    const map = {};
-    allTopicLogs.forEach((log) => {
-      const topicId = log.parentId;
-      if (!topicId) return;
-      const existing = map[topicId];
-      const isNewer =
-        !existing ||
-        log.date > existing.date ||
-        (log.date === existing.date && (log.time || "") > (existing.time || ""));
-      if (isNewer) {
-        map[topicId] = log;
-      }
-    });
-    return map;
-  }, [allTopicLogs]);
+  // 即時查詢「看得到的」每筆商談事項各自的討論紀錄，取最新一筆
+  const activeTopicIds = useMemo(() => activeTopics.map((t) => t.id), [activeTopics]);
+  const latestLogByTopic = useLatestTopicLogs(activeTopicIds);
 
   const latestTopicUpdate = useMemo(() => {
     const dates = activeTopics.map((t) => latestLogByTopic[t.id]?.date).filter(Boolean);

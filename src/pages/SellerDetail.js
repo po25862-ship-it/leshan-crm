@@ -9,6 +9,7 @@ import { formatDate, todayStr } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 import SellerActivityLog from "./SellerActivityLog";
+import ShareWithPicker from "./ShareWithPicker";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 import { useAuth } from "../AuthContext";
@@ -36,6 +37,13 @@ export default function SellerDetail() {
   const { data: listing, save: saveListing } = useDoc(listingPath);
   const { data: contact, save: saveContact } = useDoc(`contacts/${contactId}`);
   const { items: properties } = useCollection("properties", "title");
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const ownerName = (uid) => {
+    if (!uid) return "（尚未標記）";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "（未知帳號）";
+  };
   const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
 
   const [form, setForm] = useState(null);
@@ -137,6 +145,8 @@ export default function SellerDetail() {
     }
 
     await saveListing({ ...resolved, lastModifiedByUid: user.uid });
+    // 同步分享名單到屋主聯絡人資料，確保被分享的同事兩邊都看得到
+    await saveContact({ sharedWith: resolved.sharedWith || [], lastModifiedByUid: user.uid });
     setForm(resolved);
     navigate(-1);
   };
@@ -233,6 +243,19 @@ export default function SellerDetail() {
             <textarea rows="2" value={ownerForm.notes || ""} onChange={(e) => setOwnerForm({ ...ownerForm, notes: e.target.value })} />
           </div>
           <button className="btn ghost" onClick={onSaveOwner}>儲存屋主資料</button>
+
+          <div style={{ marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+            <div className="form-field">
+              <label>建立資料</label>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{ownerName(form.ownerUid)}</div>
+            </div>
+            <div className="form-field">
+              <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+                分享後，同事按「儲存變更」才會真的生效（不是勾選當下就存檔）
+              </div>
+            </div>
+          </div>
 
           <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
             <div className="form-field">

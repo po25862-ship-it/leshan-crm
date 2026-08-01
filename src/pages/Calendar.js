@@ -4,6 +4,7 @@ import { collectionGroup, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { useCollectionGroup } from "../hooks/useCollectionGroup";
+import { useSharedCollectionGroup } from "../hooks/useSharedCollectionGroup";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
 import { useGoogleAuth } from "../GoogleAuthContext";
@@ -20,9 +21,16 @@ function monthLabel(d) {
 }
 
 // 監聽所有客戶底下的 appointments 子集合（收集群組查詢）
-function useAllAppointments() {
+// 注意：約看紀錄本身沒有記擁有者/分享名單，目前只有主要負責人能看到這部分彙整，
+// 同事帳號看行事曆時，買方/賣方的約看時間暫時不會出現在這裡（其他項目不受影響），這是已知限制，之後可以再補
+const MAIN_OWNER_UID_CAL = "KiYlsnWcChW5muRkG167r7Mi1132";
+function useAllAppointments(currentUid) {
   const [items, setItems] = useState([]);
   useEffect(() => {
+    if (currentUid !== MAIN_OWNER_UID_CAL) {
+      setItems([]);
+      return;
+    }
     const q = collectionGroup(db, "appointments");
     const unsub = onSnapshot(
       q,
@@ -30,7 +38,7 @@ function useAllAppointments() {
       () => setItems([])
     );
     return () => unsub();
-  }, []);
+  }, [currentUid]);
   return items;
 }
 
@@ -38,8 +46,8 @@ export default function CalendarPage() {
   const { user } = useAuth();
   const { items: cases } = useCollection("cases", "createdAt");
   const { items: rentals } = useSharedCollection("rentals", "createdAt", user.uid);
-  const appointments = useAllAppointments();
-  const listings = useCollectionGroup("listings");
+  const appointments = useAllAppointments(user.uid);
+  const listings = useSharedCollectionGroup("listings", user.uid);
   const { isConnected, listEvents } = useGoogleAuth();
 
   const [monthCursor, setMonthCursor] = useState(() => {

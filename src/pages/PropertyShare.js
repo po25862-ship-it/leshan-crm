@@ -2,12 +2,15 @@ import React, { useState, useEffect } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
+import { useSharedCollection } from "../hooks/useSharedCollection";
 import { withAgid } from "../lib/url";
 import { truncateAddress } from "../lib/address";
 import { todayStr } from "../lib/dates";
+import { useAuth } from "../AuthContext";
 
 export default function PropertyShare({ properties, onClose }) {
-  const { items: contacts } = useCollection("contacts", "name");
+  const { user } = useAuth();
+  const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyers = contacts.filter((c) => (c.tags || []).includes("買方"));
 
   const [intro, setIntro] = useState("下面有推薦你幾間物件，您看看有沒有合適的");

@@ -4,11 +4,22 @@ import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { useAuth } from "../AuthContext";
+import { useSharedCollection } from "../hooks/useSharedCollection";
+import ShareWithPicker from "./ShareWithPicker";
 
 const emptyForm = { title: "", counterpart: "", statusTag: "進行中", notes: "" };
 
 function TopicLogs({ topicId, topicTitle, onLogged }) {
+  const { user } = useAuth();
   const { items: logs, add, remove } = useCollection(`topics/${topicId}/logs`, "date");
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const nameOf = (uid) => {
+    if (!uid) return "";
+    if (uid === user.uid) return "你";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "同事";
+  };
   const { isConnected, createEvent } = useGoogleAuth();
   const [date, setDate] = useState(todayStr());
   const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
@@ -23,7 +34,7 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
   const onAdd = async (e) => {
     e.preventDefault();
     if (!note.trim()) return;
-    const docData = { date, time, note, googleEventId: null, googleEventLink: null };
+    const docData = { date, time, note, googleEventId: null, googleEventLink: null, byUid: user.uid };
     if (syncToCalendar && isConnected) {
       try {
         const created = await createEvent({
@@ -113,6 +124,11 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
           </div>
           <div style={{ fontSize: 13, flex: 1 }}>
             {log.note}
+            {log.byUid && (
+              <span className="mono" style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>
+                由 {nameOf(log.byUid)}
+              </span>
+            )}
             {log.googleEventLink && (
               <div>
                 <a href={log.googleEventLink} target="_blank" rel="noreferrer" style={{ fontSize: 11 }}>📅 在行事曆開啟</a>
@@ -139,7 +155,14 @@ function TopicLogs({ topicId, topicTitle, onLogged }) {
 
 export default function Topics() {
   const { user } = useAuth();
-  const { items, add, update, remove } = useCollection("topics", "createdAt");
+  const { items, add, update, remove } = useSharedCollection("topics", "createdAt", user.uid);
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const ownerName = (uid) => {
+    if (!uid) return "（尚未標記）";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "（未知帳號）";
+  };
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -246,6 +269,15 @@ export default function Topics() {
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 placeholder="這件事的背景、目標…"
               />
+            </div>
+            {editingId && (
+              <div className="form-field">
+                <label>建立資料</label>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{ownerName(form.ownerUid)}</div>
+              </div>
+            )}
+            <div className="form-field">
+              <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn" type="submit">

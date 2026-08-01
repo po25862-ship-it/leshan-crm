@@ -39,9 +39,15 @@ service cloud.firestore {
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
 
       match /listings/{listingId} {
-        allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+        allow read, update: if request.auth != null && (
+          request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+          resource.data.ownerUid == request.auth.uid ||
+          (request.auth.uid in resource.data.sharedWith)
+        );
+        allow create: if request.auth != null;
+        allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
         match /{subcollection}/{docId} {
-          allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+          allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)/listings/$(listingId)).data);
         }
       }
       match /{subcollection}/{docId} {

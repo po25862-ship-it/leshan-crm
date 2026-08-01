@@ -222,6 +222,17 @@ export default function Settings() {
     setMigrating(false);
   };
 
+  if (user.uid !== "KiYlsnWcChW5muRkG167r7Mi1132") {
+    return (
+      <main>
+        <div className="section-title">設定</div>
+        <div className="panel">
+          <div className="empty-state">這個頁面是系統管理用途，只有主要負責人可以使用。</div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main>
       <div className="section-title">設定</div>

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate, todayStr } from "../lib/dates";
+import { useAuth } from "../AuthContext";
 
 function linkify(text) {
   if (!text) return null;
@@ -19,7 +20,16 @@ const TYPE_LABELS = { progress: "進度回報", appointment: "預約／處理", 
 const TYPE_ICONS = { progress: "📢", appointment: "📅", viewing: "👀", legacy: "🗂️" };
 
 export default function SellerActivityLog({ contactId, listingId, listingTitle, onLogged }) {
+  const { user } = useAuth();
   const { isConnected, createEvent } = useGoogleAuth();
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const nameOf = (uid) => {
+    if (!uid) return "";
+    if (uid === user.uid) return "你";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "同事";
+  };
 
   const { items: progressItems, add: addProgress, remove: removeProgress } = useCollection(
     `contacts/${contactId}/listings/${listingId}/progressLogs`, "date"
@@ -64,7 +74,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
   const submitProgress = async (e) => {
     e.preventDefault();
     if (!pContent.trim()) return;
-    await addProgress({ date: pDate, content: pContent });
+    await addProgress({ date: pDate, content: pContent, byUid: user.uid });
     if (onLogged) onLogged({ date: pDate, summary: pContent });
     setPContent("");
   };
@@ -72,7 +82,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
   const submitAppt = async (e) => {
     e.preventDefault();
     if (!aContent.trim()) return;
-    const docData = { date: aDate, time: aTime, content: aContent, notes: aNotes, googleEventId: null, googleEventLink: null };
+    const docData = { date: aDate, time: aTime, content: aContent, notes: aNotes, googleEventId: null, googleEventLink: null, byUid: user.uid };
     if (aSync && isConnected) {
       try {
         const created = await createEvent({ title: `${listingTitle ? listingTitle + "・" : ""}${aContent}`, date: aDate, time: aTime, notes: aNotes });
@@ -100,6 +110,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
       communication: vCommunication,
       googleEventId: null,
       googleEventLink: null,
+      byUid: user.uid,
     });
     if (onLogged) {
       const summary = [vBackground, vCommunication, vFeedback].filter(Boolean).join(" / ");
@@ -194,6 +205,11 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
               　<span style={{ fontSize: 11, background: "var(--accent-soft)", color: "var(--accent)", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>
                 {TYPE_ICONS[item._type]} {TYPE_LABELS[item._type]}
               </span>
+              {item.byUid && (
+                <span className="mono" style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>
+                  由 {nameOf(item.byUid)}
+                </span>
+              )}
             </span>
             <button onClick={() => removeEntry(item)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>刪除</button>
           </div>

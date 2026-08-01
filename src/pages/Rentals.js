@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { serverTimestamp } from "firebase/firestore";
-import { useCollection } from "../hooks/useCollection";
+import { useSharedCollection } from "../hooks/useSharedCollection";
 import { formatDateRoc } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 
@@ -37,7 +37,7 @@ const emptyRental = {
 export default function Rentals() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { items, add } = useCollection("rentals", "createdAt");
+  const { items, add } = useSharedCollection("rentals", "createdAt", user.uid);
 
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");

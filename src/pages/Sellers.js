@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { useCollection } from "../hooks/useCollection";
-import { useCollectionGroup } from "../hooks/useCollectionGroup";
+import { useSharedCollection } from "../hooks/useSharedCollection";
+import { useSharedCollectionGroup } from "../hooks/useSharedCollectionGroup";
 import { formatDate, todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 
@@ -34,8 +34,8 @@ function SellerCard({ l, navigate }) {
 export default function Sellers() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { items: contacts, add: addContact } = useCollection("contacts", "name");
-  const listings = useCollectionGroup("listings");
+  const { items: contacts, add: addContact } = useSharedCollection("contacts", "name", user.uid);
+  const listings = useSharedCollectionGroup("listings", user.uid);
 
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
@@ -160,6 +160,7 @@ export default function Sellers() {
         documents: [],
         ownerUid: user.uid,
         lastModifiedByUid: user.uid,
+        sharedWith: [],
         createdAt: serverTimestamp(),
       });
       navigate(`/sellers/${contactId}/${listingRef.id}`);

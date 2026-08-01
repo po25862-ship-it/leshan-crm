@@ -5,10 +5,12 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "../firebase";
 import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
+import { useSharedCollection } from "../hooks/useSharedCollection";
 import { formatDate, nextMonthlyDueDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
+import ShareWithPicker from "./ShareWithPicker";
 import { useAuth } from "../AuthContext";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
@@ -27,7 +29,16 @@ function linkify(text) {
 }
 
 function ProgressLog({ rentalId }) {
+  const { user } = useAuth();
   const { items, add, remove } = useCollection(`rentals/${rentalId}/progressLogs`, "date");
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const nameOf = (uid) => {
+    if (!uid) return "";
+    if (uid === user.uid) return "你";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "同事";
+  };
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [content, setContent] = useState("");
   const sorted = [...items].sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -35,7 +46,7 @@ function ProgressLog({ rentalId }) {
   const onAdd = async (e) => {
     e.preventDefault();
     if (!content.trim()) return;
-    await add({ date, content });
+    await add({ date, content, byUid: user.uid });
     setContent("");
   };
 
@@ -55,7 +66,11 @@ function ProgressLog({ rentalId }) {
       {sorted.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有紀錄</div>}
       {sorted.map((log) => (
         <div key={log.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
-          <div><span className="mono" style={{ color: "var(--muted)", marginRight: 10 }}>{formatDate(log.date)}</span>{linkify(log.content)}</div>
+          <div>
+            <span className="mono" style={{ color: "var(--muted)", marginRight: 10 }}>{formatDate(log.date)}</span>
+            {linkify(log.content)}
+            {log.byUid && <span className="mono" style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>由 {nameOf(log.byUid)}</span>}
+          </div>
           <button onClick={() => remove(log.id)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>刪除</button>
         </div>
       ))}
@@ -69,8 +84,15 @@ export default function RentalDetail() {
   const navigate = useNavigate();
   const rentalPath = `rentals/${rentalId}`;
   const { data: rental, save: saveRental } = useDoc(rentalPath);
-  const { items: contacts } = useCollection("contacts", "name");
+  const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const { items: properties } = useCollection("properties", "title");
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const ownerName = (uid) => {
+    if (!uid) return "（尚未標記）";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "（未知帳號）";
+  };
   const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
 
   const [form, setForm] = useState(null);
@@ -406,6 +428,16 @@ export default function RentalDetail() {
             <div className="form-field">
               <label>備註</label>
               <textarea rows="2" value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="form-field">
+              <label>建立資料</label>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{ownerName(form.ownerUid)}</div>
+            </div>
+            <div className="form-field">
+              <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
             </div>
           </div>
 
