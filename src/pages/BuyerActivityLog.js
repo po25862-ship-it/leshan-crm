@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate, todayStr } from "../lib/dates";
+import { useAuth } from "../AuthContext";
 
 function linkify(text) {
   if (!text) return null;
@@ -20,8 +21,17 @@ const TYPE_LABELS = { appointment: "約帶看", interaction: "互動紀錄" };
 const TYPE_ICONS = { appointment: "📅", interaction: "💬" };
 
 export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
+  const { user } = useAuth();
   const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
   const { items: properties } = useCollection("properties", "title");
+  const { items: colleagues } = useCollection("colleagues", "name");
+  const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
+  const nameOf = (uid) => {
+    if (!uid) return "";
+    if (uid === user.uid) return "你";
+    if (uid === MAIN_OWNER_UID) return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
+    return colleagues.find((c) => c.id === uid)?.name || "同事";
+  };
 
   const { items: appts, add: addAppt, update: updateAppt, remove: removeAppt } = useCollection(
     `contacts/${contactId}/appointments`, "date"
@@ -64,6 +74,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
         propertyLabel: aPropertyLabel.trim(),
         propertyId: match ? match.id : null,
         notes: aNotes,
+        byUid: user.uid,
       };
       const ref = await addAppt(docData);
       if (aSync && isConnected) {
@@ -126,6 +137,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
       communication,
       googleEventId: null,
       googleEventLink: null,
+      byUid: user.uid,
     };
 
     if (iSync && isConnected) {
@@ -268,6 +280,11 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
               　<span style={{ fontSize: 11, background: "var(--accent-soft)", color: "var(--accent)", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>
                 {TYPE_ICONS[item._type]} {TYPE_LABELS[item._type]}
               </span>
+              {item.byUid && (
+                <span className="mono" style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>
+                  由 {nameOf(item.byUid)}
+                </span>
+              )}
             </span>
             <button onClick={() => removeEntry(item)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>刪除</button>
           </div>
