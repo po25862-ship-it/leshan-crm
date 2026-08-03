@@ -5,6 +5,7 @@ import { formatDate } from "../lib/dates";
 import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
+import PropertyPicker from "./PropertyPicker";
 
 function nextMilestoneInfo(item) {
   const list = item.milestones || [];
@@ -196,18 +197,13 @@ export default function Cases() {
             </div>
             <div className="form-field">
               <label>關聯物件</label>
-              <select
-                value={form.propertyId || ""}
-                onChange={(e) => {
-                  const p = properties.find((x) => x.id === e.target.value);
-                  setForm({ ...form, propertyId: e.target.value, propertyTitle: p ? p.title : form.propertyTitle });
-                }}
-              >
-                <option value="">— 不連結物件清單 —</option>
-                {propertyOptions.map((p) => (
-                  <option key={p.id} value={p.id}>{p.title}{p.address ? `（${p.address}）` : ""}</option>
-                ))}
-              </select>
+              <PropertyPicker
+                properties={propertyOptions}
+                value={form.propertyTitle}
+                onChange={(title) => setForm({ ...form, propertyTitle: title, propertyId: "" })}
+                onSelect={(p) => setForm({ ...form, propertyId: p.id, propertyTitle: p.title })}
+                placeholder="輸入案名或地址搜尋物件…"
+              />
               {form.propertyId && (() => {
                 const linked = properties.find((p) => p.id === form.propertyId);
                 if (!linked) return null;

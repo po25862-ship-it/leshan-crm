@@ -3,6 +3,7 @@ import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate, todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
+import PropertyPicker from "./PropertyPicker";
 
 function linkify(text) {
   if (!text) return null;
@@ -178,10 +179,6 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
     <div>
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>客戶紀錄</div>
 
-      <datalist id="buyer-activity-property-options">
-        {properties.map((p) => <option key={p.id} value={p.title} />)}
-      </datalist>
-
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         {Object.entries(TYPE_LABELS).map(([key, label]) => (
           <button
@@ -202,13 +199,14 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
             <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ flex: 1, ...inputStyle }} />
             <input type="time" value={aTime} onChange={(e) => setATime(e.target.value)} style={{ width: 120, ...inputStyle }} />
           </div>
-          <input
-            list="buyer-activity-property-options"
-            value={aPropertyLabel}
-            onChange={(e) => setAPropertyLabel(e.target.value)}
-            placeholder="要帶看的物件（可選填，可從物件清單挑或自己打）"
-            style={{ ...inputStyle, marginBottom: 8 }}
-          />
+          <div style={{ marginBottom: 8 }}>
+            <PropertyPicker
+              properties={properties}
+              value={aPropertyLabel}
+              onChange={setAPropertyLabel}
+              placeholder="要帶看的物件（可選填，可從物件清單挑或自己打）"
+            />
+          </div>
           <input value={aNotes} onChange={(e) => setANotes(e.target.value)} placeholder="備註（選填）" style={{ ...inputStyle, marginBottom: 8 }} />
           {isConnected ? (
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 10, cursor: "pointer" }}>
@@ -231,13 +229,14 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>看過的物件（可從清單選，也可直接打新的地址／名稱）</div>
           {propertyInputs.map((val, idx) => (
             <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-              <input
-                list="buyer-activity-property-options"
-                value={val}
-                onChange={(e) => updatePropertyRow(idx, e.target.value)}
-                placeholder="例如：A7 重劃區 OO 社區 3F"
-                style={{ flex: 1, ...inputStyle }}
-              />
+              <div style={{ flex: 1 }}>
+                <PropertyPicker
+                  properties={properties}
+                  value={val}
+                  onChange={(v) => updatePropertyRow(idx, v)}
+                  placeholder="例如：A7 重劃區 OO 社區 3F"
+                />
+              </div>
               {propertyInputs.length > 1 && (
                 <button type="button" className="btn ghost" onClick={() => removePropertyRow(idx)}>刪除</button>
               )}

@@ -11,6 +11,7 @@ import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 import ShareWithPicker from "./ShareWithPicker";
+import PropertyPicker from "./PropertyPicker";
 import { useAuth } from "../AuthContext";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
@@ -261,10 +262,13 @@ export default function RentalDetail() {
           <div className="section-title" style={{ fontSize: 14 }}>基本資料</div>
           <div className="form-field">
             <label>案名／物件名稱（打字若跟現有物件案名一致，離開欄位會自動帶入地址/網址）</label>
-            <input list="rental-property-options" value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} onBlur={onPropertyBlur} />
-            <datalist id="rental-property-options">
-              {properties.map((p) => <option key={p.id} value={p.title} />)}
-            </datalist>
+            <PropertyPicker
+              properties={properties}
+              value={form.title || ""}
+              onChange={(title) => setForm({ ...form, title, propertyId: form.propertyId && title !== form.title ? "" : form.propertyId })}
+              onSelect={(p) => setForm((f) => ({ ...f, title: p.title, propertyId: p.id, propertyAddress: p.address || f.propertyAddress, propertyUrl: p.websiteUrl || f.propertyUrl }))}
+              placeholder="輸入案名或地址搜尋…"
+            />
             {form.propertyId && <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 4 }}>✓ 已連結物件資料庫</div>}
           </div>
           <div className="form-field">
