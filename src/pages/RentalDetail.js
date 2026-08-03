@@ -14,8 +14,8 @@ import ShareWithPicker from "./ShareWithPicker";
 import PropertyPicker from "./PropertyPicker";
 import { useAuth } from "../AuthContext";
 
-const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
-const STATUS_ORDER = ["seeking", "leased", "idle"];
+const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中", selfLeased: "被租掉了" };
+const STATUS_ORDER = ["seeking", "leased", "idle", "selfLeased"];
 
 function linkify(text) {
   if (!text) return null;
@@ -288,6 +288,20 @@ export default function RentalDetail() {
               {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
             </select>
           </div>
+
+          {form.status === "selfLeased" && (
+            <div className="form-field">
+              <label>預計退租日期（業主自己找到房客後，這個租約大概什麼時候到期）</label>
+              <input
+                type="date"
+                value={form.selfLeasedEndDate || ""}
+                onChange={(e) => setForm({ ...form, selfLeasedEndDate: e.target.value })}
+              />
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                填了之後，快到期的前 30 天會在總覽頁提醒你去跟業主聯繫，看要不要重新委託招租。
+              </div>
+            </div>
+          )}
 
           <div style={{ marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
             <div className="form-field">

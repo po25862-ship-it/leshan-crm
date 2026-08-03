@@ -51,14 +51,20 @@ export default function Dashboard() {
   }, [closedCases]);
 
   const upcomingRentDue = useMemo(() => {
-    return rentals
+    const rentReminders = rentals
       .filter((r) => r.status === "leased" && r.rentDueDay)
       .map((r) => {
         const due = nextMonthlyDueDate(r.rentDueDay);
-        return { ...r, dueDate: due, until: daysUntil(due) };
+        return { ...r, _kind: "rent", dueDate: due, until: daysUntil(due) };
       })
-      .filter((r) => r.until !== null && r.until <= 3)
-      .sort((a, b) => a.until - b.until);
+      .filter((r) => r.until !== null && r.until <= 3);
+
+    const followUpReminders = rentals
+      .filter((r) => r.status === "selfLeased" && r.selfLeasedEndDate)
+      .map((r) => ({ ...r, _kind: "followUp", dueDate: r.selfLeasedEndDate, until: daysUntil(r.selfLeasedEndDate) }))
+      .filter((r) => r.until !== null && r.until <= 30);
+
+    return [...rentReminders, ...followUpReminders].sort((a, b) => a.until - b.until);
   }, [rentals]);
 
   const activeNeeds = useMemo(
@@ -319,19 +325,25 @@ export default function Dashboard() {
 
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
-            租金提醒 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{upcomingRentDue.length}</span>
+            出租提醒 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{upcomingRentDue.length}</span>
           </div>
           <div className="panel">
             {upcomingRentDue.length === 0 && (
-              <div style={{ fontSize: 13, color: "var(--muted)" }}>近期沒有快到期的租金收款</div>
+              <div style={{ fontSize: 13, color: "var(--muted)" }}>近期沒有需要留意的出租提醒</div>
             )}
             {upcomingRentDue.slice(0, 5).map((r) => (
               <div key={r.id} onClick={() => navigate(`/rentals/${r.id}`)} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}>
                 <div style={{ fontWeight: 700 }}>{r.title}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {r.until === 0 ? "今天收租" : r.until < 0 ? `已過期 ${-r.until} 天` : `${r.until} 天後收租`}
-                  {r.tenantName && `・${r.tenantName}`}
-                </div>
+                {r._kind === "rent" ? (
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                    {r.until === 0 ? "今天收租" : r.until < 0 ? `已過期 ${-r.until} 天` : `${r.until} 天後收租`}
+                    {r.tenantName && `・${r.tenantName}`}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: "var(--brass)" }}>
+                    🔔 業主追蹤・{r.until < 0 ? `已超過退租日 ${-r.until} 天` : r.until === 0 ? "今天預計退租" : `${r.until} 天後預計退租`}，看要不要重新招租
+                  </div>
+                )}
               </div>
             ))}
             <div style={{ marginTop: 12 }}>

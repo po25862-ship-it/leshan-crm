@@ -5,8 +5,8 @@ import { useSharedCollection } from "../hooks/useSharedCollection";
 import { formatDateRoc } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 
-const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中" };
-const STATUS_ORDER = ["seeking", "leased", "idle"];
+const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中", selfLeased: "被租掉了" };
+const STATUS_ORDER = ["seeking", "leased", "idle", "selfLeased"];
 
 const emptyRental = {
   title: "",
@@ -100,6 +100,7 @@ export default function Rentals() {
         {r.rent && <>租金 {r.rent}元/月　</>}
         {r.deposit && <>押金 {r.deposit}{r.depositReturned ? "（已退）" : ""}　</>}
         {r.leaseEndDate && r.status === "leased" && <>租期至 {formatDateRoc(r.leaseEndDate)}</>}
+        {r.status === "selfLeased" && r.selfLeasedEndDate && <>預計退租 {formatDateRoc(r.selfLeasedEndDate)}</>}
         {r.status === "seeking" && (r.adPlatforms || []).length > 0 && (
           <>已刊登 {r.adPlatforms.length} 個平台</>
         )}
