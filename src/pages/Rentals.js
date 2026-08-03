@@ -48,6 +48,7 @@ export default function Rentals() {
     seeking: items.filter((r) => (r.status || "seeking") === "seeking").length,
     leased: items.filter((r) => r.status === "leased").length,
     idle: items.filter((r) => r.status === "idle").length,
+    selfLeased: items.filter((r) => r.status === "selfLeased").length,
   };
 
   const filtered = items.filter((r) => {

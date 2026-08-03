@@ -151,8 +151,8 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
       {activeType === "progress" && (
         <form onSubmit={submitProgress} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input type="date" value={pDate} onChange={(e) => setPDate(e.target.value)} style={{ width: 150, ...inputStyle }} />
-            <input value={pContent} onChange={(e) => setPContent(e.target.value)} placeholder="例如：591 詢問度增加、屋主同意降價…" style={{ flex: 1, ...inputStyle }} />
+            <input type="date" value={pDate} onChange={(e) => setPDate(e.target.value)} style={{ ...inputStyle, width: 150 }} />
+            <input value={pContent} onChange={(e) => setPContent(e.target.value)} placeholder="例如：591 詢問度增加、屋主同意降價…" style={{ ...inputStyle, flex: 1 }} />
           </div>
           <button className="btn" type="submit">新增進度回報</button>
         </form>
@@ -161,8 +161,8 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
       {activeType === "appointment" && (
         <form onSubmit={submitAppt} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ flex: 1, ...inputStyle }} />
-            <input type="time" value={aTime} onChange={(e) => setATime(e.target.value)} style={{ width: 120, ...inputStyle }} />
+            <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+            <input type="time" value={aTime} onChange={(e) => setATime(e.target.value)} style={{ ...inputStyle, width: 120 }} />
           </div>
           <input value={aContent} onChange={(e) => setAContent(e.target.value)} placeholder="要做什麼，例如：回報進度、確認簽約、估價拜訪…" style={{ ...inputStyle, marginBottom: 8 }} />
           <input value={aNotes} onChange={(e) => setANotes(e.target.value)} placeholder="備註（選填）" style={{ ...inputStyle, marginBottom: 8 }} />
@@ -179,7 +179,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
       {activeType === "viewing" && (
         <form onSubmit={submitViewing} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
           <div style={{ marginBottom: 8 }}>
-            <input type="date" value={vDate} onChange={(e) => setVDate(e.target.value)} style={{ width: 150, ...inputStyle }} />
+            <input type="date" value={vDate} onChange={(e) => setVDate(e.target.value)} style={{ ...inputStyle, width: 150 }} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <input value={vBackground} onChange={(e) => setVBackground(e.target.value)} placeholder="帶看客戶背景" style={inputStyle} />

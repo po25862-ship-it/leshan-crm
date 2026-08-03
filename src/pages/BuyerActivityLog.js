@@ -196,8 +196,8 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
       {activeType === "appointment" && (
         <form onSubmit={submitAppt} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ flex: 1, ...inputStyle }} />
-            <input type="time" value={aTime} onChange={(e) => setATime(e.target.value)} style={{ width: 120, ...inputStyle }} />
+            <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+            <input type="time" value={aTime} onChange={(e) => setATime(e.target.value)} style={{ ...inputStyle, width: 120 }} />
           </div>
           <div style={{ marginBottom: 8 }}>
             <PropertyPicker
@@ -223,7 +223,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
       {activeType === "interaction" && (
         <form onSubmit={submitInteraction} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
           <div style={{ marginBottom: 8 }}>
-            <input type="date" value={iDate} onChange={(e) => setIDate(e.target.value)} style={{ width: 150, ...inputStyle }} />
+            <input type="date" value={iDate} onChange={(e) => setIDate(e.target.value)} style={{ ...inputStyle, width: 150 }} />
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>看過的物件（可從清單選，也可直接打新的地址／名稱）</div>
