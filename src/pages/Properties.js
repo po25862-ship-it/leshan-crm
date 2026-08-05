@@ -25,6 +25,13 @@ function parseLayout(layout) {
   return { rooms: parseNum(parts[0]), living: parseNum(parts[1]), bath: parseNum(parts[2]) };
 }
 
+// 樓別格式通常是「5/5」（所在樓層/總樓層），取前面那個數字來搜尋
+function parseFloor(floor) {
+  if (!floor) return null;
+  const m = String(floor).match(/-?\d+/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
 // mode: "eq" 精確等於 / "gte" 以上（大於等於）
 function matchNum(value, filterVal, mode) {
   if (filterVal === "" || filterVal === null || filterVal === undefined) return true;
@@ -70,6 +77,8 @@ export default function Properties() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [layoutKeyword, setLayoutKeyword] = useState("");
+  const [floorFilter, setFloorFilter] = useState("");
+  const [floorMode, setFloorMode] = useState("eq");
   const [roomFilter, setRoomFilter] = useState("");
   const [roomMode, setRoomMode] = useState("eq");
   const [livingFilter, setLivingFilter] = useState("");
@@ -265,6 +274,7 @@ export default function Properties() {
     if (minPrice && Number(p.totalPrice || 0) < Number(minPrice)) return false;
     if (maxPrice && Number(p.totalPrice || 0) > Number(maxPrice)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
+    if (!matchNum(parseFloor(p.floor), floorFilter, floorMode)) return false;
     const { rooms, living, bath } = parseLayout(p.layout);
     if (!matchNum(rooms, roomFilter, roomMode)) return false;
     if (!matchNum(living, livingFilter, livingMode)) return false;
@@ -758,9 +768,10 @@ export default function Properties() {
         />
       </div>
 
-      {/* 房／廳／衛 結構化搜尋 */}
+      {/* 房／廳／衛／樓層 結構化搜尋 */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
         {[
+          { label: "樓層", value: floorFilter, setValue: setFloorFilter, mode: floorMode, setMode: setFloorMode },
           { label: "房", value: roomFilter, setValue: setRoomFilter, mode: roomMode, setMode: setRoomMode },
           { label: "廳", value: livingFilter, setValue: setLivingFilter, mode: livingMode, setMode: setLivingMode },
           { label: "衛", value: bathFilter, setValue: setBathFilter, mode: bathMode, setMode: setBathMode },
