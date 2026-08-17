@@ -8,6 +8,7 @@ import { truncateAddress } from "../lib/address";
 import { todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
+import { openLinePersonalTool } from "../lib/linePersonal";
 
 export default function PropertyShare({ properties, onClose }) {
   const { user } = useAuth();
@@ -49,6 +50,17 @@ export default function PropertyShare({ properties, onClose }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       alert("複製失敗，請手動選取文字複製");
+    }
+  };
+
+  const onCopyAndOpenLine = async () => {
+    openLinePersonalTool();
+    try {
+      await navigator.clipboard.writeText(previewText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("個人 LINE 工具已開啟；文字複製失敗，請手動選取預覽內容複製");
     }
   };
 
@@ -106,6 +118,9 @@ export default function PropertyShare({ properties, onClose }) {
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <button className="btn" onClick={onCopy} disabled={!agid}>
           {copied ? "已複製！" : "複製文字"}
+        </button>
+        <button className="btn" onClick={onCopyAndOpenLine} disabled={!agid}>
+          複製並開啟個人 LINE
         </button>
         <button className="btn ghost" onClick={onClose}>
           關閉
