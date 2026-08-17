@@ -133,6 +133,17 @@ export default function Dashboard() {
 
   return (
     <main>
+      <section className="dashboard-intro">
+        <div>
+          <div className="eyebrow">WORKSPACE OVERVIEW</div>
+          <h2>今天，先從重要的事開始。</h2>
+          <p>客戶跟進、待辦事項與案件里程碑都整理在這裡。</p>
+        </div>
+        <div className="dashboard-date">
+          <span>今日</span>
+          <strong>{new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "short" }).format(new Date())}</strong>
+        </div>
+      </section>
       <div className="kpi-row">
         <div className="panel kpi">
           <div className="label">待跟進客戶</div>
@@ -158,7 +169,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 24, marginBottom: 28 }}>
+      <div className="dashboard-primary-grid dashboard-primary-grid-wide">
         <div>
           <div className="section-title">跟進提醒</div>
           <div className="panel">
@@ -297,7 +308,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
+      <div className="dashboard-secondary-grid">
         <div>
           <div className="section-title" style={{ fontSize: 14 }}>
             客需・正在找 <span className="mono" style={{ marginLeft: 6, color: "var(--muted)" }}>{activeNeeds.length}</span>

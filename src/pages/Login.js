@@ -77,10 +77,15 @@ export default function Login() {
   };
 
   return (
-    <main style={{ maxWidth: 380, margin: "80px auto" }}>
-      <div className="section-title">{mode === "login" ? "登入案件控台" : "同事註冊帳號"}</div>
-      <div className="panel">
-        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+    <main className="login-page">
+      <div className="login-card">
+        <div className="login-brand-mark" aria-hidden="true">樂</div>
+        <div className="login-eyebrow">LESHAN REALTY CRM</div>
+        <h1>{mode === "login" ? "歡迎回來" : "建立同事帳號"}</h1>
+        <p className="login-subtitle">
+          {mode === "login" ? "登入案件控台，掌握今天的客戶與案件進度。" : "完成註冊後，即可與團隊安全共享工作資料。"}
+        </p>
+        <div className="auth-mode-tabs">
           <button
             type="button"
             className={mode === "login" ? "btn" : "btn ghost"}
@@ -102,20 +107,23 @@ export default function Login() {
         {mode === "login" ? (
           <form className="form-grid" onSubmit={onLogin}>
             <div className="form-field">
-              <label>Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+              <label htmlFor="login-email">Email</label>
+              <input id="login-email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" autoComplete="email" required />
             </div>
             <div className="form-field">
-              <label>密碼</label>
+              <label htmlFor="login-password">密碼</label>
               <input
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type="password"
+                placeholder="輸入密碼"
+                autoComplete="current-password"
                 required
               />
             </div>
             {error && <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>}
-            <button className="btn" type="submit">
+            <button className="btn login-submit" type="submit">
               登入
             </button>
           </form>
@@ -142,7 +150,7 @@ export default function Login() {
               <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} required />
             </div>
             {signupError && <div style={{ color: "var(--danger)", fontSize: 13 }}>{signupError}</div>}
-            <button className="btn" type="submit" disabled={signingUp}>
+            <button className="btn login-submit" type="submit" disabled={signingUp}>
               {signingUp ? "註冊中…" : "註冊並登入"}
             </button>
           </form>
