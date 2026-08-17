@@ -22,7 +22,35 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { GoogleAuthProvider } from "./GoogleAuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { MobileTopBar, MobileBottomNav } from "./MobileShell";
+import {
+  LayoutDashboard,
+  KeyRound,
+  Users,
+  Home,
+  ListTodo,
+  BadgeCheck,
+  Building2,
+  SearchCheck,
+  MessagesSquare,
+  CalendarDays,
+  Settings as SettingsIcon,
+  LogOut,
+} from "lucide-react";
 import "./mobile.css";
+
+const desktopNavItems = [
+  { to: "/", label: "總覽", icon: LayoutDashboard, end: true },
+  { to: "/sellers", label: "賣方", icon: KeyRound },
+  { to: "/buyers", label: "買方", icon: Users },
+  { to: "/rentals", label: "出租", icon: Home },
+  { to: "/quicknotes", label: "待辦", icon: ListTodo },
+  { to: "/cases", label: "成交", icon: BadgeCheck },
+  { to: "/properties", label: "物件", icon: Building2 },
+  { to: "/needs", label: "客需", icon: SearchCheck },
+  { to: "/topics", label: "商談", icon: MessagesSquare },
+  { to: "/calendar", label: "行事曆", icon: CalendarDays },
+  { to: "/settings", label: "設定", icon: SettingsIcon },
+];
 
 function DesktopHeader() {
   const { user, logout } = useAuth();
@@ -30,45 +58,21 @@ function DesktopHeader() {
   return (
     <header className="app-header">
       <div className="brand">
-        <h1>案件控台</h1>
-        <span>{profile.name || user.email} · 台灣房屋捷運樂善直營店</span>
+        <div className="brand-mark" aria-hidden="true">樂</div>
+        <div className="brand-copy">
+          <h1>案件控台</h1>
+          <span>{profile.name || user.email} · 捷運樂善直營店</span>
+        </div>
       </div>
-      <nav className="app-nav">
-        <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-          總覽
-        </NavLink>
-        <NavLink to="/sellers" className={({ isActive }) => (isActive ? "active" : "")}>
-          賣方
-        </NavLink>
-        <NavLink to="/buyers" className={({ isActive }) => (isActive ? "active" : "")}>
-          買方
-        </NavLink>
-        <NavLink to="/rentals" className={({ isActive }) => (isActive ? "active" : "")}>
-          出租
-        </NavLink>
-        <NavLink to="/quicknotes" className={({ isActive }) => (isActive ? "active" : "")}>
-          待辦
-        </NavLink>
-        <NavLink to="/cases" className={({ isActive }) => (isActive ? "active" : "")}>
-          成交案件
-        </NavLink>
-        <NavLink to="/properties" className={({ isActive }) => (isActive ? "active" : "")}>
-          物件
-        </NavLink>
-        <NavLink to="/needs" className={({ isActive }) => (isActive ? "active" : "")}>
-          客需
-        </NavLink>
-        <NavLink to="/topics" className={({ isActive }) => (isActive ? "active" : "")}>
-          商談事項
-        </NavLink>
-        <NavLink to="/calendar" className={({ isActive }) => (isActive ? "active" : "")}>
-          行事曆
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          設定
-        </NavLink>
-        <button className="btn ghost" onClick={logout} style={{ marginLeft: 8 }}>
-          登出
+      <nav className="app-nav" aria-label="主要導覽">
+        {desktopNavItems.map(({ to, label, icon: Icon, end }) => (
+          <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? "active" : "")}>
+            <Icon size={16} strokeWidth={2.1} aria-hidden="true" />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+        <button className="nav-logout" onClick={logout} aria-label="登出">
+          <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
         </button>
       </nav>
     </header>

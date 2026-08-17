@@ -1,11 +1,11 @@
 /* 手機專用介面 - V4 現場工作卡風格，套用在既有元件的 class 上 */
 .mobile-shell{
-  --m-bg:#FAFAF8;
+  --m-bg:#F7F6F2;
   --m-card:#FFFFFF;
   --m-ink:#1A1A1A;
   --m-muted:#8A8781;
-  --m-primary:#E85D3D;
-  --m-primary-soft:#FDE9E3;
+  --m-primary:#275E4B;
+  --m-primary-soft:#E6F0EB;
   --m-buyer:#3D6FE8;
   --m-buyer-soft:#E8EEFD;
   --m-seller:#2F9E5C;
@@ -19,12 +19,13 @@
 }
 
 .mobile-shell .m-topbar{
-  position:sticky;top:0;z-index:20;background:var(--m-bg);
-  padding:16px 18px 10px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:20;background:rgba(247,246,242,.9);
+  padding:14px 18px 10px;display:flex;align-items:center;justify-content:space-between;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
 }
-.mobile-shell .m-topbar h1{font-size:19px;font-weight:900;margin:0;}
+.mobile-shell .m-topbar h1{font-family:'Noto Serif TC',serif;font-size:19px;font-weight:700;margin:0;letter-spacing:.03em;}
 .mobile-shell .m-topbar .m-logout{
-  border:none;background:none;color:var(--m-muted);font-size:13px;font-weight:700;
+  border:1px solid var(--m-border);border-radius:999px;background:#fff;color:var(--m-muted);font-size:11px;font-weight:700;padding:7px 12px;
 }
 
 .mobile-shell main{padding:6px 16px 20px;max-width:100%;}
@@ -35,10 +36,10 @@
 }
 .mobile-shell .kpi{
   flex-shrink:0;min-width:110px;background:var(--m-card);border:1px solid var(--m-border);
-  border-radius:16px;padding:14px 16px;
+  border-radius:16px;padding:14px 16px;box-shadow:0 4px 16px rgba(23,35,31,.04);
 }
 .mobile-shell .kpi .label{font-size:11px;color:var(--m-muted);}
-.mobile-shell .kpi .value{font-size:22px;font-weight:900;color:var(--m-primary);font-family:inherit;}
+.mobile-shell .kpi .value{font-size:22px;font-weight:700;color:var(--m-primary);font-family:'IBM Plex Mono',monospace;}
 .mobile-shell .kpi .value.warn{color:var(--m-primary);}
 
 .mobile-shell .section-title{
@@ -114,15 +115,24 @@
 
 /* 底部導覽列 */
 .mobile-bottom-nav{
-  position:fixed;bottom:0;left:0;right:0;z-index:30;
-  background:#FFFFFF;border-top:1px solid #EAE7E1;
-  display:flex;padding:8px 6px calc(10px + env(safe-area-inset-bottom));
+  position:fixed;bottom:10px;left:10px;right:10px;z-index:30;
+  background:rgba(255,255,255,.94);border:1px solid #E3E3DD;border-radius:18px;
+  box-shadow:0 12px 34px rgba(23,35,31,.13);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  display:flex;padding:9px 6px calc(9px + env(safe-area-inset-bottom));
 }
 .mobile-bottom-nav a{
   flex:1;text-align:center;font-size:11px;color:#8A8781;text-decoration:none;
   display:flex;flex-direction:column;align-items:center;gap:4px;
 }
-.mobile-bottom-nav a.active{color:#E85D3D;font-weight:700;}
+.mobile-bottom-nav a.active{color:var(--m-primary);font-weight:700;}
+.mobile-bottom-nav a svg{transition:transform .18s ease;}
+.mobile-bottom-nav a.active svg{transform:translateY(-1px);stroke-width:2.6;}
+
+.mobile-shell .dashboard-intro{margin-top:4px;}
+.mobile-shell .dashboard-intro .eyebrow{color:var(--brass);}
+.mobile-shell .dashboard-intro h2{font-family:'Noto Serif TC',serif;font-weight:700;}
+.mobile-shell .dashboard-primary-grid,
+.mobile-shell .dashboard-secondary-grid{display:grid!important;grid-template-columns:1fr!important;gap:20px!important;}
 
 /* 更多頁 */
 .mobile-more-row{
