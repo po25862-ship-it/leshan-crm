@@ -6,6 +6,7 @@ import { withAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 import PropertyPicker from "./PropertyPicker";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
 
 function nextMilestoneInfo(item) {
   const list = item.milestones || [];
@@ -41,6 +42,7 @@ const emptyForm = {
 };
 
 export default function Cases() {
+  const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection("cases", "createdAt");
   const { items: properties } = useCollection("properties", "title");
   const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
@@ -216,7 +218,7 @@ export default function Cases() {
                     {linked.totalPrice && <div>總價：{linked.totalPrice} 萬</div>}
                     {linked.websiteUrl && (
                       <div style={{ marginTop: 4 }}>
-                        <a href={withAgid(linked.websiteUrl)} target="_blank" rel="noreferrer">開啟物件網頁</a>
+                        <a href={withAgid(linked.websiteUrl, agid)} target="_blank" rel="noreferrer">開啟物件網頁</a>
                       </div>
                     )}
                   </div>

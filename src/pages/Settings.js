@@ -5,19 +5,37 @@ import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { useAuth } from "../AuthContext";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
+import { MAIN_OWNER_UID } from "../lib/url";
 
 export default function Settings() {
   const { user } = useAuth();
+  const { agid, saveAgid } = usePersonalAgid();
   const { data, save } = useDoc("settings/general", { reminderDays: 5 });
   const { items: activityLog } = useCollection("propertyActivityLog", "at");
   const [days, setDays] = useState(5);
   const { isConnected, email, connect, disconnect, gsiReady } = useGoogleAuth();
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState(null);
+  const [personalAgid, setPersonalAgid] = useState("");
 
   useEffect(() => {
     setDays(data.reminderDays ?? 5);
   }, [data.reminderDays]);
+
+  useEffect(() => {
+    setPersonalAgid(agid);
+  }, [agid]);
+
+  const onSavePersonalAgid = async () => {
+    const value = personalAgid.trim();
+    if (!value) {
+      alert("請輸入你的 AGID");
+      return;
+    }
+    await saveAgid(value);
+    alert("個人 AGID 已儲存，之後開啟、複製與分享物件時會自動套用。");
+  };
 
   const onSave = async () => {
     await save({ reminderDays: Number(days) });
@@ -222,13 +240,32 @@ export default function Settings() {
     setMigrating(false);
   };
 
-  if (user.uid !== "KiYlsnWcChW5muRkG167r7Mi1132") {
+  const personalAgidPanel = (
+    <div className="panel" style={{ maxWidth: 460, marginBottom: 24 }}>
+      <div className="form-field">
+        <label>我的物件 AGID</label>
+        <input
+          value={personalAgid}
+          onChange={(e) => setPersonalAgid(e.target.value)}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="請輸入你的 AGID，例如 06459"
+        />
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.7, marginTop: 10 }}>
+        每個帳號各自儲存。設定後，開啟、複製或分享物件網址時，系統會自動換成你的 AGID，不會更改其他同事的設定。
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <button className="btn" onClick={onSavePersonalAgid}>儲存我的 AGID</button>
+      </div>
+    </div>
+  );
+
+  if (user.uid !== MAIN_OWNER_UID) {
     return (
       <main>
         <div className="section-title">設定</div>
-        <div className="panel">
-          <div className="empty-state">這個頁面是系統管理用途，只有主要負責人可以使用。</div>
-        </div>
+        {personalAgidPanel}
       </main>
     );
   }
@@ -236,6 +273,9 @@ export default function Settings() {
   return (
     <main>
       <div className="section-title">設定</div>
+      {personalAgidPanel}
+
+      <div className="section-title">系統設定</div>
       <div className="panel" style={{ maxWidth: 420, marginBottom: 24 }}>
         <div className="form-field">
           <label>跟進提醒天數（超過幾天未聯絡就提醒）</label>

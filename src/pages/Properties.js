@@ -5,10 +5,11 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { todayStr, formatDate } from "../lib/dates";
-import { withAgid } from "../lib/url";
+import { withAgid, withoutAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -67,6 +68,7 @@ const emptyForm = {
 };
 
 export default function Properties() {
+  const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection("properties", "createdAt");
   const { items: linkedCases } = useCollection("cases", "createdAt");
   const [showForm, setShowForm] = useState(false);
@@ -95,8 +97,12 @@ export default function Properties() {
 
   const copyUrl = async (url) => {
     try {
-      await navigator.clipboard.writeText(withAgid(url));
-      alert("已複製網址（含 agid），可以直接貼給客人");
+      if (!agid) {
+        alert("請先到「設定」填寫你的物件 AGID");
+        return;
+      }
+      await navigator.clipboard.writeText(withAgid(url, agid));
+      alert(`已複製網址（AGID：${agid}），可以直接貼給客人`);
     } catch {
       alert("複製失敗，請手動選取網址複製");
     }
@@ -110,7 +116,6 @@ export default function Properties() {
       return next;
     });
   };
-  const [backfilling, setBackfilling] = useState(false);
   const [uploadingSheet, setUploadingSheet] = useState(false);
 
   const openNew = () => {
@@ -145,7 +150,7 @@ export default function Properties() {
     e.preventDefault();
     if (!form.title.trim()) return;
 
-    const formToSave = { ...form, websiteUrl: withAgid(form.websiteUrl), updatedAt: todayStr() };
+    const formToSave = { ...form, websiteUrl: withoutAgid(form.websiteUrl), updatedAt: todayStr() };
 
     if (editingId) {
       const priceChanged =
@@ -323,7 +328,7 @@ export default function Properties() {
             occupancy: String(r[12] || ""),
             laneWidth: String(r[13] || ""),
             agentInfo: String(r[14] || ""),
-            websiteUrl: withAgid(String(r[15] || "")),
+            websiteUrl: withoutAgid(String(r[15] || "")),
             notes: String(r[17] || ""),
             category: cat,
           });
@@ -577,34 +582,6 @@ export default function Properties() {
     XLSX.writeFile(wb, `物件總表_匯出_${todayStr()}.xlsx`);
   };
 
-  // ---- 一次性補齊所有既有物件的 agid（給還沒補到的舊資料用）----
-  const handleBackfillAgid = async () => {
-    const targets = items.filter((p) => p.websiteUrl && !p.websiteUrl.includes("agid="));
-    if (targets.length === 0) {
-      alert("所有物件的網址都已經有 agid 了，不需要補。");
-      return;
-    }
-    if (!window.confirm(`即將幫 ${targets.length} 筆物件（含在售與已售出）的網址補上 agid，確定要繼續嗎？`)) {
-      return;
-    }
-    setBackfilling(true);
-    try {
-      const CHUNK = 400;
-      for (let i = 0; i < targets.length; i += CHUNK) {
-        const batch = writeBatch(db);
-        targets.slice(i, i + CHUNK).forEach((p) => {
-          batch.update(doc(db, "properties", p.id), { websiteUrl: withAgid(p.websiteUrl) });
-        });
-        await batch.commit();
-      }
-      alert(`已完成，補上了 ${targets.length} 筆物件的 agid。`);
-    } catch (err) {
-      console.error(err);
-      alert("補齊失敗，請再試一次。");
-    }
-    setBackfilling(false);
-  };
-
   const fieldStyle2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
   const fieldStyle3 = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 };
 
@@ -617,9 +594,6 @@ export default function Properties() {
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn ghost" onClick={handleExport}>
             匯出 Excel
-          </button>
-          <button className="btn ghost" onClick={handleBackfillAgid} disabled={backfilling}>
-            {backfilling ? "補齊中…" : "補齊網址 agid"}
           </button>
           <label className="btn ghost" style={{ cursor: "pointer" }}>
             {importing ? "處理中…" : "匯入／更新 Excel"}
@@ -933,7 +907,7 @@ export default function Properties() {
                   onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
                 />
                 {form.websiteUrl && (
-                  <a href={withAgid(form.websiteUrl)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
+                  <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                     開啟網頁
                   </a>
                 )}
@@ -1088,7 +1062,7 @@ export default function Properties() {
             </div>
             <div className="actions" onClick={(e) => e.stopPropagation()}>
               {p.websiteUrl && (
-                <a href={withAgid(p.websiteUrl)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                <a href={withAgid(p.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   開啟網頁
                 </a>
               )}

@@ -7,12 +7,13 @@ import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { formatDate, nextMonthlyDueDate } from "../lib/dates";
-import { withAgid } from "../lib/url";
+import { withAgid, withoutAgid } from "../lib/url";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 import ShareWithPicker from "./ShareWithPicker";
 import PropertyPicker from "./PropertyPicker";
 import { useAuth } from "../AuthContext";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
 
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中", selfLeased: "被租掉了" };
 const STATUS_ORDER = ["seeking", "leased", "idle", "selfLeased"];
@@ -81,6 +82,7 @@ function ProgressLog({ rentalId }) {
 
 export default function RentalDetail() {
   const { user } = useAuth();
+  const { agid } = usePersonalAgid();
   const { rentalId } = useParams();
   const navigate = useNavigate();
   const rentalPath = `rentals/${rentalId}`;
@@ -147,7 +149,7 @@ export default function RentalDetail() {
     setForm({ ...form, adPlatforms: (form.adPlatforms || []).filter((_, i) => i !== idx) });
 
   const onSave = async () => {
-    let resolved = { ...form, propertyUrl: withAgid(form.propertyUrl) };
+    let resolved = { ...form, propertyUrl: withoutAgid(form.propertyUrl) };
 
     // 有連結物件的話，同步地址／網址（不動物件本身的在售狀態）
     if (resolved.propertyId) {
@@ -279,7 +281,7 @@ export default function RentalDetail() {
             <label>物件網址</label>
             <div style={{ display: "flex", gap: 8 }}>
               <input style={{ flex: 1 }} value={form.propertyUrl || ""} onChange={(e) => setForm({ ...form, propertyUrl: e.target.value })} />
-              {form.propertyUrl && <a href={withAgid(form.propertyUrl)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>}
+              {form.propertyUrl && <a href={withAgid(form.propertyUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>}
             </div>
           </div>
           <div className="form-field">

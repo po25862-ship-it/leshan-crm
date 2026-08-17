@@ -6,7 +6,7 @@ import { db, storage } from "../firebase";
 import { useDoc } from "../hooks/useDoc";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
-import { withAgid } from "../lib/url";
+import { withAgid, withoutAgid } from "../lib/url";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
 import SellerActivityLog from "./SellerActivityLog";
 import ShareWithPicker from "./ShareWithPicker";
@@ -14,6 +14,7 @@ import PropertyPicker from "./PropertyPicker";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 import { useAuth } from "../AuthContext";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -32,6 +33,7 @@ function linkify(text) {
 
 export default function SellerDetail() {
   const { user } = useAuth();
+  const { agid } = usePersonalAgid();
   const { contactId, listingId } = useParams();
   const navigate = useNavigate();
   const listingPath = `contacts/${contactId}/listings/${listingId}`;
@@ -76,7 +78,7 @@ export default function SellerDetail() {
       address: data.propertyAddress,
       totalPrice: data.askingPrice || data.price || "",
       listingNo: data.listingNo,
-      websiteUrl: withAgid(data.propertyUrl),
+      websiteUrl: withoutAgid(data.propertyUrl),
       category: data.category || PROPERTY_CATEGORIES[0],
       store: data.store || PROPERTY_STORES[3],
     };
@@ -102,7 +104,7 @@ export default function SellerDetail() {
   };
 
   const onSave = async () => {
-    let resolved = { ...form, propertyUrl: withAgid(form.propertyUrl) };
+    let resolved = { ...form, propertyUrl: withoutAgid(form.propertyUrl) };
     if (!resolved.propertyId) {
       const match = properties.find((p) => p.title === (form.title || "").trim());
       if (match) resolved.propertyId = match.id;
@@ -293,7 +295,7 @@ export default function SellerDetail() {
               <label>物件網址</label>
               <div style={{ display: "flex", gap: 8 }}>
                 <input style={{ flex: 1 }} value={form.propertyUrl || ""} onChange={(e) => setForm({ ...form, propertyUrl: e.target.value })} />
-                {form.propertyUrl && <a href={form.propertyUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>}
+                {form.propertyUrl && <a href={withAgid(form.propertyUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>}
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>

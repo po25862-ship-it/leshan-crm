@@ -7,9 +7,11 @@ import { withAgid } from "../lib/url";
 import { truncateAddress } from "../lib/address";
 import { todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
 
 export default function PropertyShare({ properties, onClose }) {
   const { user } = useAuth();
+  const { agid } = usePersonalAgid();
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyers = contacts.filter((c) => (c.tags || []).includes("買方"));
 
@@ -27,7 +29,7 @@ export default function PropertyShare({ properties, onClose }) {
         const line1 = [p.title, truncateAddress(p.address), p.totalPrice ? `${p.totalPrice}萬` : ""]
           .filter(Boolean)
           .join("・");
-        const line2 = p.websiteUrl ? withAgid(p.websiteUrl) : "";
+        const line2 = p.websiteUrl ? withAgid(p.websiteUrl, agid) : "";
         return [line1, line2, ""];
       }),
     ]
@@ -38,7 +40,7 @@ export default function PropertyShare({ properties, onClose }) {
   useEffect(() => {
     setPreviewText(buildText(intro));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intro, properties]);
+  }, [intro, properties, agid]);
 
   const onCopy = async () => {
     try {
@@ -80,6 +82,12 @@ export default function PropertyShare({ properties, onClose }) {
         分享物件（已選 {properties.length} 筆）
       </div>
 
+      {!agid && (
+        <div style={{ background: "var(--danger-soft)", color: "var(--danger)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 12, lineHeight: 1.6 }}>
+          尚未設定個人 AGID，請先到「設定」填寫後再分享物件。
+        </div>
+      )}
+
       <div className="form-field">
         <label>開頭文字</label>
         <textarea rows="2" value={intro} onChange={(e) => setIntro(e.target.value)} />
@@ -96,7 +104,7 @@ export default function PropertyShare({ properties, onClose }) {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        <button className="btn" onClick={onCopy}>
+        <button className="btn" onClick={onCopy} disabled={!agid}>
           {copied ? "已複製！" : "複製文字"}
         </button>
         <button className="btn ghost" onClick={onClose}>

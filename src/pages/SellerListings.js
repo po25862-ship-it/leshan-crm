@@ -5,6 +5,8 @@ import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { formatDate, todayStr } from "../lib/dates";
 import { PROPERTY_CATEGORIES, PROPERTY_STORES } from "../lib/propertyConstants";
+import { usePersonalAgid } from "../hooks/usePersonalAgid";
+import { withAgid, withoutAgid } from "../lib/url";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -97,6 +99,7 @@ function ProgressLog({ contactId, listingId }) {
 }
 
 export default function SellerListings({ contactId }) {
+  const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection(`contacts/${contactId}/listings`, "createdAt");
   const { items: properties } = useCollection("properties", "title");
   const [showForm, setShowForm] = useState(false);
@@ -129,7 +132,7 @@ export default function SellerListings({ contactId }) {
     if (!form.title.trim()) return;
 
     // 如果標題剛好對到現有物件的案名，自動視為連結（沒對到就維持獨立輸入）
-    let resolvedForm = { ...form };
+    let resolvedForm = { ...form, propertyUrl: withoutAgid(form.propertyUrl) };
     if (!resolvedForm.propertyId) {
       const match = properties.find((p) => p.title === form.title.trim());
       if (match) resolvedForm.propertyId = match.id;
@@ -163,7 +166,7 @@ export default function SellerListings({ contactId }) {
       address: listing.propertyAddress,
       totalPrice: listing.askingPrice || listing.price || "",
       listingNo: listing.listingNo,
-      websiteUrl: listing.propertyUrl,
+      websiteUrl: withoutAgid(listing.propertyUrl),
       category: listing.category || PROPERTY_CATEGORIES[0],
       store: listing.store || PROPERTY_STORES[3],
       status: "active",
@@ -283,7 +286,7 @@ export default function SellerListings({ contactId }) {
             <div style={{ display: "flex", gap: 8 }}>
               <input style={{ flex: 1 }} value={form.propertyUrl} onChange={(e) => setForm({ ...form, propertyUrl: e.target.value })} />
               {form.propertyUrl && (
-                <a href={form.propertyUrl} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>
+                <a href={withAgid(form.propertyUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟</a>
               )}
             </div>
           </div>
