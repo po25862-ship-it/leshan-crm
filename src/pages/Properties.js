@@ -66,6 +66,11 @@ const emptyForm = {
   address: "",
   landPing: "",
   titlePing: "",
+  mainBuildingPing: "",
+  auxiliaryBuildingPing: "",
+  commonAreaPing: "",
+  parkingPing: "",
+  parkingDescription: "",
   floor: "",
   orientation: "",
   age: "",
@@ -594,6 +599,88 @@ export default function Properties() {
     setImportDecisions({});
   };
 
+  // ---- 補充公司詳細資料表的完整地址與面積（只用委託書編號精確比對）----
+  const importPropertyDetails = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      const payload = JSON.parse(await file.text());
+      const records = Array.isArray(payload?.records) ? payload.records : [];
+      if (records.length === 0) {
+        alert("找不到可匯入的物件詳細資料，請確認檔案是否正確。");
+        return;
+      }
+
+      const existingByListingNo = new Map();
+      items.forEach((item) => {
+        const listingNo = String(item.listingNo || "").trim();
+        if (!listingNo) return;
+        if (!existingByListingNo.has(listingNo)) existingByListingNo.set(listingNo, []);
+        existingByListingNo.get(listingNo).push(item);
+      });
+
+      const ops = [];
+      const matchedListingNos = new Set();
+      let addressCount = 0;
+      let buildingCount = 0;
+      let parkingAreaCount = 0;
+
+      records.forEach((record) => {
+        const listingNo = String(record.listingNo || "").trim();
+        const matches = existingByListingNo.get(listingNo) || [];
+        if (!listingNo || matches.length === 0) return;
+        matchedListingNos.add(listingNo);
+
+        const updates = {
+          detailSource: "台灣房屋詳細資料表 2026-08-18",
+          detailUpdatedAt: todayStr(),
+        };
+        if (record.address) updates.address = String(record.address).trim();
+        if (record.mainBuildingPing != null) updates.mainBuildingPing = Number(record.mainBuildingPing);
+        if (record.auxiliaryBuildingPing != null) updates.auxiliaryBuildingPing = Number(record.auxiliaryBuildingPing);
+        if (record.commonAreaPing != null) updates.commonAreaPing = Number(record.commonAreaPing);
+        if (record.parkingPing != null) updates.parkingPing = Number(record.parkingPing);
+        if (record.parkingDescription) updates.parkingDescription = String(record.parkingDescription).trim();
+
+        matches.forEach((item) => {
+          ops.push({ ref: doc(db, "properties", item.id), data: updates });
+          if (updates.address) addressCount++;
+          if (updates.mainBuildingPing != null) buildingCount++;
+          if (updates.parkingPing != null) parkingAreaCount++;
+        });
+      });
+
+      if (ops.length === 0) {
+        alert("這份檔案的委託書編號都沒有在目前 CRM 找到，因此沒有更新任何資料。");
+        return;
+      }
+
+      const unmatchedCount = records.length - matchedListingNos.size;
+      const confirmed = window.confirm(
+        `即將依委託書編號更新 ${matchedListingNos.size} 個物件（共 ${ops.length} 筆 CRM 紀錄）：\n` +
+        `完整地址 ${addressCount} 筆\n建物面積 ${buildingCount} 筆\n車位坪數 ${parkingAreaCount} 筆\n` +
+        `${unmatchedCount} 個委託編號在 CRM 找不到，將略過。\n\n不會新增、刪除或改變物件狀態。確定要繼續嗎？`
+      );
+      if (!confirmed) return;
+
+      setImporting(true);
+      const CHUNK = 450;
+      for (let i = 0; i < ops.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        ops.slice(i, i + CHUNK).forEach((op) => batch.set(op.ref, op.data, { merge: true }));
+        await batch.commit();
+      }
+      alert(`地址與面積補充完成：已更新 ${ops.length} 筆 CRM 紀錄。`);
+    } catch (err) {
+      console.error(err);
+      alert("地址與面積匯入失敗，請確認檔案格式後再試一次。");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // ---- 匯出 Excel（維持原始檔案的分頁與欄位格式）----
   const handleExport = () => {
     const exportItems = items.filter((p) => (p.status || "active") === "active");
@@ -676,6 +763,16 @@ export default function Properties() {
               type="file"
               accept=".xlsx,.xls"
               onChange={analyzeImportFile}
+              style={{ display: "none" }}
+              disabled={importing}
+            />
+          </label>
+          <label className="btn ghost" style={{ cursor: "pointer" }}>
+            {importing ? "處理中…" : "補上地址／面積"}
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={importPropertyDetails}
               style={{ display: "none" }}
               disabled={importing}
             />
@@ -931,6 +1028,22 @@ export default function Properties() {
                 <input value={form.titlePing} onChange={(e) => setForm({ ...form, titlePing: e.target.value })} />
               </div>
               <div className="form-field">
+                <label>主建物（坪）</label>
+                <input value={form.mainBuildingPing} onChange={(e) => setForm({ ...form, mainBuildingPing: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label>附屬建物（坪）</label>
+                <input value={form.auxiliaryBuildingPing} onChange={(e) => setForm({ ...form, auxiliaryBuildingPing: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label>公設（坪）</label>
+                <input value={form.commonAreaPing} onChange={(e) => setForm({ ...form, commonAreaPing: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label>車位（坪）</label>
+                <input value={form.parkingPing} onChange={(e) => setForm({ ...form, parkingPing: e.target.value })} />
+              </div>
+              <div className="form-field">
                 <label>樓別</label>
                 <input value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} placeholder="例如：5/5" />
               </div>
@@ -949,6 +1062,10 @@ export default function Properties() {
               <div className="form-field">
                 <label>車位（數量）</label>
                 <input value={form.parkingCount} onChange={(e) => setForm({ ...form, parkingCount: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label>車位說明</label>
+                <input value={form.parkingDescription} onChange={(e) => setForm({ ...form, parkingDescription: e.target.value })} />
               </div>
               <div className="form-field">
                 <label>總價（萬）</label>
@@ -1120,6 +1237,14 @@ export default function Properties() {
                 {Boolean(p.totalPrice) && <>總價 {p.totalPrice} 萬　</>}
                 {Boolean(p.occupancy) && <>{p.occupancy}</>}
               </div>
+              {(p.mainBuildingPing != null || p.auxiliaryBuildingPing != null || p.commonAreaPing != null || p.parkingPing != null) && (
+                <div className="meta">
+                  {p.mainBuildingPing != null && <>主建 {p.mainBuildingPing} 坪　</>}
+                  {p.auxiliaryBuildingPing != null && <>附屬 {p.auxiliaryBuildingPing} 坪　</>}
+                  {p.commonAreaPing != null && <>公設 {p.commonAreaPing} 坪　</>}
+                  {p.parkingPing != null && <>車位 {p.parkingPing} 坪</>}
+                </div>
+              )}
               {p.lastPriceChange && (
                 <div className="meta" style={{ color: "var(--brass)" }}>
                   💰 已調整：{p.lastPriceChange.oldPrice} 萬 → {p.lastPriceChange.newPrice} 萬（{p.lastPriceChange.date}）
