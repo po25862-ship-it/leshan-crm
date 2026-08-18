@@ -261,11 +261,39 @@ export default function Settings() {
     </div>
   );
 
+  const googlePanel = (
+    <>
+      <div className="section-title">Google 行事曆與 Drive</div>
+      <div className="panel" style={{ maxWidth: 460, marginBottom: 24 }}>
+        {isConnected ? (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div><div style={{ fontSize: 14, fontWeight: 700 }}>已連結</div><div style={{ fontSize: 12, color: "var(--muted)" }}>{email}</div></div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#2F9E5C", background: "#E6F5EC", padding: "4px 12px", borderRadius: 20 }}>● 已連結</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.7 }}>
+              行程會同步到你的 Google 行事曆；CRM 備份與附件會上傳到你自己的 Google Drive。每位同事各自連結，不共用帳號。
+            </div>
+            <button className="btn ghost" style={{ marginTop: 14 }} onClick={disconnect}>中斷連結</button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.7 }}>
+              連結後可同步行事曆，並把備份或附件上傳到你自己的 Google Drive。
+            </div>
+            <button className="btn" onClick={connect} disabled={!gsiReady}>{gsiReady ? "連結 Google 帳號" : "載入中…"}</button>
+          </>
+        )}
+      </div>
+    </>
+  );
+
   if (user.uid !== MAIN_OWNER_UID) {
     return (
       <main>
         <div className="section-title">設定</div>
         {personalAgidPanel}
+        {googlePanel}
       </main>
     );
   }
@@ -274,6 +302,7 @@ export default function Settings() {
     <main>
       <div className="section-title">設定</div>
       {personalAgidPanel}
+      {googlePanel}
 
       <div className="section-title">系統設定</div>
       <div className="panel" style={{ maxWidth: 420, marginBottom: 24 }}>
@@ -336,47 +365,6 @@ export default function Settings() {
             )}
           </div>
         ))}
-      </div>
-
-      <div className="section-title">Google 行事曆</div>
-      <div className="panel" style={{ maxWidth: 420 }}>
-        {isConnected ? (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>已連結</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{email}</div>
-              </div>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: "#2F9E5C",
-                  background: "#E6F5EC",
-                  padding: "4px 12px",
-                  borderRadius: 20,
-                }}
-              >
-                ● 已連結
-              </span>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
-              之後在「案件」表單裡設定關鍵日期時，可以選擇同步到這個 Google 帳號的行事曆。
-            </div>
-            <button className="btn ghost" style={{ marginTop: 14 }} onClick={disconnect}>
-              中斷連結
-            </button>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
-              連結 Google 帳號後，案件的關鍵日期（委託到期、簽約日等）可以同步到你的 Google 行事曆。
-            </div>
-            <button className="btn" onClick={connect} disabled={!gsiReady}>
-              {gsiReady ? "連結 Google 帳號" : "載入中…"}
-            </button>
-          </>
-        )}
       </div>
 
       <div className="section-title">商談事項最新狀況補齊</div>
