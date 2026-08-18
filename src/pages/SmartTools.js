@@ -32,6 +32,7 @@ export default function SmartTools() {
   const { items: needs } = useNeedsCollection(user.uid);
   const { isConnected, email, connect, uploadToDrive } = useGoogleAuth();
   const [selectedIds, setSelectedIds] = useState([]);
+  const [mapKeyword, setMapKeyword] = useState("");
   const [driveBusy, setDriveBusy] = useState(false);
   const [driveResult, setDriveResult] = useState(null);
   const [apiKey, setApiKey] = useState(() => getGeminiApiKey());
@@ -39,8 +40,13 @@ export default function SmartTools() {
   const [aiOutput, setAiOutput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
 
-  const mappable = useMemo(() => properties.filter((p) => p.address), [properties]);
-  const selectedProperties = selectedIds.map((id) => mappable.find((p) => p.id === id)).filter(Boolean);
+  const mappableAll = useMemo(() => properties.filter((p) => p.address && (p.status || "active") === "active"), [properties]);
+  const mappable = useMemo(() => {
+    const key = mapKeyword.trim().toLowerCase();
+    if (!key) return mappableAll;
+    return mappableAll.filter((p) => `${p.title || ""} ${p.address || ""}`.toLowerCase().includes(key));
+  }, [mappableAll, mapKeyword]);
+  const selectedProperties = selectedIds.map((id) => mappableAll.find((p) => p.id === id)).filter(Boolean);
   const routeUrl = buildDirectionsUrl(selectedProperties.map((p) => p.address));
   const counts = { properties: properties.length, contacts: contacts.length, rentals: rentals.length, topics: topics.length, needs: needs.length };
 
@@ -119,6 +125,7 @@ export default function SmartTools() {
       <div className="smart-tools-grid">
         <section className="panel smart-tool-card smart-tool-wide">
           <div className="smart-tool-heading"><MapPinned size={20} /><div><h3>Google Maps 帶看路線</h3><p>依選取順序安排多間物件，最多 8 個地點。</p></div></div>
+          <div className="form-field route-search"><label>搜尋在售物件</label><input value={mapKeyword} onChange={(e) => setMapKeyword(e.target.value)} placeholder="輸入案名或地址" /></div>
           <div className="route-list">
             {mappable.length === 0 && <div className="empty-state">物件尚未填寫地址</div>}
             {mappable.map((property) => {
