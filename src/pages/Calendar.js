@@ -54,7 +54,7 @@ export default function CalendarPage() {
   );
   const appointments = useAllAppointments(user.uid);
   const listings = useListingsForContacts(sellerContactIds);
-  const { isConnected, listEvents } = useGoogleAuth();
+  const { isConnected, listEvents, createEvent, connect } = useGoogleAuth();
 
   const [monthCursor, setMonthCursor] = useState(() => {
     const d = new Date();
@@ -63,6 +63,9 @@ export default function CalendarPage() {
   });
   const [googleEvents, setGoogleEvents] = useState([]);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [eventForm, setEventForm] = useState({ title: "", date: toDateStr(new Date()), time: "09:00", notes: "" });
+  const [creatingEvent, setCreatingEvent] = useState(false);
+  const [googleRefreshKey, setGoogleRefreshKey] = useState(0);
 
   const monthStart = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
   const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
@@ -80,7 +83,27 @@ export default function CalendarPage() {
       .catch(() => setGoogleEvents([]))
       .finally(() => setLoadingGoogle(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, monthCursor]);
+  }, [isConnected, monthCursor, googleRefreshKey]);
+
+  const addGoogleEvent = async (e) => {
+    e.preventDefault();
+    if (!isConnected) {
+      connect();
+      return;
+    }
+    if (!eventForm.title.trim() || !eventForm.date) return;
+    setCreatingEvent(true);
+    try {
+      await createEvent({ ...eventForm, title: eventForm.title.trim() });
+      setEventForm((prev) => ({ ...prev, title: "", notes: "" }));
+      setGoogleRefreshKey((key) => key + 1);
+      alert("已加入你的 Google 行事曆");
+    } catch (err) {
+      alert(err.message || "建立行程失敗");
+    } finally {
+      setCreatingEvent(false);
+    }
+  };
 
   // ---- 整合系統事件（成交案件里程碑、委託到期日、客戶約看）----
   const systemEvents = useMemo(() => {
@@ -195,6 +218,18 @@ export default function CalendarPage() {
         )}
       </div>
 
+      <form className="panel calendar-quick-add" onSubmit={addGoogleEvent}>
+        <div className="calendar-quick-copy">
+          <strong>快速新增 Google 行程</strong>
+          <span>{isConnected ? "會寫入你自己的 Google 帳號" : "首次使用請先連結 Google 帳號"}</span>
+        </div>
+        <input aria-label="行程名稱" placeholder="行程名稱，例如：林小姐 A7 帶看" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} required />
+        <input aria-label="日期" type="date" value={eventForm.date} onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })} required />
+        <input aria-label="時間" type="time" value={eventForm.time} onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })} />
+        <input aria-label="備註" placeholder="地址或備註" value={eventForm.notes} onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })} />
+        <button className="btn" type="submit" disabled={creatingEvent}>{creatingEvent ? "新增中…" : isConnected ? "新增行程" : "連結 Google"}</button>
+      </form>
+
       <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 24, alignItems: "start" }}>
         <div className="panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -244,8 +279,9 @@ export default function CalendarPage() {
         </div>
 
         <div className="panel">
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
-            {monthLabel(monthCursor)} 行程{loadingGoogle && "（讀取 Google 行事曆中…）"}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{monthLabel(monthCursor)} 行程{loadingGoogle && "（讀取 Google 行事曆中…）"}</div>
+            {isConnected && <button className="btn ghost" onClick={() => setGoogleRefreshKey((key) => key + 1)}>重新同步</button>}
           </div>
           {allEvents.length === 0 && (
             <div className="empty-state">這個月沒有排定的行程</div>
