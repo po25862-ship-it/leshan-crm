@@ -17,6 +17,7 @@ import Needs from "./pages/Needs";
 import Settings from "./pages/Settings";
 import CalendarPage from "./pages/Calendar";
 import LineBroadcast from "./pages/LineBroadcast";
+import SmartTools from "./pages/SmartTools";
 import MobileMore from "./pages/MobileMore";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
@@ -35,6 +36,7 @@ import {
   MessagesSquare,
   CalendarDays,
   MessageCircle,
+  WandSparkles,
   Settings as SettingsIcon,
   LogOut,
 } from "lucide-react";
@@ -52,6 +54,7 @@ const desktopNavItems = [
   { to: "/topics", label: "商談", icon: MessagesSquare },
   { to: "/calendar", label: "行事曆", icon: CalendarDays },
   { to: "/line", label: "個人LINE", icon: MessageCircle },
+  { to: "/tools", label: "智慧工具", icon: WandSparkles },
   { to: "/settings", label: "設定", icon: SettingsIcon },
 ];
 
@@ -99,6 +102,7 @@ function AppRoutes() {
       <Route path="/settings" element={<Settings />} />
       <Route path="/calendar" element={<CalendarPage />} />
       <Route path="/line" element={<LineBroadcast />} />
+      <Route path="/tools" element={<SmartTools />} />
       <Route path="/more" element={<MobileMore />} />
     </Routes>
   );
