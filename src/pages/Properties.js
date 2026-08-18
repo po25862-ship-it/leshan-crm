@@ -10,6 +10,7 @@ import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
+import { X } from "lucide-react";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -105,6 +106,19 @@ export default function Properties() {
       alert(`已複製網址（AGID：${agid}），可以直接貼給客人`);
     } catch {
       alert("複製失敗，請手動選取網址複製");
+    }
+  };
+
+  const toggleWebsiteUnlisted = async (item) => {
+    try {
+      const websiteUnlisted = !item.websiteUnlisted;
+      await update(item.id, { websiteUnlisted, updatedAt: todayStr() });
+      if (editingId === item.id) {
+        setForm((current) => ({ ...current, websiteUnlisted }));
+      }
+    } catch (err) {
+      console.error("更新物件網址狀態失敗", err);
+      alert("更新網址狀態失敗，請稍後再試");
     }
   };
 
@@ -1065,6 +1079,27 @@ export default function Properties() {
                 <a href={withAgid(p.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   開啟網頁
                 </a>
+              )}
+              {p.websiteUrl && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => toggleWebsiteUnlisted(p)}
+                  aria-label={`${p.websiteUnlisted ? "取消" : "標記"} ${p.title || "物件"} 官網未上架`}
+                  aria-pressed={Boolean(p.websiteUnlisted)}
+                  title={p.websiteUnlisted ? "取消未上架標記" : "標記為官網未上架"}
+                  style={{
+                    color: p.websiteUnlisted ? "#fff" : "#B42318",
+                    background: p.websiteUnlisted ? "#B42318" : "#fff",
+                    borderColor: "#F1B8B2",
+                    padding: "8px",
+                  }}
+                >
+                  <X size={15} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              )}
+              {p.websiteUrl && p.websiteUnlisted && (
+                <span className="tag" style={{ color: "#B42318", background: "#FEECEB" }}>官網未上架</span>
               )}
               {p.websiteUrl && (
                 <button className="btn ghost" onClick={() => copyUrl(p.websiteUrl)}>
