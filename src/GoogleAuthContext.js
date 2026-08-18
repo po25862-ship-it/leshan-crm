@@ -3,8 +3,14 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 // 這是在 Google Cloud Console 建立的 OAuth 用戶端 ID，屬於公開資訊，
 // 安全性是靠 Cloud Console 裡設定的「已授權的 JavaScript 來源」把關，不是靠隱藏這串文字。
 const CLIENT_ID = "67951666720-k1qder1i93lrm8kjp4p6f1iubt91qra9.apps.googleusercontent.com";
-const SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const SCOPE = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/drive.file",
+].join(" ");
 const STORAGE_KEY = "gcal_session";
+const AUTH_VERSION = 2;
 
 const GoogleAuthContext = createContext(null);
 
@@ -13,7 +19,7 @@ function loadSaved() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed.expiresAt && parsed.expiresAt > Date.now()) return parsed;
+    if (parsed.version === AUTH_VERSION && parsed.expiresAt && parsed.expiresAt > Date.now()) return parsed;
     return null;
   } catch {
     return null;
@@ -53,7 +59,7 @@ export function GoogleAuthProvider({ children }) {
         } catch {
           // 拿不到 email 也沒關係，不影響同步功能
         }
-        const next = { accessToken: resp.access_token, expiresAt, email };
+        const next = { accessToken: resp.access_token, expiresAt, email, version: AUTH_VERSION };
         setSession(next);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       },
@@ -108,11 +114,15 @@ export function GoogleAuthProvider({ children }) {
         end: { dateTime: endDateTime, timeZone: "Asia/Taipei" },
       };
     } else {
+      const endDate = new Date(`${date}T00:00:00`);
+      endDate.setDate(endDate.getDate() + 1);
+      const pad = (n) => String(n).padStart(2, "0");
+      const nextDate = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}`;
       body = {
         summary: title,
         description: notes || "",
         start: { date },
-        end: { date },
+        end: { date: nextDate },
       };
     }
     if (recurrence) {
@@ -180,6 +190,40 @@ export function GoogleAuthProvider({ children }) {
     [authedFetch]
   );
 
+  const uploadToDrive = useCallback(
+    async (file, customName) => {
+      if (!isConnected) throw new Error("請先連結 Google 帳號");
+      const name = customName || file.name || `CRM-${Date.now()}.json`;
+      const metadataRes = await fetch(
+        "https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name }),
+        }
+      );
+      if (!metadataRes.ok) throw new Error("建立 Google Drive 檔案失敗，請重新連結 Google 帳號");
+      const metadata = await metadataRes.json();
+      const uploadRes = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${metadata.id}?uploadType=media&fields=id,name,webViewLink`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "Content-Type": file.type || "application/octet-stream",
+          },
+          body: file,
+        }
+      );
+      if (!uploadRes.ok) throw new Error("上傳 Google Drive 失敗");
+      return uploadRes.json();
+    },
+    [isConnected, session]
+  );
+
   return (
     <GoogleAuthContext.Provider
       value={{
@@ -191,6 +235,7 @@ export function GoogleAuthProvider({ children }) {
         updateEvent,
         deleteEvent,
         listEvents,
+        uploadToDrive,
         gsiReady,
       }}
     >
