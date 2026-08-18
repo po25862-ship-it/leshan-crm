@@ -59,6 +59,20 @@ function matchNum(value, filterVal, mode) {
   return mode === "eq" ? value === f : value >= f;
 }
 
+function matchRange(value, min, max) {
+  if (min === "" && max === "") return true;
+  if (value === "" || value === null || value === undefined || !Number.isFinite(Number(value))) return false;
+  const number = Number(value);
+  if (min !== "" && number < Number(min)) return false;
+  if (max !== "" && number > Number(max)) return false;
+  return true;
+}
+
+function propertyHasParking(property) {
+  if (String(property.parkingDescription || "").trim() === "無") return false;
+  return Number(property.parkingCount || 0) > 0 || Number(property.parkingPing || 0) > 0 || Boolean(String(property.parkingDescription || "").trim());
+}
+
 const emptyForm = {
   store: STORES[3],
   listingNo: "",
@@ -101,6 +115,14 @@ export default function Properties() {
   const [keyword, setKeyword] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  const [minMainBuildingPing, setMinMainBuildingPing] = useState("");
+  const [maxMainBuildingPing, setMaxMainBuildingPing] = useState("");
+  const [minTitlePing, setMinTitlePing] = useState("");
+  const [maxTitlePing, setMaxTitlePing] = useState("");
+  const [minLandPing, setMinLandPing] = useState("");
+  const [maxLandPing, setMaxLandPing] = useState("");
+  const [parkingFilter, setParkingFilter] = useState("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [layoutKeyword, setLayoutKeyword] = useState("");
   const [floorFilter, setFloorFilter] = useState("");
   const [floorMode, setFloorMode] = useState("eq");
@@ -358,6 +380,11 @@ export default function Properties() {
     if (activeCategory !== "全部" && (p.category || "未分類") !== activeCategory) return false;
     if (minPrice && Number(p.totalPrice || 0) < Number(minPrice)) return false;
     if (maxPrice && Number(p.totalPrice || 0) > Number(maxPrice)) return false;
+    if (!matchRange(p.mainBuildingPing, minMainBuildingPing, maxMainBuildingPing)) return false;
+    if (!matchRange(p.titlePing, minTitlePing, maxTitlePing)) return false;
+    if (!matchRange(p.landPing, minLandPing, maxLandPing)) return false;
+    if (parkingFilter === "yes" && !propertyHasParking(p)) return false;
+    if (parkingFilter === "no" && propertyHasParking(p)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
     if (!matchNum(parseFloor(p.floor), floorFilter, floorMode)) return false;
     const { rooms, living, bath } = parseLayout(p.layout);
@@ -373,6 +400,30 @@ export default function Properties() {
       (p.store || "").includes(k)
     );
   });
+
+  const advancedFilterCount = [
+    minMainBuildingPing, maxMainBuildingPing, minTitlePing, maxTitlePing,
+    minLandPing, maxLandPing, parkingFilter === "all" ? "" : parkingFilter,
+  ].filter((value) => value !== "").length;
+
+  const clearAllFilters = () => {
+    setKeyword("");
+    setMinPrice("");
+    setMaxPrice("");
+    setLayoutKeyword("");
+    setFloorFilter("");
+    setRoomFilter("");
+    setLivingFilter("");
+    setBathFilter("");
+    setMinMainBuildingPing("");
+    setMaxMainBuildingPing("");
+    setMinTitlePing("");
+    setMaxTitlePing("");
+    setMinLandPing("");
+    setMaxLandPing("");
+    setParkingFilter("all");
+    setActiveCategory("全部");
+  };
 
   // ---- 匯入 Excel（智慧更新：用委託書編號比對新增/更新，並標記消失的物件）----
   const analyzeImportFile = async (e) => {
@@ -912,7 +963,47 @@ export default function Properties() {
           type="number"
           style={{ width: 130, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
         />
+        <button
+          type="button"
+          className={showAdvancedFilters || advancedFilterCount > 0 ? "btn" : "btn ghost"}
+          onClick={() => setShowAdvancedFilters((value) => !value)}
+        >
+          進階篩選{advancedFilterCount > 0 ? `（${advancedFilterCount}）` : ""}
+        </button>
+        <button type="button" className="btn ghost" onClick={clearAllFilters}>清除條件</button>
       </div>
+
+      {showAdvancedFilters && (
+        <div className="panel" style={{ padding: 14, marginBottom: 14, background: "var(--panel-soft, #FAFAF8)" }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "end" }}>
+            {[
+              { label: "主建物坪數", min: minMainBuildingPing, setMin: setMinMainBuildingPing, max: maxMainBuildingPing, setMax: setMaxMainBuildingPing },
+              { label: "權狀坪數", min: minTitlePing, setMin: setMinTitlePing, max: maxTitlePing, setMax: setMaxTitlePing },
+              { label: "地坪", min: minLandPing, setMin: setMinLandPing, max: maxLandPing, setMax: setMaxLandPing },
+            ].map((range) => (
+              <div key={range.label} style={{ minWidth: 230 }}>
+                <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, marginBottom: 6 }}>{range.label}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input type="number" min="0" step="0.1" value={range.min} onChange={(e) => range.setMin(e.target.value)} placeholder="最低" style={{ width: 96, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7 }} />
+                  <span style={{ color: "var(--muted)" }}>～</span>
+                  <input type="number" min="0" step="0.1" value={range.max} onChange={(e) => range.setMax(e.target.value)} placeholder="最高" style={{ width: 96, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7 }} />
+                </div>
+              </div>
+            ))}
+            <div style={{ minWidth: 150 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, marginBottom: 6 }}>車位</div>
+              <select value={parkingFilter} onChange={(e) => setParkingFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7 }}>
+                <option value="all">全部</option>
+                <option value="yes">有車位</option>
+                <option value="no">無車位</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted)" }}>
+            主建物坪數只會搜尋已補入詳細資料的物件；沒有主建物明細的土地或舊物件不會列入結果。
+          </div>
+        </div>
+      )}
 
       {/* 房／廳／衛／樓層 結構化搜尋 */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
