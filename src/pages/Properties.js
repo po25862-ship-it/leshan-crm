@@ -10,6 +10,7 @@ import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { X } from "lucide-react";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
@@ -105,6 +106,7 @@ const emptyForm = {
 };
 
 export default function Properties() {
+  const isMobile = useIsMobile();
   const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection("properties", "createdAt");
   const { items: linkedCases } = useCollection("cases", "createdAt");
@@ -805,6 +807,15 @@ export default function Properties() {
           物件（{pool.length}）
         </div>
         <div style={{ display: "flex", gap: 10 }}>
+          {!isMobile && (
+            <button
+              className="btn ghost"
+              onClick={() => window.open("http://127.0.0.1:8877/", "leshan-property-sync")}
+              title="開啟這台電腦上的物件同步工具"
+            >
+              立即同步
+            </button>
+          )}
           <button className="btn ghost" onClick={handleExport}>
             匯出 Excel
           </button>

@@ -1,0 +1,5 @@
+.DS_Store
+node_modules/
+build/
+property-sync/output/
+property-sync/*.log

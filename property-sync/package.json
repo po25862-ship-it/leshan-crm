@@ -1,0 +1,23 @@
+{
+  "name": "leshan-property-sync",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "sync": "node sync.js",
+    "server": "node server.js",
+    "test:archive": "node sync.js --source-dir /private/tmp/leshan-64-reports --assume-ordered --output-dir /private/tmp/leshan-property-sync-test"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "firebase": "^12.17.1",
+    "html-entities": "^2.6.0",
+    "iconv-lite": "^0.6.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
+  }
+}
