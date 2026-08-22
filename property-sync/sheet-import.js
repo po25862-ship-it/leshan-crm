@@ -229,6 +229,27 @@ async function applyMatched(results, context) {
   return counts;
 }
 
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function writeReviewQueue(results) {
+  const pending = results.filter((item) => item.status !== "matched");
+  const queueDir = path.join(archiveRoot(), "待確認");
+  fs.mkdirSync(queueDir, { recursive: true });
+  for (const item of pending) {
+    const source = path.join(sourceDir, item.file);
+    const destination = path.join(queueDir, safeName(item.file));
+    if (fs.existsSync(source) && !fs.existsSync(destination)) fs.copyFileSync(source, destination);
+  }
+  const header = ["狀態", "檔名", "辨識編號", "辨識案名", "建議物件編號", "建議物件案名", "配對分數"];
+  const rows = pending.map((item) => [item.status, item.file, item.recognized?.code, item.recognized?.title, item.listingNo, item.propertyTitle, item.score]);
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  fs.writeFileSync(path.join(queueDir, "待確認清單.csv"), `\uFEFF${csv}\n`);
+  return { files: pending.length, queueDir };
+}
+
 async function main() {
   if (!fs.existsSync(sourceDir)) throw new Error(`找不到物件資料夾：${sourceDir}`);
   ensureOcrBinary();
@@ -261,7 +282,10 @@ async function main() {
     unmatched: results.filter((item) => item.status === "unmatched").length,
     errors: results.filter((item) => item.status === "error").length,
   };
-  if (applyMode) summary.actions = await applyMatched(results, context);
+  if (applyMode) {
+    summary.actions = await applyMatched(results, context);
+    summary.reviewQueue = writeReviewQueue(results);
+  }
   await context.close?.();
   const report = { generatedAt: new Date().toISOString(), sourceDir, applyMode, summary, results };
   fs.writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
