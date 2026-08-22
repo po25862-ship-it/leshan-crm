@@ -113,6 +113,48 @@
 }
 .mobile-shell .top-actions .btn{width:100%;}
 
+/* 物件頁：手機只保留常用操作，其餘收合，避免按鈕被擠成直排文字 */
+.mobile-shell .properties-top-actions{gap:8px;margin-bottom:12px;}
+.mobile-shell .properties-top-actions .section-title{margin:0;}
+.mobile-shell .properties-toolbar{
+  width:100%;display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;
+}
+.mobile-shell .properties-toolbar .btn{width:auto;min-width:0;padding:10px 8px;font-size:13px;}
+.mobile-shell .properties-toolbar .properties-add-btn{grid-column:1/-1;}
+.mobile-shell .properties-mobile-tools{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;margin-bottom:12px;
+}
+.mobile-shell .properties-mobile-tools .btn{width:auto;padding:10px 8px;font-size:13px;text-align:center;}
+.mobile-shell .properties-mobile-tools label:last-child{grid-column:1/-1;}
+.mobile-shell .property-category-filter{
+  flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;margin:0 -16px 14px!important;padding:0 16px 3px;
+}
+.mobile-shell .property-category-filter::-webkit-scrollbar{display:none;}
+.mobile-shell .property-category-filter button{flex:0 0 auto;white-space:nowrap;}
+.mobile-shell .property-search-bar{
+  display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-bottom:12px!important;
+}
+.mobile-shell .property-search-bar>input{width:100%!important;min-width:0!important;}
+.mobile-shell .property-search-bar>input:first-child{grid-column:1/-1;}
+.mobile-shell .property-search-bar>.btn{width:100%;padding:10px 6px;font-size:13px;}
+.mobile-shell .property-structured-filters{
+  display:grid!important;grid-template-columns:1fr!important;gap:8px!important;padding:10px;border:1px solid var(--m-border);border-radius:14px;background:#fff;
+}
+.mobile-shell .property-structured-filters>div{display:grid!important;grid-template-columns:42px 1fr 86px!important;width:100%;}
+.mobile-shell .property-structured-filters>div input,
+.mobile-shell .property-structured-filters>div select,
+.mobile-shell .property-structured-filters>input{width:100%!important;min-width:0!important;}
+.mobile-shell .properties-list{padding:0;background:transparent;border:0;box-shadow:none;}
+.mobile-shell .properties-list .list-row{padding:14px;gap:12px;}
+.mobile-shell .properties-list .list-row>div:first-child{width:100%;min-width:0;}
+.mobile-shell .properties-list .list-row .actions{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;
+}
+.mobile-shell .properties-list .list-row .actions>*{
+  width:100%;min-width:0;min-height:42px;display:flex;align-items:center;justify-content:center;text-align:center;margin:0;
+}
+.mobile-shell .properties-list .list-row .actions select{padding:8px 6px;}
+
 /* 底部導覽列 */
 .mobile-bottom-nav{
   position:fixed;bottom:10px;left:10px;right:10px;z-index:30;

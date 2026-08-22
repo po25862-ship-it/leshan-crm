@@ -135,6 +135,7 @@ export default function Properties() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showMobileTools, setShowMobileTools] = useState(false);
 
   const copyUrl = async (url) => {
     try {
@@ -742,11 +743,11 @@ export default function Properties() {
 
   return (
     <main>
-      <div className="top-actions">
+      <div className="top-actions properties-top-actions">
         <div className="section-title">
           物件（{pool.length}）
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="properties-toolbar" style={{ display: "flex", gap: 10 }}>
           <button
             className={selectionMode ? "btn" : "btn ghost"}
             onClick={() => {
@@ -766,34 +767,43 @@ export default function Properties() {
               立即同步
             </button>
           )}
-          <button className="btn ghost" onClick={handleExport}>
-            匯出 Excel
-          </button>
-          <label className="btn ghost" style={{ cursor: "pointer" }}>
-            {importing ? "處理中…" : "匯入／更新 Excel"}
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={analyzeImportFile}
-              style={{ display: "none" }}
-              disabled={importing}
-            />
-          </label>
-          <label className="btn ghost" style={{ cursor: "pointer" }}>
-            {importing ? "處理中…" : "補上地址／面積"}
-            <input
-              type="file"
-              accept=".json,application/json"
-              onChange={importPropertyDetails}
-              style={{ display: "none" }}
-              disabled={importing}
-            />
-          </label>
-          <button className="btn" onClick={openNew}>
+          {!isMobile && <button className="btn ghost" onClick={handleExport}>匯出 Excel</button>}
+          {!isMobile && (
+            <label className="btn ghost" style={{ cursor: "pointer" }}>
+              {importing ? "處理中…" : "匯入／更新 Excel"}
+              <input type="file" accept=".xlsx,.xls" onChange={analyzeImportFile} style={{ display: "none" }} disabled={importing} />
+            </label>
+          )}
+          {!isMobile && (
+            <label className="btn ghost" style={{ cursor: "pointer" }}>
+              {importing ? "處理中…" : "補上地址／面積"}
+              <input type="file" accept=".json,application/json" onChange={importPropertyDetails} style={{ display: "none" }} disabled={importing} />
+            </label>
+          )}
+          {isMobile && (
+            <button className="btn ghost" onClick={() => setShowMobileTools((value) => !value)}>
+              {showMobileTools ? "收起工具" : "更多工具"}
+            </button>
+          )}
+          <button className="btn properties-add-btn" onClick={openNew}>
             ＋ 新增物件
           </button>
         </div>
       </div>
+
+      {isMobile && showMobileTools && (
+        <div className="panel properties-mobile-tools">
+          <button className="btn ghost" onClick={handleExport}>匯出 Excel</button>
+          <label className="btn ghost" style={{ cursor: "pointer" }}>
+            {importing ? "處理中…" : "匯入／更新 Excel"}
+            <input type="file" accept=".xlsx,.xls" onChange={analyzeImportFile} style={{ display: "none" }} disabled={importing} />
+          </label>
+          <label className="btn ghost" style={{ cursor: "pointer" }}>
+            {importing ? "處理中…" : "補上地址／面積"}
+            <input type="file" accept=".json,application/json" onChange={importPropertyDetails} style={{ display: "none" }} disabled={importing} />
+          </label>
+        </div>
+      )}
 
       {selectedIds.size > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
@@ -876,7 +886,7 @@ export default function Properties() {
       </div>
 
       {/* 分類篩選 */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+      <div className="property-category-filter" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
         <button
           style={{
             cursor: "pointer", border: "none", borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700,
@@ -903,7 +913,7 @@ export default function Properties() {
       </div>
 
       {/* 搜尋與篩選 */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+      <div className="property-search-bar" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -967,7 +977,7 @@ export default function Properties() {
       )}
 
       {/* 房／廳／衛／樓層 結構化搜尋 */}
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
+      {(!isMobile || showAdvancedFilters) && <div className="property-structured-filters" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
         {[
           { label: "樓層", value: floorFilter, setValue: setFloorFilter, mode: floorMode, setMode: setFloorMode },
           { label: "房", value: roomFilter, setValue: setRoomFilter, mode: roomMode, setMode: setRoomMode },
@@ -999,7 +1009,7 @@ export default function Properties() {
           placeholder="格局關鍵字（備用，例如非標準格局的物件）"
           style={{ width: 220, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
         />
-      </div>
+      </div>}
 
       {showForm && (
         <div
@@ -1311,7 +1321,7 @@ export default function Properties() {
         </div>
       )}
 
-      <div className="panel">
+      <div className="panel properties-list">
         {filtered.length === 0 && (
           <div className="empty-state">
             <div className="big">{items.length === 0 ? "還沒有物件資料" : "找不到符合的物件"}</div>
@@ -1374,7 +1384,7 @@ export default function Properties() {
                   開啟網頁
                 </a>
               )}
-              {p.websiteUrl && p.websitePublished === false && (
+              {p.websiteUrl && p.websitePublished === false && !isMobile && (
                 <span
                   role="img"
                   aria-label={`${p.title || "物件"} 官網目前未上架`}
@@ -1384,8 +1394,11 @@ export default function Properties() {
                   <X size={15} strokeWidth={2.5} aria-hidden="true" />
                 </span>
               )}
-              {p.websiteUrl && p.websitePublished === false && (
+              {p.websiteUrl && p.websitePublished === false && !isMobile && (
                 <span className="tag" style={{ color: "#B42318", background: "#FEECEB" }}>官網未上架</span>
+              )}
+              {p.websiteUrl && p.websitePublished === false && isMobile && (
+                <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>
               )}
               {p.websiteUrl && (
                 <button className="btn ghost" onClick={() => copyUrl(p.websiteUrl)}>
