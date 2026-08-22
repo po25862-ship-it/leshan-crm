@@ -106,6 +106,7 @@ export default function Rentals() {
           <>已刊登 {r.adPlatforms.length} 個平台</>
         )}
       </div>
+      <div style={{ marginTop: 10, fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>查看資料 →</div>
     </div>
   );
 

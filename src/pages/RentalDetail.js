@@ -18,6 +18,15 @@ import { usePersonalAgid } from "../hooks/usePersonalAgid";
 const STATUS_LABELS = { seeking: "招租中", leased: "租賃中", idle: "閒置中", selfLeased: "被租掉了" };
 const STATUS_ORDER = ["seeking", "leased", "idle", "selfLeased"];
 
+function RentalDetailValue({ label, value, accent = false }) {
+  return (
+    <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: accent ? 19 : 14, color: accent ? "var(--accent)" : "var(--text)", fontWeight: accent ? 800 : 650, overflowWrap: "anywhere" }}>{value || "—"}</div>
+    </div>
+  );
+}
+
 function linkify(text) {
   if (!text) return null;
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
@@ -101,10 +110,12 @@ export default function RentalDetail() {
   const [form, setForm] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     if (rental && Object.keys(rental).length > 0) {
       setForm({ ...rental });
+      setEditMode(!rental.title);
     }
   }, [rental]);
 
@@ -194,7 +205,7 @@ export default function RentalDetail() {
 
     await saveRental({ ...resolved, lastModifiedByUid: user.uid });
     setForm(resolved);
-    navigate(-1);
+    setEditMode(false);
   };
 
   const onDelete = async () => {
@@ -254,11 +265,52 @@ export default function RentalDetail() {
       <div className="top-actions">
         <Link to="/rentals" className="btn ghost" style={{ textDecoration: "none" }}>← 回出租列表</Link>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" onClick={onSave} disabled={syncing}>{syncing ? "同步中…" : "儲存變更"}</button>
-          <button className="btn danger" onClick={onDelete}>刪除</button>
+          {editMode ? (
+            <>
+              <button className="btn" onClick={onSave} disabled={syncing}>{syncing ? "同步中…" : "儲存變更"}</button>
+              <button className="btn ghost" onClick={() => { setForm({ ...rental }); setEditMode(false); }}>返回瀏覽</button>
+              <button className="btn danger" onClick={onDelete}>刪除</button>
+            </>
+          ) : (
+            <button className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
+          )}
         </div>
       </div>
 
+      {!editMode && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, alignItems: "start" }}>
+          <div className="panel">
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>出租案件</div>
+            <div className="section-title" style={{ fontSize: 22, marginBottom: 8 }}>{form.title || "未命名出租"}</div>
+            <span className="tag">{STATUS_LABELS[form.status || "seeking"]}</span>
+            <div style={{ display: "grid", gap: 10, marginTop: 18 }}>
+              <RentalDetailValue label="物件地址" value={form.propertyAddress} />
+              <RentalDetailValue label="出租人（屋主）" value={[form.landlordName, form.landlordPhone].filter(Boolean).join("・")} />
+              <RentalDetailValue label="承租人（房客）" value={[form.tenantName, form.tenantPhone].filter(Boolean).join("・")} />
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div className="panel">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
+                <RentalDetailValue label="每月租金" value={form.rent ? `${form.rent} 元` : "—"} accent />
+                <RentalDetailValue label="押金" value={form.deposit ? `${form.deposit}${form.depositReturned ? "（已退）" : ""}` : "—"} />
+                <RentalDetailValue label="租期" value={[formatDate(form.leaseStartDate), formatDate(form.leaseEndDate)].filter(Boolean).join(" ～ ")} />
+                <RentalDetailValue label="每月繳租日" value={form.rentDueDay ? `${form.rentDueDay} 日` : "—"} />
+              </div>
+              {form.notes && <RentalDetailValue label="備註" value={form.notes} />}
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {form.propertyUrl && <a href={withAgid(form.propertyUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟物件網頁</a>}
+                {(form.documents || []).map((file, idx) => <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>📄 {file.name || `租賃文件 ${idx + 1}`}</a>)}
+              </div>
+            </div>
+            <div className="panel">
+              <ProgressLog rentalId={rentalId} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editMode && (
       <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 24, alignItems: "start" }}>
         <div className="panel">
           <div className="section-title" style={{ fontSize: 14 }}>基本資料</div>
@@ -466,6 +518,7 @@ export default function RentalDetail() {
           </div>
         </div>
       </div>
+      )}
     </main>
   );
 }

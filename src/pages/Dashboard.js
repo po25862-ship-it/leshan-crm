@@ -183,7 +183,11 @@ export default function Dashboard() {
                 <div className="reminder" onClick={() => goToContact(c)} style={{ cursor: "pointer" }}>
                   <div className="dot"></div>
                   <div className="txt">
-                    <div className="t1">{c.name}</div>
+                    <div className="t1" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span>{c.name}</span>
+                      {(c.tags || []).includes("買方") && <span className="tag buyer" style={{ fontSize: 10 }}>買方</span>}
+                      {(c.tags || []).includes("賣方") && <span className="tag" style={{ fontSize: 10, background: "#FFF4E5", color: "#9A5B00" }}>賣方</span>}
+                    </div>
                     <div className="t2">
                       已 <span className="num">{c.days}</span> 天未聯絡
                       {c.lastContactNote && `・${c.lastContactNote}`}
