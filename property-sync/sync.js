@@ -345,11 +345,11 @@ async function downloadOfficialStatusReports(userId) {
   let completed = 0;
   for (const store of STORES) {
     for (const category of CATEGORIES) {
-      const setupFile = path.join(statusDir, `${store.code}_${category.code}.setup.html`);
       const reportFile = path.join(statusDir, `${store.code}_${category.code}.html`);
       const common = [
         "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
         "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
+        "--referer", "http://nh3.twhg.com.tw/report/objdetail.php",
         "--data-urlencode", `user_id=${userId}`,
         "--data-urlencode", `txtDEPID=${store.code}`,
         "--data-urlencode", `txtOBJTYPE=${category.code}`,
@@ -357,15 +357,7 @@ async function downloadOfficialStatusReports(userId) {
         "--data-urlencode", "tsort=1", "--data-urlencode", "tQRC=Y", "--data-urlencode", "sendpok=",
       ];
       try {
-        await runCurl([...common, "--output", setupFile, "http://nh3.twhg.com.tw/report/objdetail.php"]);
-        await runCurl([
-          "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
-          "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
-          "--output", reportFile, "http://nh3.twhg.com.tw/report/objreport.php",
-        ]);
-        const reportText = iconv.decode(fs.readFileSync(reportFile), "big5");
-        const setupText = iconv.decode(fs.readFileSync(setupFile), "big5");
-        if (!reportText.includes("官網點閱") && setupText.includes("官網點閱")) fs.copyFileSync(setupFile, reportFile);
+        await runCurl([...common, "--output", reportFile, "http://nh3.twhg.com.tw/report/objreport.php"]);
       } catch (error) {
         console.error(`官網狀態失敗 ${store.name}／${category.name}: ${error.message}`);
       }
