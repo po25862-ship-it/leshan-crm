@@ -212,8 +212,15 @@ function runCurl(args) {
   return new Promise((resolve, reject) => {
     const child = spawn("curl", args, { stdio: ["ignore", "ignore", "pipe"] });
     let error = "";
+    const timeout = setTimeout(() => {
+      error += "下載逾時，已停止卡住的連線";
+      child.kill("SIGKILL");
+    }, 150000);
     child.stderr.on("data", (chunk) => { error += chunk.toString(); });
-    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(error.trim() || `curl ${code}`)));
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      code === 0 ? resolve() : reject(new Error(error.trim() || `curl ${code}`));
+    });
   });
 }
 

@@ -12,6 +12,7 @@ const appDir = __dirname;
 const configDir = path.join(os.homedir(), ".leshan-property-sync");
 const configFile = path.join(configDir, "config.json");
 const backendCookieFile = path.join(configDir, "nh3-session-cookies.txt");
+const backendVerifiedFile = path.join(configDir, "nh3-session-verified.json");
 let running = null;
 let lastResult = null;
 
@@ -49,24 +50,43 @@ function credentialsReady() {
 }
 
 function backendSessionReady() {
-  try { return fs.statSync(backendCookieFile).size > 50; }
+  try {
+    const cookie = fs.statSync(backendCookieFile);
+    const verified = JSON.parse(fs.readFileSync(backendVerifiedFile, "utf8"));
+    return cookie.size > 50 && Date.now() - Date.parse(verified.verifiedAt) < 12 * 60 * 60 * 1000;
+  }
   catch { return false; }
 }
 
 function loginBackend({ account, password, verificationCode }) {
   fs.mkdirSync(configDir, { recursive: true });
-  const response = execFileSync("curl", [
+  try { fs.unlinkSync(backendVerifiedFile); } catch { /* 尚未驗證 */ }
+  execFileSync("curl", [
+    "--fail", "--silent", "--show-error", "--max-time", "40",
+    "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
+    "--output", "/dev/null", "http://nh3.twhg.com.tw/index.php",
+  ]);
+  execFileSync("curl", [
     "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
     "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
     "--data-urlencode", `user_id1=${account}`,
     "--data-urlencode", `user_pass1=${password}`,
     "--data-urlencode", `id1=${verificationCode}`,
     "--data-urlencode", "save_code=on",
+    "--output", "/dev/null",
     "http://nh3.twhg.com.tw/lib/loginchk.php",
+  ]);
+  const response = execFileSync("curl", [
+    "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
+    "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
+    "http://nh3.twhg.com.tw/report/objdetail.php",
   ], { encoding: "buffer", maxBuffer: 4 * 1024 * 1024 });
   fs.chmodSync(backendCookieFile, 0o600);
   const text = iconvBig5(response);
-  if (/密碼錯誤|驗證碼錯誤|登入失敗|user_pass1/i.test(text)) throw new Error("公司後台登入未成功，請確認帳號、密碼與驗證碼");
+  if (/meta\s+http-equiv=['"]?refresh[^>]+index\.php|form_login|user_pass1/i.test(text)) {
+    throw new Error("公司後台登入未成功，請確認帳號、密碼與驗證碼");
+  }
+  fs.writeFileSync(backendVerifiedFile, `${JSON.stringify({ verifiedAt: new Date().toISOString() })}\n`, { mode: 0o600 });
   return true;
 }
 
@@ -115,10 +135,11 @@ function runSync() {
     cwd: appDir, env: { ...process.env, LESHAN_SYNC_OUTPUT_ROOT: config.outputRoot }, stdio: ["ignore", "pipe", "pipe"],
   });
   running = { startedAt: new Date().toISOString(), pid: child.pid };
-  const append = (chunk) => fs.appendFileSync(logFile, chunk);
-  child.stdout.on("data", append);
-  child.stderr.on("data", append);
+  const logStream = fs.createWriteStream(logFile, { flags: "a" });
+  child.stdout.on("data", (chunk) => logStream.write(chunk));
+  child.stderr.on("data", (chunk) => logStream.write(chunk));
   child.on("close", (code) => {
+    logStream.end();
     lastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, outputDir, logFile };
     running = null;
   });
