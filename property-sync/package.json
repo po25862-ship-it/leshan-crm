@@ -5,6 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "sync": "node sync.js",
+    "scan:sheets": "node sheet-import.js",
     "server": "node server.js",
     "test:archive": "node sync.js --source-dir /private/tmp/leshan-64-reports --assume-ordered --output-dir /private/tmp/leshan-property-sync-test"
   },

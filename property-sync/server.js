@@ -15,6 +15,8 @@ const backendCookieFile = path.join(configDir, "nh3-session-cookies.txt");
 const backendVerifiedFile = path.join(configDir, "nh3-session-verified.json");
 let running = null;
 let lastResult = null;
+let sheetRunning = null;
+let sheetLastResult = null;
 
 function defaultOutputRoot() {
   try {
@@ -116,7 +118,7 @@ function installLaunchAgents(outputRoot) {
   const serverFile = path.join(launchDir, `${serverLabel}.plist`);
   const dailyFile = path.join(launchDir, `${dailyLabel}.plist`);
   fs.writeFileSync(serverFile, plist(serverLabel, [process.execPath, path.join(appDir, "server.js")], outputRoot, false));
-  fs.writeFileSync(dailyFile, plist(dailyLabel, [process.execPath, path.join(appDir, "sync.js"), "--apply-crm"], outputRoot, true));
+  fs.writeFileSync(dailyFile, plist(dailyLabel, [process.execPath, path.join(appDir, "daily.js")], outputRoot, true));
   const domain = `gui/${process.getuid()}`;
   for (const file of [serverFile, dailyFile]) {
     try { execFileSync("launchctl", ["bootstrap", domain, file], { stdio: "ignore" }); }
@@ -146,6 +148,25 @@ function runSync() {
   return true;
 }
 
+function runSheetImport() {
+  if (sheetRunning) return false;
+  const config = loadConfig();
+  const logFile = path.join(config.outputRoot, "物件資料自動匯入.log");
+  const child = spawn(process.execPath, [path.join(appDir, "sheet-import.js"), "--apply"], {
+    cwd: appDir, env: process.env, stdio: ["ignore", "pipe", "pipe"],
+  });
+  sheetRunning = { startedAt: new Date().toISOString(), pid: child.pid };
+  const logStream = fs.createWriteStream(logFile, { flags: "a" });
+  child.stdout.on("data", (chunk) => logStream.write(chunk));
+  child.stderr.on("data", (chunk) => logStream.write(chunk));
+  child.on("close", (code) => {
+    logStream.end();
+    sheetLastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, logFile };
+    sheetRunning = null;
+  });
+  return true;
+}
+
 function sendJson(response, status, data) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(data));
@@ -163,7 +184,7 @@ function readJson(request) {
   });
 }
 
-const page = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>樂善 CRM 物件同步</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f4ef;color:#292723;margin:0}.wrap{max-width:720px;margin:48px auto;padding:0 20px}.card{background:#fff;border:1px solid #ddd8cf;border-radius:16px;padding:28px;box-shadow:0 10px 30px #0000000d}h1{font-size:24px;margin:0 0 8px}p{color:#68635b;line-height:1.6}.status{background:#f2f5f0;border-radius:10px;padding:14px;margin:20px 0;white-space:pre-line}button{border:0;border-radius:9px;padding:11px 18px;background:#1f6f4a;color:white;font-weight:700;cursor:pointer;margin-top:12px}button:disabled{opacity:.5}details{margin-top:24px;border-top:1px solid #eee;padding-top:18px}label{display:block;font-size:13px;font-weight:700;margin-top:12px}input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-top:5px}.minor{font-size:12px}</style></head><body><div class="wrap"><div class="card"><h1>樂善 CRM 物件同步</h1><p>每天 07:30 會自動下載 64 份報表、補地址與面積、備份後更新 CRM，並產出 Excel。</p><div id="status" class="status">讀取狀態中…</div><button id="sync" onclick="startSync()">立即同步</button><details><summary>公司後台登入（官網點閱狀態）</summary><label>後台帳號<input id="backendAccount" autocomplete="username"></label><label>後台密碼<input id="backendPassword" type="password" autocomplete="current-password"></label><label>後台驗證碼<input id="backendCode" type="password" autocomplete="one-time-code"></label><p class="minor">密碼與驗證碼不會保存；只保留這台 Mac 的登入工作階段。過期時再登入一次即可。</p><button onclick="backendLogin()">登入公司後台</button></details><details><summary>首次安全設定／重新安裝排程</summary><label>CRM 登入 Email<input id="email" type="email" autocomplete="username"></label><label>CRM 密碼<input id="password" type="password" autocomplete="current-password"></label><label>內部系統使用者編號<input id="userId" autocomplete="off"></label><label>輸出資料夾<input id="outputRoot" value=""></label><p class="minor">密碼與內部編號只會存入這台 Mac 的「鑰匙圈」，不會寫入專案或上傳 GitHub。</p><button onclick="setup()">儲存安全設定並安裝 07:30 排程</button></details></div></div><script>async function refresh(){const s=await fetch('/api/status').then(r=>r.json());document.querySelector('#outputRoot').value=document.querySelector('#outputRoot').value||s.outputRoot;document.querySelector('#sync').disabled=s.running||!s.credentialsReady;document.querySelector('#status').textContent=(s.credentialsReady?'安全設定：完成':'安全設定：尚未完成')+'\\n後台官網狀態：'+(s.backendSessionReady?'已登入':'尚未登入')+'\\n'+(s.running?'正在同步，開始時間：'+s.running.startedAt:s.lastResult?(s.lastResult.ok?'上次同步成功：':'上次同步失敗：')+s.lastResult.finishedAt:'尚無本次啟動後的同步紀錄')+'\\n輸出位置：'+s.outputRoot}async function startSync(){const r=await fetch('/api/sync',{method:'POST'}).then(r=>r.json());alert(r.message);refresh()}async function setup(){const data={email:email.value,password:password.value,userId:userId.value,outputRoot:outputRoot.value};const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());password.value='';alert(r.message);refresh()}async function backendLogin(){const data={account:backendAccount.value,password:backendPassword.value,verificationCode:backendCode.value};const r=await fetch('/api/backend-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());backendPassword.value='';backendCode.value='';alert(r.message);refresh()}refresh();setInterval(refresh,3000)</script></body></html>`;
+const page = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>樂善 CRM 物件同步</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f4ef;color:#292723;margin:0}.wrap{max-width:720px;margin:48px auto;padding:0 20px}.card{background:#fff;border:1px solid #ddd8cf;border-radius:16px;padding:28px;box-shadow:0 10px 30px #0000000d}h1{font-size:24px;margin:0 0 8px}p{color:#68635b;line-height:1.6}.status{background:#f2f5f0;border-radius:10px;padding:14px;margin:20px 0;white-space:pre-line}button{border:0;border-radius:9px;padding:11px 18px;background:#1f6f4a;color:white;font-weight:700;cursor:pointer;margin:12px 8px 0 0}button:disabled{opacity:.5}details{margin-top:24px;border-top:1px solid #eee;padding-top:18px}label{display:block;font-size:13px;font-weight:700;margin-top:12px}input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-top:5px}.minor{font-size:12px}</style></head><body><div class="wrap"><div class="card"><h1>樂善 CRM 物件同步</h1><p>每天 07:30 會自動下載 64 份報表、更新 CRM，再辨識「物件資料」圖片並分類保存。</p><div id="status" class="status">讀取狀態中…</div><button id="sync" onclick="startSync()">立即同步</button><button id="sheetSync" onclick="startSheetSync()">掃描物件資料</button><details><summary>公司後台登入（官網點閱狀態）</summary><label>後台帳號<input id="backendAccount" autocomplete="username"></label><label>後台密碼<input id="backendPassword" type="password" autocomplete="current-password"></label><label>後台驗證碼<input id="backendCode" type="password" autocomplete="one-time-code"></label><p class="minor">密碼與驗證碼不會保存；只保留這台 Mac 的登入工作階段。過期時再登入一次即可。</p><button onclick="backendLogin()">登入公司後台</button></details><details><summary>首次安全設定／重新安裝排程</summary><label>CRM 登入 Email<input id="email" type="email" autocomplete="username"></label><label>CRM 密碼<input id="password" type="password" autocomplete="current-password"></label><label>內部系統使用者編號<input id="userId" autocomplete="off"></label><label>輸出資料夾<input id="outputRoot" value=""></label><p class="minor">密碼與內部編號只會存入這台 Mac 的「鑰匙圈」，不會寫入專案或上傳 GitHub。</p><button onclick="setup()">儲存安全設定並安裝 07:30 排程</button></details></div></div><script>async function refresh(){const s=await fetch('/api/status').then(r=>r.json());document.querySelector('#outputRoot').value=document.querySelector('#outputRoot').value||s.outputRoot;document.querySelector('#sync').disabled=s.running||!s.credentialsReady;document.querySelector('#sheetSync').disabled=s.sheetRunning||!s.credentialsReady;document.querySelector('#status').textContent=(s.credentialsReady?'安全設定：完成':'安全設定：尚未完成')+'\\n後台官網狀態：'+(s.backendSessionReady?'已登入':'尚未登入')+'\\n'+(s.running?'正在同步，開始時間：'+s.running.startedAt:s.lastResult?(s.lastResult.ok?'上次同步成功：':'上次同步失敗：')+s.lastResult.finishedAt:'尚無本次啟動後的同步紀錄')+'\\n物件資料：'+(s.sheetRunning?'正在掃描與分類':s.sheetLastResult?(s.sheetLastResult.ok?'上次匯入成功':'上次匯入失敗'):'可按「掃描物件資料」')+'\\n輸出位置：'+s.outputRoot}async function startSync(){const r=await fetch('/api/sync',{method:'POST'}).then(r=>r.json());alert(r.message);refresh()}async function startSheetSync(){const r=await fetch('/api/sheets/scan',{method:'POST'}).then(r=>r.json());alert(r.message);refresh()}async function setup(){const data={email:email.value,password:password.value,userId:userId.value,outputRoot:outputRoot.value};const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());password.value='';alert(r.message);refresh()}async function backendLogin(){const data={account:backendAccount.value,password:backendPassword.value,verificationCode:backendCode.value};const r=await fetch('/api/backend-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());backendPassword.value='';backendCode.value='';alert(r.message);refresh()}refresh();setInterval(refresh,3000)</script></body></html>`;
 
 http.createServer(async (request, response) => {
   try {
@@ -174,13 +195,19 @@ http.createServer(async (request, response) => {
     }
     if (request.method === "GET" && request.url === "/api/status") {
       const config = loadConfig();
-      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: backendSessionReady(), outputRoot: config.outputRoot, running, lastResult });
+      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: backendSessionReady(), outputRoot: config.outputRoot, running, lastResult, sheetRunning, sheetLastResult });
       return;
     }
     if (request.method === "POST" && request.url === "/api/sync") {
       if (!credentialsReady()) return sendJson(response, 400, { message: "請先完成安全設定。" });
       const started = runSync();
       sendJson(response, started ? 202 : 409, { message: started ? "已開始同步，可留在此頁查看進度。" : "同步已在執行中。" });
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/sheets/scan") {
+      if (!credentialsReady()) return sendJson(response, 400, { message: "請先完成安全設定。" });
+      const started = runSheetImport();
+      sendJson(response, started ? 202 : 409, { message: started ? "已開始掃描物件資料，可留在此頁查看進度。" : "物件資料掃描已在執行中。" });
       return;
     }
     if (request.method === "POST" && request.url === "/api/backend-login") {
