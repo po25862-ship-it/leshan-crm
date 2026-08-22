@@ -19,6 +19,15 @@ const emptyForm = {
   sharedWith: [],
 };
 
+function BuyerDetailValue({ label, value }) {
+  return (
+    <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 650, overflowWrap: "anywhere" }}>{value || "—"}</div>
+    </div>
+  );
+}
+
 export default function Buyers() {
   const { user } = useAuth();
   const { items, add, update, remove } = useSharedCollection("contacts", "name", user.uid);
@@ -30,6 +39,7 @@ export default function Buyers() {
   };
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [keyword, setKeyword] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,6 +49,7 @@ export default function Buyers() {
   const openNew = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setEditMode(true);
     setShowForm(true);
   };
 
@@ -54,6 +65,7 @@ export default function Buyers() {
       ownerUid: item.ownerUid || "",
     });
     setEditingId(item.id);
+    setEditMode(false);
     setShowForm(true);
   };
 
@@ -70,6 +82,7 @@ export default function Buyers() {
     } else if (draftNote) {
       setForm({ ...emptyForm, notes: draftNote });
       setEditingId(null);
+      setEditMode(true);
       setShowForm(true);
       setSearchParams({}, { replace: true });
     }
@@ -92,7 +105,8 @@ export default function Buyers() {
     } else {
       await add({ ...dataToSave, ownerUid: user.uid, lastModifiedByUid: user.uid, sharedWith: [] });
     }
-    setShowForm(false);
+    if (editingId) setEditMode(false);
+    else setShowForm(false);
   };
 
   const logFollowUp = (item) => update(item.id, { lastContactDate: todayStr(), lastModifiedByUid: user.uid });
@@ -143,7 +157,28 @@ export default function Buyers() {
           }}
         >
           <div className="panel">
-            <form className="form-grid" onSubmit={onSubmit}>
+            {editingId && !editMode && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
+                  <div>
+                    <div className="section-title" style={{ fontSize: 22, marginBottom: 8 }}>{form.name || "未命名客戶"}</div>
+                    {(form.tags || []).map((tag) => <span key={tag} className={`tag ${tag === "買方" ? "buyer" : ""}`} style={{ marginRight: 5 }}>{tag}</span>)}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {form.phone && <a className="btn ghost" href={`tel:${form.phone}`} style={{ textDecoration: "none" }}>撥打電話</a>}
+                    <button className="btn" type="button" onClick={() => setEditMode(true)}>編輯資料</button>
+                    <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>關閉</button>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
+                  <BuyerDetailValue label="電話" value={form.phone} />
+                  <BuyerDetailValue label="客戶來源" value={form.source} />
+                  <BuyerDetailValue label="最後聯絡" value={formatDate(form.lastContactDate)} />
+                </div>
+                <BuyerDetailValue label="備註／需求摘要" value={form.notes} />
+              </div>
+            )}
+            <form className="form-grid" onSubmit={onSubmit} style={{ display: !editingId || editMode ? "grid" : "none" }}>
               <div className="form-field">
                 <label>姓名</label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例如：陳小姐" required />
@@ -186,7 +221,7 @@ export default function Buyers() {
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn" type="submit">{editingId ? "儲存變更" : "新增買方"}</button>
-                <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
+                <button className="btn ghost" type="button" onClick={() => editingId ? setEditMode(false) : setShowForm(false)}>{editingId ? "返回瀏覽" : "取消"}</button>
                 {editingId && (
                   <button
                     className="btn danger"
@@ -254,7 +289,7 @@ export default function Buyers() {
               </div>
               <div className="actions">
                 <button className="btn ghost" onClick={(e) => { e.stopPropagation(); logFollowUp(item); }}>記錄今日跟進</button>
-                <button className="btn ghost" onClick={(e) => { e.stopPropagation(); openEdit(item); }}>編輯</button>
+                <button className="btn ghost" onClick={(e) => { e.stopPropagation(); openEdit(item); }}>查看資料</button>
               </div>
             </div>
           );

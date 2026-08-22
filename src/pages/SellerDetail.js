@@ -19,6 +19,15 @@ import { usePersonalAgid } from "../hooks/usePersonalAgid";
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
 
+function SellerDetailValue({ label, value, accent = false }) {
+  return (
+    <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: accent ? 19 : 14, color: accent ? "var(--accent)" : "var(--text)", fontWeight: accent ? 800 : 650, overflowWrap: "anywhere" }}>{value || "—"}</div>
+    </div>
+  );
+}
+
 function linkify(text) {
   if (!text) return null;
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
@@ -53,6 +62,7 @@ export default function SellerDetail() {
   const [ownerForm, setOwnerForm] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     if (listing && Object.keys(listing).length > 0) {
@@ -151,7 +161,7 @@ export default function SellerDetail() {
     // 同步分享名單到屋主聯絡人資料，確保被分享的同事兩邊都看得到
     await saveContact({ sharedWith: resolved.sharedWith || [], lastModifiedByUid: user.uid });
     setForm(resolved);
-    navigate(-1);
+    setEditMode(false);
   };
 
   const onSaveOwner = async () => {
@@ -225,11 +235,58 @@ export default function SellerDetail() {
       <div className="top-actions">
         <Link to="/sellers" className="btn ghost" style={{ textDecoration: "none" }}>← 回賣方列表</Link>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" onClick={onSave} disabled={syncing}>{syncing ? "同步物件中…" : "儲存變更"}</button>
-          <button className="btn danger" onClick={onDelete}>刪除</button>
+          {editMode ? (
+            <>
+              <button className="btn" onClick={onSave} disabled={syncing}>{syncing ? "同步物件中…" : "儲存變更"}</button>
+              <button className="btn ghost" onClick={() => { setForm({ adPlatforms: [], ...listing }); setOwnerForm({ tags: [], ...contact }); setEditMode(false); }}>返回瀏覽</button>
+              <button className="btn danger" onClick={onDelete}>刪除</button>
+            </>
+          ) : (
+            <button className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
+          )}
         </div>
       </div>
 
+      {!editMode && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, alignItems: "start" }}>
+          <div className="panel">
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>{form.listingNo || "未填委託書編號"}</div>
+            <div className="section-title" style={{ fontSize: 22, marginBottom: 8 }}>{form.title || "未命名委託"}</div>
+            <span className="tag">{STATUS_LABELS[form.status || "tracking"]}</span>
+            <span className="tag" style={{ marginLeft: 6 }}>{form.agreementType || "一般"}委託</span>
+            <div style={{ display: "grid", gap: 10, marginTop: 18 }}>
+              <SellerDetailValue label="屋主" value={ownerForm.name} />
+              <SellerDetailValue label="電話" value={ownerForm.phone} />
+              <SellerDetailValue label="屋主備註" value={ownerForm.notes} />
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div className="panel">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
+                <SellerDetailValue label="開價" value={form.askingPrice ? `${form.askingPrice} 萬` : form.price ? `${form.price} 萬` : "—"} accent />
+                <SellerDetailValue label="底價" value={form.floorPrice ? `${form.floorPrice} 萬` : "—"} />
+                <SellerDetailValue label="委託期間" value={[formatDate(form.agreementStartDate), formatDate(form.agreementEndDate)].filter(Boolean).join(" ～ ")} />
+                <SellerDetailValue label="類別／店名" value={[form.category, form.store].filter(Boolean).join("・")} />
+              </div>
+              <SellerDetailValue label="物件地址" value={form.propertyAddress} />
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {form.propertyUrl && <a href={withAgid(form.propertyUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟物件網頁</a>}
+                {(form.documents || []).map((file, idx) => <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>📄 {file.name || `委託文件 ${idx + 1}`}</a>)}
+              </div>
+            </div>
+            <div className="panel">
+              <SellerActivityLog
+                contactId={contactId}
+                listingId={listingId}
+                listingTitle={form.title}
+                onLogged={({ date, summary }) => saveContact({ lastContactDate: date, lastContactNote: summary })}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editMode && (
       <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 24, alignItems: "start" }}>
         <div className="panel">
           <div className="section-title" style={{ fontSize: 14 }}>屋主資料</div>
@@ -450,6 +507,7 @@ export default function SellerDetail() {
           </div>
         </div>
       </div>
+      )}
     </main>
   );
 }

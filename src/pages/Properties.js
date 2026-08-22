@@ -87,6 +87,16 @@ const emptyForm = {
   customFields: [],
 };
 
+function DetailValue({ label, value, accent = false }) {
+  const shown = value === "" || value === null || value === undefined ? "—" : value;
+  return (
+    <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: accent ? 19 : 14, color: accent ? "var(--accent)" : "var(--text)", fontWeight: accent ? 800 : 600, overflowWrap: "anywhere" }}>{shown}</div>
+    </div>
+  );
+}
+
 export default function Properties() {
   const isMobile = useIsMobile();
   const { agid } = usePersonalAgid();
@@ -94,6 +104,7 @@ export default function Properties() {
   const { items: linkedCases } = useCollection("cases", "createdAt");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [originalTotalPrice, setOriginalTotalPrice] = useState(null);
   const [keyword, setKeyword] = useState("");
@@ -122,6 +133,7 @@ export default function Properties() {
   const [importAnalysis, setImportAnalysis] = useState(null);
   const [importDecisions, setImportDecisions] = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [showShare, setShowShare] = useState(false);
 
   const copyUrl = async (url) => {
@@ -151,6 +163,7 @@ export default function Properties() {
     setForm(emptyForm);
     setEditingId(null);
     setOriginalTotalPrice(null);
+    setEditMode(true);
     setShowForm(true);
   };
 
@@ -158,6 +171,7 @@ export default function Properties() {
     setForm({ ...emptyForm, ...item, customFields: item.customFields || [] });
     setEditingId(item.id);
     setOriginalTotalPrice(item.totalPrice);
+    setEditMode(false);
     setShowForm(true);
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -212,7 +226,8 @@ export default function Properties() {
         createdAt: serverTimestamp(),
       });
     }
-    setShowForm(false);
+    if (editingId) setEditMode(false);
+    else setShowForm(false);
   };
 
   const changeStatus = async (item, newStatus) => {
@@ -732,6 +747,16 @@ export default function Properties() {
           物件（{pool.length}）
         </div>
         <div style={{ display: "flex", gap: 10 }}>
+          <button
+            className={selectionMode ? "btn" : "btn ghost"}
+            onClick={() => {
+              setSelectionMode((value) => !value);
+              setSelectedIds(new Set());
+              setShowForm(false);
+            }}
+          >
+            {selectionMode ? "結束勾選" : "勾選傳送"}
+          </button>
           {!isMobile && (
             <button
               className="btn ghost"
@@ -987,7 +1012,61 @@ export default function Properties() {
           }}
         >
           <div className="panel">
-          <form className="form-grid" onSubmit={onSubmit}>
+          {editingId && !editMode && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>{form.listingNo || "未填委託書編號"}・{form.store || "未填店名"}</div>
+                  <div className="section-title" style={{ fontSize: 22, marginBottom: 6 }}>{form.title || "未命名物件"}</div>
+                  <span className="tag">{form.category || "未分類"}</span>
+                  <span className="tag" style={{ marginLeft: 6 }}>{STATUS_LABELS[form.status || "active"]}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {form.websiteUrl && <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟網頁</a>}
+                  {form.websiteUrl && <button type="button" className="btn ghost" onClick={() => copyUrl(form.websiteUrl)}>複製網址</button>}
+                  <button type="button" className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
+                  <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>關閉</button>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 14 }}>
+                <DetailValue label="總價" value={form.totalPrice ? `${form.totalPrice} 萬` : "—"} accent />
+                <DetailValue label="格局" value={form.layout} />
+                <DetailValue label="權狀坪" value={form.titlePing ? `${form.titlePing} 坪` : "—"} />
+                <DetailValue label="主建物" value={form.mainBuildingPing ? `${form.mainBuildingPing} 坪` : "—"} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
+                <DetailValue label="地址" value={form.address} />
+                <DetailValue label="樓別／座向" value={[form.floor, form.orientation].filter(Boolean).join("・")} />
+                <DetailValue label="屋齡" value={form.age} />
+                <DetailValue label="空屋／自住" value={form.occupancy} />
+                <DetailValue label="地坪" value={form.landPing ? `${form.landPing} 坪` : "—"} />
+                <DetailValue label="附屬／公設／車位" value={[
+                  form.auxiliaryBuildingPing && `附屬 ${form.auxiliaryBuildingPing} 坪`,
+                  form.commonAreaPing && `公設 ${form.commonAreaPing} 坪`,
+                  form.parkingPing && `車位 ${form.parkingPing} 坪`,
+                ].filter(Boolean).join("・")} />
+              </div>
+              {(form.notes || form.agentInfo) && (
+                <div style={{ background: "var(--accent-soft)", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, lineHeight: 1.65 }}>
+                  {form.agentInfo && <div><strong>開發：</strong>{form.agentInfo}</div>}
+                  {form.notes && <div><strong>備註：</strong>{form.notes}</div>}
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
+                {(form.sheetFiles || []).length === 0 ? (
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未上傳資料表</div>
+                ) : (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {(form.sheetFiles || []).map((file, idx) => (
+                      <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>📄 {file.name || `資料表 ${idx + 1}`}</a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <form className="form-grid" onSubmit={onSubmit} style={{ display: !editingId || editMode ? "grid" : "none" }}>
             <div style={fieldStyle3}>
               <div className="form-field">
                 <label>店名</label>
@@ -1192,7 +1271,7 @@ export default function Properties() {
               <button className="btn" type="submit">
                 {editingId ? "儲存變更" : "新增物件"}
               </button>
-              <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
+              <button className="btn ghost" type="button" onClick={() => editingId ? setEditMode(false) : setShowForm(false)}>{editingId ? "返回瀏覽" : "取消"}</button>
               {editingId && (
                 <button className="btn danger" type="button" onClick={async () => { await deleteForever({ id: editingId, title: form.title }); setShowForm(false); }}>
                   永久刪除
@@ -1240,15 +1319,17 @@ export default function Properties() {
           </div>
         )}
         {filtered.map((p) => (
-          <div className="list-row" key={p.id} onClick={() => openEdit(p)} style={{ cursor: "pointer" }}>
+          <div className="list-row" key={p.id} onClick={() => selectionMode ? toggleSelect(p.id) : openEdit(p)} style={{ cursor: "pointer", background: selectedIds.has(p.id) ? "var(--accent-soft)" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <input
-                type="checkbox"
-                checked={selectedIds.has(p.id)}
-                onClick={(e) => e.stopPropagation()}
-                onChange={() => toggleSelect(p.id)}
-                style={{ marginTop: 4, width: 16, height: 16, flexShrink: 0 }}
-              />
+              {selectionMode && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(p.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => toggleSelect(p.id)}
+                  style={{ marginTop: 4, width: 18, height: 18, flexShrink: 0 }}
+                />
+              )}
               <div>
               <div className="name">
                 {p.title} <span className="tag">{p.category}</span>
@@ -1320,7 +1401,7 @@ export default function Properties() {
                   <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                 ))}
               </select>
-              <button className="btn ghost" onClick={() => openEdit(p)}>編輯</button>
+              <button className="btn ghost" onClick={() => openEdit(p)}>查看資料</button>
             </div>
           </div>
         ))}

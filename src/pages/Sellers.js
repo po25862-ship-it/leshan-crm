@@ -27,6 +27,7 @@ function SellerCard({ l, navigate }) {
         {l.floorPrice && <>底價 {l.floorPrice}萬　</>}
         {l.agreementEndDate && l.status === "listed" && <>到期 {formatDate(l.agreementEndDate)}</>}
       </div>
+      <div style={{ marginTop: 10, fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>查看資料 →</div>
     </div>
   );
 }
