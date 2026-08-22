@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { spawn } = require("child_process");
 const XLSX = require("xlsx");
 const iconv = require("iconv-lite");
@@ -34,6 +35,7 @@ function argValue(name, fallback = "") {
 const assumeOrdered = process.argv.includes("--assume-ordered");
 const sourceDirArg = argValue("--source-dir");
 const officialStatusDirArg = argValue("--official-status-dir");
+const backendCookieFile = process.env.LESHAN_BACKEND_COOKIE_FILE || path.join(os.homedir(), ".leshan-property-sync", "nh3-session-cookies.txt");
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
 const defaultOutputDir = process.env.LESHAN_SYNC_OUTPUT_ROOT
   ? path.join(process.env.LESHAN_SYNC_OUTPUT_ROOT, today)
@@ -329,6 +331,44 @@ async function downloadReports(userId) {
   return reportDir;
 }
 
+async function downloadOfficialStatusReports(userId) {
+  if (!fs.existsSync(backendCookieFile)) return "";
+  const statusDir = path.join(outputDir, "official-status-64");
+  fs.mkdirSync(statusDir, { recursive: true });
+  let completed = 0;
+  for (const store of STORES) {
+    for (const category of CATEGORIES) {
+      const setupFile = path.join(statusDir, `${store.code}_${category.code}.setup.html`);
+      const reportFile = path.join(statusDir, `${store.code}_${category.code}.html`);
+      const common = [
+        "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
+        "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
+        "--data-urlencode", `user_id=${userId}`,
+        "--data-urlencode", `txtDEPID=${store.code}`,
+        "--data-urlencode", `txtOBJTYPE=${category.code}`,
+        "--data-urlencode", "txtAREA=", "--data-urlencode", "tno=", "--data-urlencode", "tnof=",
+        "--data-urlencode", "tsort=1", "--data-urlencode", "tQRC=Y", "--data-urlencode", "sendpok=",
+      ];
+      try {
+        await runCurl([...common, "--output", setupFile, "http://nh3.twhg.com.tw/report/objdetail.php"]);
+        await runCurl([
+          "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
+          "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
+          "--output", reportFile, "http://nh3.twhg.com.tw/report/objreport.php",
+        ]);
+        const reportText = iconv.decode(fs.readFileSync(reportFile), "big5");
+        const setupText = iconv.decode(fs.readFileSync(setupFile), "big5");
+        if (!reportText.includes("官網點閱") && setupText.includes("官網點閱")) fs.copyFileSync(setupFile, reportFile);
+      } catch (error) {
+        console.error(`官網狀態失敗 ${store.name}／${category.name}: ${error.message}`);
+      }
+      completed += 1;
+      if (completed % 16 === 0) console.log(`官網狀態 ${completed}/64`);
+    }
+  }
+  return statusDir;
+}
+
 function sourceFiles(dir) {
   return fs.readdirSync(dir)
     .filter((name) => !name.startsWith(".") && name !== "__MACOSX")
@@ -495,8 +535,10 @@ async function main() {
     sourceDir = await downloadReports(userId);
   }
   const snapshot = parseReports(sourceDir);
-  if (officialStatusDirArg) {
-    const official = parseOfficialStatusDirectory(path.resolve(officialStatusDirArg), snapshot.records);
+  let officialStatusDir = officialStatusDirArg ? path.resolve(officialStatusDirArg) : "";
+  if (!sourceDirArg && !officialStatusDir) officialStatusDir = await downloadOfficialStatusReports(userId);
+  if (officialStatusDir) {
+    const official = parseOfficialStatusDirectory(officialStatusDir, snapshot.records);
     snapshot.records = official.records;
     snapshot.officialWebsiteStatus = {
       checked: official.checked, published: official.published,
