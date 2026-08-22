@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -15,24 +15,6 @@ import { X } from "lucide-react";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
-const WEBSITE_HEALTH_CACHE_KEY = "leshan_property_website_health_v1";
-const WEBSITE_HEALTH_TTL = 6 * 60 * 60 * 1000;
-const WEBSITE_HEALTH_UNKNOWN_TTL = 15 * 60 * 1000;
-
-function normalizeTwhgUrl(value) {
-  try {
-    const url = new URL(withoutAgid(value));
-    if (!["twhg.com.tw", "www.twhg.com.tw"].includes(url.hostname.toLowerCase())) return null;
-    if (!url.pathname.startsWith("/buy/")) return null;
-    url.protocol = "https:";
-    url.hash = "";
-    url.searchParams.delete("agid");
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
 // 解析「房/廳/衛」格式的格局字串，例如 "4+1/2/4" 會取每段開頭的數字
 function parseLayout(layout) {
   if (!layout) return { rooms: null, living: null, bath: null };
@@ -141,63 +123,6 @@ export default function Properties() {
   const [importDecisions, setImportDecisions] = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showShare, setShowShare] = useState(false);
-  const [websiteHealth, setWebsiteHealth] = useState({});
-
-  useEffect(() => {
-    let cancelled = false;
-    let cache = {};
-    try {
-      cache = JSON.parse(localStorage.getItem(WEBSITE_HEALTH_CACHE_KEY) || "{}");
-    } catch {
-      cache = {};
-    }
-
-    const now = Date.now();
-    const supportedItems = items
-      .map((item) => ({ item, url: normalizeTwhgUrl(item.websiteUrl) }))
-      .filter(({ url }) => Boolean(url));
-    const initial = {};
-    const pending = [];
-
-    supportedItems.forEach(({ item, url }) => {
-      const cached = cache[url];
-      if (cached?.status) initial[item.id] = cached;
-      const ttl = cached?.status === "unknown" ? WEBSITE_HEALTH_UNKNOWN_TTL : WEBSITE_HEALTH_TTL;
-      if (!cached || now - Number(cached.checkedAt || 0) >= ttl) {
-        pending.push({ item, url });
-      }
-    });
-    setWebsiteHealth(initial);
-
-    let cursor = 0;
-    const worker = async () => {
-      while (!cancelled && cursor < pending.length) {
-        const { item, url } = pending[cursor++];
-        try {
-          const response = await fetch(`/api/check-property-url?url=${encodeURIComponent(url)}`);
-          const result = await response.json();
-          if (cancelled) return;
-          const entry = { status: result.status || "unknown", checkedAt: Date.now() };
-          cache[url] = entry;
-          localStorage.setItem(WEBSITE_HEALTH_CACHE_KEY, JSON.stringify(cache));
-          setWebsiteHealth((current) => ({ ...current, [item.id]: entry }));
-        } catch {
-          if (!cancelled) {
-            setWebsiteHealth((current) => ({
-              ...current,
-              [item.id]: { status: "unknown", checkedAt: Date.now() },
-            }));
-          }
-        }
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-    };
-
-    Promise.all([worker(), worker(), worker()]);
-    return () => {
-      cancelled = true;
-    };
-  }, [items]);
 
   const copyUrl = async (url) => {
     try {
@@ -1368,17 +1293,17 @@ export default function Properties() {
                   開啟網頁
                 </a>
               )}
-              {p.websiteUrl && websiteHealth[p.id]?.status === "unlisted" && (
+              {p.websiteUrl && p.websitePublished === false && (
                 <span
                   role="img"
                   aria-label={`${p.title || "物件"} 官網目前未上架`}
-                  title="系統自動檢查：公司官網目前未上架"
+                  title="公司後台「官網點閱」沒有超連結，目前未上官網"
                   style={{ color: "#B42318", background: "#FEECEB", border: "1px solid #F1B8B2", borderRadius: 8, padding: 8, display: "inline-flex" }}
                 >
                   <X size={15} strokeWidth={2.5} aria-hidden="true" />
                 </span>
               )}
-              {p.websiteUrl && websiteHealth[p.id]?.status === "unlisted" && (
+              {p.websiteUrl && p.websitePublished === false && (
                 <span className="tag" style={{ color: "#B42318", background: "#FEECEB" }}>官網未上架</span>
               )}
               {p.websiteUrl && (

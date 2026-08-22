@@ -33,6 +33,7 @@ function argValue(name, fallback = "") {
 }
 const assumeOrdered = process.argv.includes("--assume-ordered");
 const sourceDirArg = argValue("--source-dir");
+const officialStatusDirArg = argValue("--official-status-dir");
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
 const defaultOutputDir = process.env.LESHAN_SYNC_OUTPUT_ROOT
   ? path.join(process.env.LESHAN_SYNC_OUTPUT_ROOT, today)
@@ -350,23 +351,79 @@ function parseReports(dir) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }).map((row) => row.map(decodeBig5));
     if (rows[0]?.[1] !== "委託書編號") throw new Error(`${path.basename(item.file)} 欄位或編碼不正確`);
-    for (const row of rows.slice(1)) {
+    const officialColumn = rows[0].findIndex((header) => String(header).includes("官網點閱"));
+    for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex];
       if (!row[1]) continue;
-      records.push({
-        store: item.store.name, category: item.category.name, listingNo: String(row[1]).trim(),
+      const listingNo = String(row[1]).trim();
+      const officialCell = officialColumn >= 0 ? sheet[XLSX.utils.encode_cell({ r: rowIndex, c: officialColumn })] : null;
+      const officialLink = officialCell?.l?.Target || "";
+      const record = {
+        store: item.store.name, category: item.category.name, listingNo,
         title: String(row[2] || "").trim(), address: String(row[3] || "").trim(),
         landPing: row[4] === "" ? null : Number(row[4]), titlePing: row[5] === "" ? null : Number(row[5]),
         floor: String(row[6] || "").trim(), orientation: String(row[7] || "").trim(), age: String(row[8] || "").trim(),
         layout: String(row[9] || "").trim(), parkingCount: row[10] === "" ? null : Number(row[10]),
         totalPrice: row[11] === "" ? null : Number(row[11]), occupancy: String(row[12] || "").trim(),
         laneWidth: String(row[13] || "").trim(), agentInfo: String(row[14] || "").trim(),
-        websiteUrl: `https://www.twhg.com.tw/buy/${String(row[1]).trim()}`, notes: String(row[16] || "").trim(),
-      });
+        websiteUrl: /\/buy\//i.test(officialLink) ? officialLink : `https://www.twhg.com.tw/buy/${listingNo}`,
+        notes: String(row[16] || "").trim(),
+      };
+      if (officialColumn >= 0) {
+        record.websitePublished = Boolean(officialLink);
+        record.officialViewCount = numberOrNull(row[officialColumn]);
+        record.officialStatusCheckedAt = new Date().toISOString();
+      }
+      records.push(record);
     }
   }
   const unique = new Map();
   for (const record of records) if (!unique.has(record.listingNo)) unique.set(record.listingNo, record);
   return { fileCount: files.length, rowCount: records.length, records: [...unique.values()] };
+}
+
+function parseOfficialStatusDirectory(dir, records) {
+  if (!dir) return { records, checked: 0, published: 0, unpublished: 0 };
+  const files = fs.readdirSync(dir)
+    .filter((name) => !name.startsWith(".") && fs.statSync(path.join(dir, name)).isFile());
+  const statuses = new Map();
+
+  for (const name of files) {
+    const buffer = fs.readFileSync(path.join(dir, name));
+    const latinPreview = buffer.subarray(0, 1000).toString("latin1").toLowerCase();
+    const html = /charset\s*=\s*["']?(?:big5|big-5)/i.test(latinPreview)
+      ? iconv.decode(buffer, "big5")
+      : buffer.toString("utf8");
+    if (/url\s*=\s*\.\.\/index\.php|name=["']user_pass1["']/i.test(html)) continue;
+
+    for (const rowHtml of html.match(/<tr\b[\s\S]*?<\/tr>/gi) || []) {
+      const plain = decode(rowHtml.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+      const listingMatch = plain.match(/\b([A-Z]{1,3}\d{7,10})\b/);
+      if (!listingMatch) continue;
+      let viewCount = null;
+      for (const anchor of rowHtml.match(/<a\b[\s\S]*?<\/a>/gi) || []) {
+        const anchorText = decode(anchor.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+        if (/^\d+$/.test(anchorText)) {
+          viewCount = Number(anchorText);
+          break;
+        }
+      }
+      statuses.set(listingMatch[1], {
+        websitePublished: viewCount !== null,
+        officialViewCount: viewCount,
+        officialStatusCheckedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  const coverage = records.length ? statuses.size / records.length : 1;
+  if (records.length && coverage < 0.9) {
+    console.error(`官網狀態頁只涵蓋 ${statuses.size}/${records.length} 筆，可能登入失效；本次不更新官網狀態`);
+    return { records, checked: 0, published: 0, unpublished: 0, ignored: statuses.size };
+  }
+  const merged = records.map((record) => statuses.has(record.listingNo) ? { ...record, ...statuses.get(record.listingNo) } : record);
+  const published = [...statuses.values()].filter((item) => item.websitePublished).length;
+  return { records: merged, checked: statuses.size, published, unpublished: statuses.size - published };
 }
 
 function loadPrevious() {
@@ -438,6 +495,14 @@ async function main() {
     sourceDir = await downloadReports(userId);
   }
   const snapshot = parseReports(sourceDir);
+  if (officialStatusDirArg) {
+    const official = parseOfficialStatusDirectory(path.resolve(officialStatusDirArg), snapshot.records);
+    snapshot.records = official.records;
+    snapshot.officialWebsiteStatus = {
+      checked: official.checked, published: official.published,
+      unpublished: official.unpublished, ignored: official.ignored || 0,
+    };
+  }
   if (userId || process.argv.includes("--fetch-details")) {
     userId = userId || internalUserId();
     const details = await enrichRecords(snapshot.records, userId);
