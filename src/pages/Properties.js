@@ -9,6 +9,7 @@ import { withAgid, withoutAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
+import { TAIWAN_REGIONS, TAIWAN_CITIES, normalizeRegionText } from "../lib/taiwanRegions";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { X } from "lucide-react";
@@ -32,6 +33,17 @@ function parseFloor(floor) {
   if (!floor) return null;
   const m = String(floor).match(/-?\d+/);
   return m ? parseInt(m[0], 10) : null;
+}
+
+// 屋齡格式通常是「12年3個月」這種自由輸入文字，優先取「年」前面的數字，
+// 找不到「年」的話就取字串裡第一個數字（例如直接填 "15"）
+function parseAge(age) {
+  if (!age && age !== 0) return null;
+  const s = String(age);
+  const yearMatch = s.match(/(\d+(?:\.\d+)?)\s*年/);
+  if (yearMatch) return parseFloat(yearMatch[1]);
+  const m = s.match(/\d+(?:\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
 }
 
 // mode: "eq" 精確等於 / "gte" 以上（大於等於）
@@ -116,6 +128,10 @@ export default function Properties() {
   const [maxTitlePing, setMaxTitlePing] = useState("");
   const [minLandPing, setMinLandPing] = useState("");
   const [maxLandPing, setMaxLandPing] = useState("");
+  const [minAge, setMinAge] = useState("");
+  const [maxAge, setMaxAge] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [districtFilter, setDistrictFilter] = useState("");
   const [parkingFilter, setParkingFilter] = useState("all");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [layoutKeyword, setLayoutKeyword] = useState("");
@@ -326,6 +342,9 @@ export default function Properties() {
     if (!matchRange(p.mainBuildingPing, minMainBuildingPing, maxMainBuildingPing)) return false;
     if (!matchRange(p.titlePing, minTitlePing, maxTitlePing)) return false;
     if (!matchRange(p.landPing, minLandPing, maxLandPing)) return false;
+    if (!matchRange(parseAge(p.age), minAge, maxAge)) return false;
+    if (cityFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(cityFilter))) return false;
+    if (districtFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(districtFilter))) return false;
     if (parkingFilter === "yes" && !propertyHasParking(p)) return false;
     if (parkingFilter === "no" && propertyHasParking(p)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
@@ -346,7 +365,7 @@ export default function Properties() {
 
   const advancedFilterCount = [
     minMainBuildingPing, maxMainBuildingPing, minTitlePing, maxTitlePing,
-    minLandPing, maxLandPing, parkingFilter === "all" ? "" : parkingFilter,
+    minLandPing, maxLandPing, minAge, maxAge, parkingFilter === "all" ? "" : parkingFilter,
   ].filter((value) => value !== "").length;
 
   const clearAllFilters = () => {
@@ -364,6 +383,10 @@ export default function Properties() {
     setMaxTitlePing("");
     setMinLandPing("");
     setMaxLandPing("");
+    setMinAge("");
+    setMaxAge("");
+    setCityFilter("");
+    setDistrictFilter("");
     setParkingFilter("all");
     setActiveCategory("全部");
   };
@@ -920,6 +943,27 @@ export default function Properties() {
           placeholder="搜尋案名、地址、委託書編號、店名…"
           style={{ flex: 1, minWidth: 220, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
         />
+        <select
+          value={cityFilter}
+          onChange={(e) => { setCityFilter(e.target.value); setDistrictFilter(""); }}
+          style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        >
+          <option value="">全部縣市</option>
+          {TAIWAN_CITIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <select
+          value={districtFilter}
+          onChange={(e) => setDistrictFilter(e.target.value)}
+          disabled={!cityFilter}
+          style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        >
+          <option value="">{cityFilter ? "全部鄉鎮市區" : "先選縣市"}</option>
+          {(TAIWAN_REGIONS[cityFilter] || []).map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
         <input
           value={minPrice}
           onChange={(e) => setMinPrice(e.target.value)}
@@ -951,6 +995,7 @@ export default function Properties() {
               { label: "主建物坪數", min: minMainBuildingPing, setMin: setMinMainBuildingPing, max: maxMainBuildingPing, setMax: setMaxMainBuildingPing },
               { label: "權狀坪數", min: minTitlePing, setMin: setMinTitlePing, max: maxTitlePing, setMax: setMaxTitlePing },
               { label: "地坪", min: minLandPing, setMin: setMinLandPing, max: maxLandPing, setMax: setMaxLandPing },
+              { label: "屋齡（年）", min: minAge, setMin: setMinAge, max: maxAge, setMax: setMaxAge },
             ].map((range) => (
               <div key={range.label} style={{ minWidth: 230 }}>
                 <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, marginBottom: 6 }}>{range.label}</div>
@@ -971,7 +1016,7 @@ export default function Properties() {
             </div>
           </div>
           <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted)" }}>
-            主建物坪數只會搜尋已補入詳細資料的物件；沒有主建物明細的土地或舊物件不會列入結果。
+            主建物坪數、屋齡這類條件只會搜尋已補入詳細資料的物件；沒有填寫的物件不會列入結果。
           </div>
         </div>
       )}
