@@ -31,4 +31,3 @@ export const TAIWAN_CITIES = Object.keys(TAIWAN_REGIONS);
 export function normalizeRegionText(s) {
   return String(s || "").replace(/臺/g, "台");
 }
-taiwanRegions
