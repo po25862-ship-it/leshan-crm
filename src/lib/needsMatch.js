@@ -2,6 +2,7 @@
 // 給客需表單裡的「系統配對建議」用，讓仲介不用自己一筆一筆手動搜尋。
 import { normalizeRegionText } from "./taiwanRegions";
 import { normalizeNeedRanges, toNum } from "./needsFields";
+import { parseFloor, isTopFloor } from "./floor";
 
 // 客需表單的物件類型標籤，對應到「案件控台」實際使用的物件類別
 const TYPE_TO_CATEGORIES = {
@@ -58,6 +59,9 @@ export function matchPropertiesForNeed(need, properties) {
   const roomsMax = toNum(ranges.roomsMax);
   const bathMin = toNum(ranges.bathMin);
   const bathMax = toNum(ranges.bathMax);
+  const floorMin = toNum(need.floorMin);
+  const floorMax = toNum(need.floorMax);
+  const topFloorOnly = !!need.topFloorOnly;
 
   const hasAnyCriteria =
     areas.length > 0 ||
@@ -69,7 +73,10 @@ export function matchPropertiesForNeed(need, properties) {
     roomsMin !== null ||
     roomsMax !== null ||
     bathMin !== null ||
-    bathMax !== null;
+    bathMax !== null ||
+    floorMin !== null ||
+    floorMax !== null ||
+    topFloorOnly;
   if (!hasAnyCriteria) return [];
 
   const results = [];
@@ -131,6 +138,22 @@ export function matchPropertiesForNeed(need, properties) {
       if (inRange(bath, bathMin, bathMax)) {
         score++;
         reasons.push("衛浴符合");
+      }
+    }
+
+    if (floorMin !== null || floorMax !== null) {
+      total++;
+      if (inRange(parseFloor(p.floor), floorMin, floorMax)) {
+        score++;
+        reasons.push("樓層符合");
+      }
+    }
+
+    if (topFloorOnly) {
+      total++;
+      if (isTopFloor(p.floor)) {
+        score++;
+        reasons.push("頂樓");
       }
     }
 
