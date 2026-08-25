@@ -1,17 +1,27 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useCollection } from "../hooks/useCollection";
+import { matchPropertiesForNeed } from "../lib/needsMatch";
 
 // value 是推薦物件陣列 [{propertyId, introduced, addedAt}]，onChange 傳回更新後的陣列
-export default function RecommendedProperties({ value, onChange }) {
+// need（選填）是客需表單目前的內容（區域／類型／預算／坪數／房數），有帶入時會自動配對系統建議物件
+export default function RecommendedProperties({ value, onChange, need }) {
   const { items: properties } = useCollection("properties", "title");
   const recommended = value || [];
   const recommendedIds = recommended.map((r) => r.propertyId);
 
   const [showPicker, setShowPicker] = useState(false);
   const [keyword, setKeyword] = useState("");
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
 
   const propertyMap = {};
   properties.forEach((p) => (propertyMap[p.id] = p));
+
+  const suggestions = useMemo(
+    () => matchPropertiesForNeed(need, properties).filter((m) => !recommendedIds.includes(m.property.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [need, properties, recommendedIds.join(",")]
+  );
+  const visibleSuggestions = showAllSuggestions ? suggestions : suggestions.slice(0, 5);
 
   const filtered = properties.filter((p) => {
     if (recommendedIds.includes(p.id)) return false;
@@ -34,6 +44,59 @@ export default function RecommendedProperties({ value, onChange }) {
 
   return (
     <div>
+      {suggestions.length > 0 && (
+        <div style={{ background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", marginBottom: 8 }}>
+            系統配對建議（{suggestions.length}）
+          </div>
+          {visibleSuggestions.map(({ property: p, reasons }) => (
+            <div
+              key={p.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 12px",
+                background: "#fff",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                marginBottom: 8,
+              }}
+            >
+              <div style={{ fontSize: 13 }}>
+                <div style={{ fontWeight: 700 }}>
+                  {p.title} <span className="tag">{p.category}</span>
+                </div>
+                <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
+                  {p.address}
+                  {p.layout && <>{p.layout}　</>}
+                  {p.titlePing && <>{p.titlePing} 坪　</>}
+                  {p.totalPrice && <>總價 {p.totalPrice} 萬</>}
+                </div>
+                {reasons.length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    {reasons.map((r) => (
+                      <span key={r} style={{ fontSize: 10, color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "1px 7px", marginRight: 4 }}>
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button type="button" className="btn ghost" style={{ flexShrink: 0, fontSize: 12 }} onClick={() => addProperty(p.id)}>
+                ＋ 加入推薦
+              </button>
+            </div>
+          ))}
+          {suggestions.length > visibleSuggestions.length && (
+            <button type="button" className="btn ghost" style={{ fontSize: 12 }} onClick={() => setShowAllSuggestions(true)}>
+              顯示全部 {suggestions.length} 筆建議
+            </button>
+          )}
+        </div>
+      )}
+
       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>
         推薦物件（{recommended.length}）
       </div>

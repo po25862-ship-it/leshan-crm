@@ -182,6 +182,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
               <RecommendedProperties
                 value={form.recommendedProperties}
                 onChange={(recommendedProperties) => setForm({ ...form, recommendedProperties })}
+                need={form}
               />
             </div>
 

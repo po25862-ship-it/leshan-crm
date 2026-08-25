@@ -225,6 +225,7 @@ export default function Needs() {
               <RecommendedProperties
                 value={form.recommendedProperties}
                 onChange={(recommendedProperties) => setForm({ ...form, recommendedProperties })}
+                need={form}
               />
             </div>
 
