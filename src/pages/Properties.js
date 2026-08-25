@@ -10,6 +10,7 @@ import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 import { TAIWAN_REGIONS, TAIWAN_CITIES, normalizeRegionText } from "../lib/taiwanRegions";
+import { parseFloor, isTopFloor } from "../lib/floor";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { X } from "lucide-react";
@@ -26,29 +27,6 @@ function parseLayout(layout) {
     return m ? parseInt(m[0], 10) : null;
   };
   return { rooms: parseNum(parts[0]), living: parseNum(parts[1]), bath: parseNum(parts[2]) };
-}
-
-// 樓別格式通常是「5/5」（所在樓層/總樓層），取前面那個數字來搜尋
-function parseFloor(floor) {
-  if (!floor) return null;
-  const m = String(floor).match(/-?\d+/);
-  return m ? parseInt(m[0], 10) : null;
-}
-
-// 判斷是不是頂樓：樓別欄位裡直接打「頂樓」文字，或是「5/5」這種所在樓層等於總樓層的格式
-function isTopFloor(floor) {
-  if (!floor) return false;
-  const s = String(floor);
-  if (s.includes("頂")) return true;
-  const parts = s.split("/").map((p) => p.trim());
-  if (parts.length >= 2) {
-    const cur = parseInt(parts[0], 10);
-    const total = parseInt(parts[1], 10);
-    if (Number.isFinite(cur) && Number.isFinite(total) && total > 0) {
-      return cur === total;
-    }
-  }
-  return false;
 }
 
 // 屋齡格式通常是「12年3個月」這種自由輸入文字，優先取「年」前面的數字，

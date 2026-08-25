@@ -5,6 +5,7 @@ import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
 import RecommendedProperties from "./RecommendedProperties";
 import { normalizeNeedRanges, rangeStatText } from "../lib/needsFields";
+import { TAIWAN_REGIONS, TAIWAN_CITIES } from "../lib/taiwanRegions";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -30,6 +31,9 @@ const emptyForm = {
   roomsMax: "",
   bathMin: "",
   bathMax: "",
+  floorMin: "",
+  floorMax: "",
+  topFloorOnly: false,
   notes: "",
   shared: false,
   recommendedProperties: [],
@@ -91,6 +95,12 @@ export default function Needs() {
   const updateArea = (idx, key, val) => {
     const next = [...form.areas];
     next[idx] = { ...next[idx], [key]: val };
+    setForm({ ...form, areas: next });
+  };
+  // 換縣市時，原本選的鄉鎮市區可能已經不屬於新縣市，一併清空避免留下錯誤的組合
+  const updateAreaCity = (idx, city) => {
+    const next = [...form.areas];
+    next[idx] = { ...next[idx], city, district: "" };
     setForm({ ...form, areas: next });
   };
   const addArea = () => setForm({ ...form, areas: [...form.areas, { ...emptyArea }] });
@@ -186,16 +196,25 @@ export default function Needs() {
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>找房條件</div>
 
               <div style={{ marginBottom: 10 }}>
-                {form.areas.map((a, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                    <input value={a.city} onChange={(e) => updateArea(idx, "city", e.target.value)} placeholder="縣市" style={{ ...fieldBox, width: 70 }} />
-                    <input value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} placeholder="鄉鎮市區" style={{ ...fieldBox, width: 80 }} />
-                    <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: 1 }} />
-                    {form.areas.length > 1 && (
-                      <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>✕</button>
-                    )}
-                  </div>
-                ))}
+                {form.areas.map((a, idx) => {
+                  const cityValid = TAIWAN_CITIES.includes(a.city);
+                  return (
+                    <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                      <select value={cityValid ? a.city : ""} onChange={(e) => updateAreaCity(idx, e.target.value)} style={{ ...fieldBox, width: 100 }}>
+                        <option value="">縣市</option>
+                        {TAIWAN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} disabled={!cityValid} style={{ ...fieldBox, width: 100 }}>
+                        <option value="">鄉鎮市區</option>
+                        {(TAIWAN_REGIONS[a.city] || []).map((d) => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: 1 }} />
+                      {form.areas.length > 1 && (
+                        <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>✕</button>
+                      )}
+                    </div>
+                  );
+                })}
                 <button type="button" className="btn ghost" onClick={addArea} style={{ fontSize: 12 }}>＋ 新增區域</button>
               </div>
 
@@ -219,6 +238,7 @@ export default function Needs() {
                   { label: "主建物坪數", minKey: "mainAreaMin", maxKey: "mainAreaMax" },
                   { label: "房", minKey: "roomsMin", maxKey: "roomsMax" },
                   { label: "衛", minKey: "bathMin", maxKey: "bathMax" },
+                  { label: "樓層", minKey: "floorMin", maxKey: "floorMax" },
                 ].map((r) => (
                   <div key={r.label}>
                     <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>{r.label}</div>
@@ -242,6 +262,11 @@ export default function Needs() {
                   </div>
                 ))}
               </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+                <input type="checkbox" checked={!!form.topFloorOnly} onChange={(e) => setForm({ ...form, topFloorOnly: e.target.checked })} />
+                偏好頂樓
+              </label>
 
               <textarea
                 rows="2"
@@ -294,13 +319,17 @@ export default function Needs() {
                   rangeStatText(ranges.mainAreaMin, ranges.mainAreaMax, "坪") && { value: rangeStatText(ranges.mainAreaMin, ranges.mainAreaMax, "坪"), label: "主建物坪數" },
                   rangeStatText(ranges.roomsMin, ranges.roomsMax, "房") && { value: rangeStatText(ranges.roomsMin, ranges.roomsMax, "房"), label: "房數" },
                   rangeStatText(ranges.bathMin, ranges.bathMax, "衛") && { value: rangeStatText(ranges.bathMin, ranges.bathMax, "衛"), label: "衛浴數" },
+                  rangeStatText(item.floorMin, item.floorMax, "樓") && { value: rangeStatText(item.floorMin, item.floorMax, "樓"), label: "樓層" },
                 ].filter(Boolean);
                 const areaText = (item.areas || []).map(areaLabel).filter(Boolean).join("、");
                 return (
                   <div className="card" key={item.id} onClick={() => openEdit(item)} style={{ cursor: "pointer" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div className="name">{item.title}</div>
-                      {item.shared && <span style={{ fontSize: 10, color: "var(--muted)" }}>已分享</span>}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {item.topFloorOnly && <span style={{ fontSize: 10, color: "var(--muted)" }}>頂樓</span>}
+                        {item.shared && <span style={{ fontSize: 10, color: "var(--muted)" }}>已分享</span>}
+                      </div>
                     </div>
                     {item.contactName && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>買方：{item.contactName}</div>}
 
