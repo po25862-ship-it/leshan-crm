@@ -30,6 +30,8 @@ const makeEmptyForm = (contactId, contactName) => ({
   roomsMax: "",
   bathMin: "",
   bathMax: "",
+  ageMin: "",
+  ageMax: "",
   floorMin: "",
   floorMax: "",
   topFloorOnly: false,
@@ -125,6 +127,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
     rangeStatText(viewRanges.mainAreaMin, viewRanges.mainAreaMax, "坪") && { value: rangeStatText(viewRanges.mainAreaMin, viewRanges.mainAreaMax, "坪"), label: "主建物坪數" },
     rangeStatText(viewRanges.roomsMin, viewRanges.roomsMax, "房") && { value: rangeStatText(viewRanges.roomsMin, viewRanges.roomsMax, "房"), label: "房數" },
     rangeStatText(viewRanges.bathMin, viewRanges.bathMax, "衛") && { value: rangeStatText(viewRanges.bathMin, viewRanges.bathMax, "衛"), label: "衛浴數" },
+    rangeStatText(viewRanges.ageMin, viewRanges.ageMax, "年") && { value: rangeStatText(viewRanges.ageMin, viewRanges.ageMax, "年"), label: "屋齡" },
     rangeStatText(form.floorMin, form.floorMax, "樓") && { value: rangeStatText(form.floorMin, form.floorMax, "樓"), label: "樓層" },
   ].filter(Boolean);
 
@@ -314,6 +317,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
                   { label: "主建物坪數", minKey: "mainAreaMin", maxKey: "mainAreaMax" },
                   { label: "房", minKey: "roomsMin", maxKey: "roomsMax" },
                   { label: "衛", minKey: "bathMin", maxKey: "bathMax" },
+                  { label: "屋齡（年）", minKey: "ageMin", maxKey: "ageMax" },
                   { label: "樓層", minKey: "floorMin", maxKey: "floorMax" },
                 ].map((r) => (
                   <div key={r.label}>
@@ -383,6 +387,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
           rangeStatText(ranges.mainAreaMin, ranges.mainAreaMax, "坪") && { value: rangeStatText(ranges.mainAreaMin, ranges.mainAreaMax, "坪"), label: "主建物坪數" },
           rangeStatText(ranges.roomsMin, ranges.roomsMax, "房") && { value: rangeStatText(ranges.roomsMin, ranges.roomsMax, "房"), label: "房數" },
           rangeStatText(ranges.bathMin, ranges.bathMax, "衛") && { value: rangeStatText(ranges.bathMin, ranges.bathMax, "衛"), label: "衛浴數" },
+          rangeStatText(ranges.ageMin, ranges.ageMax, "年") && { value: rangeStatText(ranges.ageMin, ranges.ageMax, "年"), label: "屋齡" },
           rangeStatText(n.floorMin, n.floorMax, "樓") && { value: rangeStatText(n.floorMin, n.floorMax, "樓"), label: "樓層" },
         ].filter(Boolean);
         const areaText = (n.areas || []).map(areaLabel).filter(Boolean).join("、");
