@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useAuth } from "../AuthContext";
 import RecommendedProperties from "./RecommendedProperties";
+import { normalizeNeedRanges, rangeStatText } from "../lib/needsFields";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -18,9 +19,14 @@ const makeEmptyForm = (contactId, contactName) => ({
   types: [],
   purposes: [],
   motivation: "",
-  minMainArea: "",
-  minRooms: "",
-  budget: "",
+  budgetMin: "",
+  budgetMax: "",
+  mainAreaMin: "",
+  mainAreaMax: "",
+  roomsMin: "",
+  roomsMax: "",
+  bathMin: "",
+  bathMax: "",
   notes: "",
   shared: false,
   recommendedProperties: [],
@@ -46,7 +52,12 @@ export default function BuyerNeeds({ contactId, contactName }) {
     setShowForm(true);
   };
   const openEdit = (item) => {
-    setForm({ ...makeEmptyForm(contactId, contactName), ...item, areas: item.areas?.length ? item.areas : [{ ...emptyArea }] });
+    setForm({
+      ...makeEmptyForm(contactId, contactName),
+      ...item,
+      ...normalizeNeedRanges(item),
+      areas: item.areas?.length ? item.areas : [{ ...emptyArea }],
+    });
     setEditingId(item.id);
     setShowForm(true);
   };
@@ -163,10 +174,34 @@ export default function BuyerNeeds({ contactId, contactName }) {
                 ))}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
-                <input value={form.minMainArea} onChange={(e) => setForm({ ...form, minMainArea: e.target.value })} placeholder="最低坪數" style={fieldBox} />
-                <input value={form.minRooms} onChange={(e) => setForm({ ...form, minRooms: e.target.value })} placeholder="最小房數" style={fieldBox} />
-                <input value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} placeholder="預算（萬）" style={fieldBox} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 10 }}>
+                {[
+                  { label: "總價（萬）", minKey: "budgetMin", maxKey: "budgetMax" },
+                  { label: "主建物坪數", minKey: "mainAreaMin", maxKey: "mainAreaMax" },
+                  { label: "房", minKey: "roomsMin", maxKey: "roomsMax" },
+                  { label: "衛", minKey: "bathMin", maxKey: "bathMax" },
+                ].map((r) => (
+                  <div key={r.label}>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>{r.label}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="number"
+                        value={form[r.minKey]}
+                        onChange={(e) => setForm({ ...form, [r.minKey]: e.target.value })}
+                        placeholder="最低"
+                        style={{ ...fieldBox, width: 0, flex: 1 }}
+                      />
+                      <span style={{ color: "var(--muted)" }}>～</span>
+                      <input
+                        type="number"
+                        value={form[r.maxKey]}
+                        onChange={(e) => setForm({ ...form, [r.maxKey]: e.target.value })}
+                        placeholder="最高"
+                        style={{ ...fieldBox, width: 0, flex: 1 }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <textarea
@@ -201,10 +236,12 @@ export default function BuyerNeeds({ contactId, contactName }) {
       {myNeeds.map((n) => {
         const introducedCount = (n.recommendedProperties || []).filter((r) => r.introduced).length;
         const totalCount = (n.recommendedProperties || []).length;
+        const ranges = normalizeNeedRanges(n);
         const stats = [
-          n.budget && { value: `${n.budget}萬`, label: "預算上限" },
-          n.minMainArea && { value: `${n.minMainArea}坪`, label: "最低坪數" },
-          n.minRooms && { value: `${n.minRooms}房`, label: "最少房數" },
+          rangeStatText(ranges.budgetMin, ranges.budgetMax, "萬") && { value: rangeStatText(ranges.budgetMin, ranges.budgetMax, "萬"), label: "總價" },
+          rangeStatText(ranges.mainAreaMin, ranges.mainAreaMax, "坪") && { value: rangeStatText(ranges.mainAreaMin, ranges.mainAreaMax, "坪"), label: "主建物坪數" },
+          rangeStatText(ranges.roomsMin, ranges.roomsMax, "房") && { value: rangeStatText(ranges.roomsMin, ranges.roomsMax, "房"), label: "房數" },
+          rangeStatText(ranges.bathMin, ranges.bathMax, "衛") && { value: rangeStatText(ranges.bathMin, ranges.bathMax, "衛"), label: "衛浴數" },
         ].filter(Boolean);
         const areaText = (n.areas || []).map(areaLabel).filter(Boolean).join("、");
         return (

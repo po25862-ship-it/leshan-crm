@@ -35,6 +35,22 @@ function parseFloor(floor) {
   return m ? parseInt(m[0], 10) : null;
 }
 
+// 判斷是不是頂樓：樓別欄位裡直接打「頂樓」文字，或是「5/5」這種所在樓層等於總樓層的格式
+function isTopFloor(floor) {
+  if (!floor) return false;
+  const s = String(floor);
+  if (s.includes("頂")) return true;
+  const parts = s.split("/").map((p) => p.trim());
+  if (parts.length >= 2) {
+    const cur = parseInt(parts[0], 10);
+    const total = parseInt(parts[1], 10);
+    if (Number.isFinite(cur) && Number.isFinite(total) && total > 0) {
+      return cur === total;
+    }
+  }
+  return false;
+}
+
 // 屋齡格式通常是「12年3個月」這種自由輸入文字，優先取「年」前面的數字，
 // 找不到「年」的話就取字串裡第一個數字（例如直接填 "15"）
 function parseAge(age) {
@@ -137,6 +153,7 @@ export default function Properties() {
   const [layoutKeyword, setLayoutKeyword] = useState("");
   const [floorFilter, setFloorFilter] = useState("");
   const [floorMode, setFloorMode] = useState("eq");
+  const [topFloorOnly, setTopFloorOnly] = useState(false);
   const [roomFilter, setRoomFilter] = useState("");
   const [roomMode, setRoomMode] = useState("eq");
   const [livingFilter, setLivingFilter] = useState("");
@@ -349,6 +366,7 @@ export default function Properties() {
     if (parkingFilter === "no" && propertyHasParking(p)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
     if (!matchNum(parseFloor(p.floor), floorFilter, floorMode)) return false;
+    if (topFloorOnly && !isTopFloor(p.floor)) return false;
     const { rooms, living, bath } = parseLayout(p.layout);
     if (!matchNum(rooms, roomFilter, roomMode)) return false;
     if (!matchNum(living, livingFilter, livingMode)) return false;
@@ -374,6 +392,7 @@ export default function Properties() {
     setMaxPrice("");
     setLayoutKeyword("");
     setFloorFilter("");
+    setTopFloorOnly(false);
     setRoomFilter("");
     setLivingFilter("");
     setBathFilter("");
@@ -1048,6 +1067,10 @@ export default function Properties() {
             </select>
           </div>
         ))}
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>
+          <input type="checkbox" checked={topFloorOnly} onChange={(e) => setTopFloorOnly(e.target.checked)} />
+          只看頂樓
+        </label>
         <input
           value={layoutKeyword}
           onChange={(e) => setLayoutKeyword(e.target.value)}
