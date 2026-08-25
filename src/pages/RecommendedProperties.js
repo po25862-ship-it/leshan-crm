@@ -12,16 +12,23 @@ export default function RecommendedProperties({ value, onChange, need }) {
   const [showPicker, setShowPicker] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+  const [showPartialSuggestions, setShowPartialSuggestions] = useState(false);
+  const [hideSuggestions, setHideSuggestions] = useState(false);
 
   const propertyMap = {};
   properties.forEach((p) => (propertyMap[p.id] = p));
 
-  const suggestions = useMemo(
+  const allMatches = useMemo(
     () => matchPropertiesForNeed(need, properties).filter((m) => !recommendedIds.includes(m.property.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [need, properties, recommendedIds.join(",")]
   );
-  const visibleSuggestions = showAllSuggestions ? suggestions : suggestions.slice(0, 5);
+  // 完全符合：有填的條件全部都符合，才會直接列出來，避免像只設了「區域」就把整個區域的物件都列出來
+  // 部分符合：至少符合一項，但沒有全部符合，收在「還有 N 筆部分符合」裡面，預設收合，需要的時候再展開看
+  const exactMatches = allMatches.filter((m) => m.total > 0 && m.score === m.total);
+  const partialMatches = allMatches.filter((m) => m.total > 0 && m.score < m.total);
+  const visibleSuggestions = showAllSuggestions ? exactMatches : exactMatches.slice(0, 5);
+  const visiblePartialSuggestions = partialMatches.slice(0, 5);
 
   const filtered = properties.filter((p) => {
     if (recommendedIds.includes(p.id)) return false;
@@ -42,57 +49,102 @@ export default function RecommendedProperties({ value, onChange, need }) {
     );
   };
 
+  const suggestionRow = (p, reasons, { muted = false } = {}) => (
+    <div
+      key={p.id}
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "10px 12px",
+        background: "#fff",
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        marginBottom: 8,
+        opacity: muted ? 0.85 : 1,
+      }}
+    >
+      <div style={{ fontSize: 13 }}>
+        <div style={{ fontWeight: 700 }}>
+          {p.title} <span className="tag">{p.category}</span>
+        </div>
+        <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
+          {p.address}
+          {p.layout && <>{p.layout}　</>}
+          {p.titlePing && <>{p.titlePing} 坪　</>}
+          {p.totalPrice && <>總價 {p.totalPrice} 萬</>}
+        </div>
+        {reasons.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            {reasons.map((r) => (
+              <span key={r} style={{ fontSize: 10, color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "1px 7px", marginRight: 4 }}>
+                {r}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <button type="button" className="btn ghost" style={{ flexShrink: 0, fontSize: 12 }} onClick={() => addProperty(p.id)}>
+        ＋ 加入推薦
+      </button>
+    </div>
+  );
+
   return (
     <div>
-      {suggestions.length > 0 && (
+      {allMatches.length > 0 && (
         <div style={{ background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", marginBottom: 8 }}>
-            系統配對建議（{suggestions.length}）
-          </div>
-          {visibleSuggestions.map(({ property: p, reasons }) => (
-            <div
-              key={p.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: 10,
-                padding: "10px 12px",
-                background: "#fff",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                marginBottom: 8,
-              }}
-            >
-              <div style={{ fontSize: 13 }}>
-                <div style={{ fontWeight: 700 }}>
-                  {p.title} <span className="tag">{p.category}</span>
-                </div>
-                <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
-                  {p.address}
-                  {p.layout && <>{p.layout}　</>}
-                  {p.titlePing && <>{p.titlePing} 坪　</>}
-                  {p.totalPrice && <>總價 {p.totalPrice} 萬</>}
-                </div>
-                {reasons.length > 0 && (
-                  <div style={{ marginTop: 4 }}>
-                    {reasons.map((r) => (
-                      <span key={r} style={{ fontSize: 10, color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "1px 7px", marginRight: 4 }}>
-                        {r}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button type="button" className="btn ghost" style={{ flexShrink: 0, fontSize: 12 }} onClick={() => addProperty(p.id)}>
-                ＋ 加入推薦
-              </button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: hideSuggestions ? 0 : 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>
+              系統配對建議（{exactMatches.length}）
             </div>
-          ))}
-          {suggestions.length > visibleSuggestions.length && (
-            <button type="button" className="btn ghost" style={{ fontSize: 12 }} onClick={() => setShowAllSuggestions(true)}>
-              顯示全部 {suggestions.length} 筆建議
+            <button
+              type="button"
+              onClick={() => setHideSuggestions((v) => !v)}
+              style={{ border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 12, fontWeight: 700 }}
+            >
+              {hideSuggestions ? "顯示" : "隱藏"}
             </button>
+          </div>
+
+          {!hideSuggestions && (
+            <>
+              {exactMatches.length === 0 && (
+                <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
+                  沒有完全符合所有條件的物件，可以展開下面部分符合的物件參考看看。
+                </div>
+              )}
+              {visibleSuggestions.map(({ property: p, reasons }) => suggestionRow(p, reasons))}
+              {exactMatches.length > visibleSuggestions.length && (
+                <button type="button" className="btn ghost" style={{ fontSize: 12 }} onClick={() => setShowAllSuggestions(true)}>
+                  顯示全部 {exactMatches.length} 筆完全符合
+                </button>
+              )}
+
+              {partialMatches.length > 0 && (
+                <div style={{ marginTop: exactMatches.length > 0 ? 10 : 0 }}>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    style={{ fontSize: 12 }}
+                    onClick={() => setShowPartialSuggestions((v) => !v)}
+                  >
+                    {showPartialSuggestions ? "收合部分符合的物件" : `還有 ${partialMatches.length} 筆部分符合（少一兩個條件）`}
+                  </button>
+                  {showPartialSuggestions && (
+                    <div style={{ marginTop: 8 }}>
+                      {visiblePartialSuggestions.map(({ property: p, reasons }) => suggestionRow(p, reasons, { muted: true }))}
+                      {partialMatches.length > visiblePartialSuggestions.length && (
+                        <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                          還有 {partialMatches.length - visiblePartialSuggestions.length} 筆部分符合的物件沒有列出，可以用下面「從物件清單挑選」搜尋。
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
