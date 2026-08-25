@@ -10,7 +10,9 @@ import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { openLinePersonalTool } from "../lib/linePersonal";
 
-export default function PropertyShare({ properties, onClose }) {
+// defaultBuyerId（選填）：從客需的「推薦物件」開啟分享時，該客需本來就綁定買方，
+// 直接預選起來，不用再選一次；其他呼叫端（例如物件列表的多選分享）不傳就跟原本一樣要自己選。
+export default function PropertyShare({ properties, onClose, defaultBuyerId = "" }) {
   const { user } = useAuth();
   const { agid } = usePersonalAgid();
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
@@ -18,7 +20,7 @@ export default function PropertyShare({ properties, onClose }) {
 
   const [intro, setIntro] = useState("下面有推薦你幾間物件，您看看有沒有合適的");
   const [previewText, setPreviewText] = useState("");
-  const [buyerId, setBuyerId] = useState("");
+  const [buyerId, setBuyerId] = useState(defaultBuyerId);
   const [logging, setLogging] = useState(false);
   const [copied, setCopied] = useState(false);
 

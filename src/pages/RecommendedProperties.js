@@ -3,6 +3,7 @@ import { useCollection } from "../hooks/useCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { mobileFontSize } from "../lib/mobileFont";
+import PropertyShare from "./PropertyShare";
 
 // value 是推薦物件陣列 [{propertyId, introduced, addedAt}]，onChange 傳回更新後的陣列
 // need（選填）是客需表單目前的內容（區域／類型／預算／坪數／房數），有帶入時會自動配對系統建議物件
@@ -18,6 +19,20 @@ export default function RecommendedProperties({ value, onChange, need }) {
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const [showPartialSuggestions, setShowPartialSuggestions] = useState(false);
   const [hideSuggestions, setHideSuggestions] = useState(false);
+
+  // 勾選傳送：跟物件列表的「勾選傳送」是同一套（共用 PropertyShare 面板），
+  // 差別是這裡本來就在某個客需底下，勾選範圍只在「推薦物件」清單裡，方便直接把網址整理好傳給這位買方。
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showShare, setShowShare] = useState(false);
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const propertyMap = {};
   properties.forEach((p) => (propertyMap[p.id] = p));
@@ -162,12 +177,44 @@ export default function RecommendedProperties({ value, onChange, need }) {
         </div>
       )}
 
-      <div style={{ fontSize: mfs(11), fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>
-        推薦物件（{recommended.length}）
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: mfs(11), fontWeight: 700, color: "var(--muted)" }}>
+          推薦物件（{recommended.length}）
+        </div>
+        {recommended.length > 0 && (
+          <button
+            type="button"
+            className={selectionMode ? "btn" : "btn ghost"}
+            style={{ fontSize: mfs(12) }}
+            onClick={() => {
+              setSelectionMode((v) => !v);
+              setSelectedIds(new Set());
+              setShowShare(false);
+            }}
+          >
+            {selectionMode ? "結束勾選" : "勾選傳送"}
+          </button>
+        )}
       </div>
 
       {recommended.length === 0 && (
         <div style={{ fontSize: mfs(13), color: "var(--muted)", marginBottom: 10 }}>還沒有推薦任何物件</div>
+      )}
+
+      {selectedIds.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: mfs(12), color: "var(--accent)", fontWeight: 700 }}>已選 {selectedIds.size} 筆物件</span>
+          <button type="button" className="btn" style={{ fontSize: mfs(12) }} onClick={() => setShowShare(true)}>分享給客人</button>
+          <button type="button" className="btn ghost" style={{ fontSize: mfs(12) }} onClick={() => setSelectedIds(new Set())}>清除選取</button>
+        </div>
+      )}
+
+      {showShare && (
+        <PropertyShare
+          properties={recommended.map((r) => propertyMap[r.propertyId]).filter((p) => p && selectedIds.has(p.id))}
+          onClose={() => setShowShare(false)}
+          defaultBuyerId={need?.contactId || ""}
+        />
       )}
 
       {recommended.map((r) => {
@@ -189,13 +236,21 @@ export default function RecommendedProperties({ value, onChange, need }) {
               alignItems: "flex-start",
               gap: 10,
               padding: "10px 12px",
-              background: r.introduced ? "var(--accent-soft)" : "#FAFAF8",
+              background: selectedIds.has(p.id) || r.introduced ? "var(--accent-soft)" : "#FAFAF8",
               border: "1px solid var(--border)",
               borderRadius: 8,
               marginBottom: 8,
             }}
           >
-            <div style={{ fontSize: mfs(13) }}>
+            {selectionMode && (
+              <input
+                type="checkbox"
+                checked={selectedIds.has(p.id)}
+                onChange={() => toggleSelect(p.id)}
+                style={{ marginTop: 3, flexShrink: 0 }}
+              />
+            )}
+            <div style={{ fontSize: mfs(13), flex: 1 }}>
               <div style={{ fontWeight: 700 }}>
                 <a
                   href={`#/properties?open=${p.id}`}
