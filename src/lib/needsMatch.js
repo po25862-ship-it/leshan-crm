@@ -1,6 +1,7 @@
 // 根據「客需」的找房條件，自動從物件清單中配對出可能符合的物件，
 // 給客需表單裡的「系統配對建議」用，讓仲介不用自己一筆一筆手動搜尋。
 import { normalizeRegionText } from "./taiwanRegions";
+import { normalizeNeedRanges, toNum } from "./needsFields";
 
 // 客需表單的物件類型標籤，對應到「案件控台」實際使用的物件類別
 const TYPE_TO_CATEGORIES = {
@@ -12,18 +13,23 @@ const TYPE_TO_CATEGORIES = {
   車位: ["車位"],
 };
 
-// 樓層／房型格式通常是「3/2/2」（房/廳/衛），取第一個數字當房數
-function parseLayoutRooms(layout) {
+// 樓層／房型格式通常是「3/2/2」（房/廳/衛），依序取房數／衛浴數
+function parseLayoutPart(layout, index) {
   if (!layout) return null;
-  const first = String(layout).split("/")[0];
-  const m = (first || "").match(/\d+/);
+  const part = String(layout).split("/")[index];
+  const m = (part || "").match(/\d+/);
   return m ? parseInt(m[0], 10) : null;
 }
 
-function toNumberOrNull(v) {
-  if (v === "" || v === null || v === undefined) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+// 判斷一個數值是否落在 [min, max] 範圍內；min／max 沒填的那一端不比對，兩者都沒填視為「沒有這個條件」
+function inRange(value, min, max) {
+  const hasMin = min !== null;
+  const hasMax = max !== null;
+  if (!hasMin && !hasMax) return null; // 沒設條件
+  if (value === null) return false;
+  if (hasMin && value < min) return false;
+  if (hasMax && value > max) return false;
+  return true;
 }
 
 // 判斷一筆物件地址是否落在某個找房區域內（縣市／鄉鎮市區／社區皆為模糊比對，沒填的欄位不比對）
@@ -36,20 +42,35 @@ function matchesArea(address, area) {
 }
 
 // 針對一筆客需，從物件清單中配對出可能符合的物件，依符合程度（score）排序。
-// 區域、預算超出太多的物件會直接排除；其他條件（類型／坪數／房數）沒符合只是不加分，不會被排除，
+// 區域、預算超出太多的物件會直接排除；其他條件（類型／坪數／房數／衛浴數）沒符合只是不加分，不會被排除，
 // 避免因為單一條件沒填好就漏掉原本該推薦的物件。
 // 回傳 [{ property, score, total, reasons }]
 export function matchPropertiesForNeed(need, properties) {
   if (!need) return [];
   const areas = (need.areas || []).filter((a) => a.city || a.district || a.community);
   const wantedCategories = (need.types || []).flatMap((t) => TYPE_TO_CATEGORIES[t] || [t]);
-  const budget = toNumberOrNull(need.budget);
-  const minMainArea = toNumberOrNull(need.minMainArea);
-  const minRooms = toNumberOrNull(need.minRooms);
+  const ranges = normalizeNeedRanges(need);
+  const budgetMin = toNum(ranges.budgetMin);
+  const budgetMax = toNum(ranges.budgetMax);
+  const mainAreaMin = toNum(ranges.mainAreaMin);
+  const mainAreaMax = toNum(ranges.mainAreaMax);
+  const roomsMin = toNum(ranges.roomsMin);
+  const roomsMax = toNum(ranges.roomsMax);
+  const bathMin = toNum(ranges.bathMin);
+  const bathMax = toNum(ranges.bathMax);
 
-  if (areas.length === 0 && wantedCategories.length === 0 && budget === null && minMainArea === null && minRooms === null) {
-    return [];
-  }
+  const hasAnyCriteria =
+    areas.length > 0 ||
+    wantedCategories.length > 0 ||
+    budgetMin !== null ||
+    budgetMax !== null ||
+    mainAreaMin !== null ||
+    mainAreaMax !== null ||
+    roomsMin !== null ||
+    roomsMax !== null ||
+    bathMin !== null ||
+    bathMax !== null;
+  if (!hasAnyCriteria) return [];
 
   const results = [];
   (properties || []).forEach((p) => {
@@ -65,16 +86,16 @@ export function matchPropertiesForNeed(need, properties) {
       reasons.push("區域相符");
     }
 
-    if (budget !== null) {
+    if (budgetMin !== null || budgetMax !== null) {
       total++;
-      const price = toNumberOrNull(p.totalPrice);
+      const price = toNum(p.totalPrice);
       if (price === null) {
         // 沒填總價的物件不加分，但也不排除
-      } else if (price <= budget * 1.1) {
-        score++;
-        reasons.push(price <= budget ? "預算內" : "接近預算");
       } else {
-        return; // 超出預算太多就不推薦
+        if (budgetMin !== null && price < budgetMin) return; // 明顯低於預算下限也一併排除，避免推薦到條件太不符的物件
+        if (budgetMax !== null && price > budgetMax * 1.1) return; // 超出預算上限太多就不推薦
+        score++;
+        reasons.push(budgetMax !== null && price > budgetMax ? "接近預算" : "預算內");
       }
     }
 
@@ -86,21 +107,30 @@ export function matchPropertiesForNeed(need, properties) {
       }
     }
 
-    if (minMainArea !== null) {
+    if (mainAreaMin !== null || mainAreaMax !== null) {
       total++;
-      const ping = toNumberOrNull(p.titlePing) ?? toNumberOrNull(p.mainBuildingPing);
-      if (ping !== null && ping >= minMainArea) {
+      const ping = toNum(p.titlePing) ?? toNum(p.mainBuildingPing);
+      if (inRange(ping, mainAreaMin, mainAreaMax)) {
         score++;
         reasons.push("坪數符合");
       }
     }
 
-    if (minRooms !== null) {
+    if (roomsMin !== null || roomsMax !== null) {
       total++;
-      const rooms = parseLayoutRooms(p.layout);
-      if (rooms !== null && rooms >= minRooms) {
+      const rooms = parseLayoutPart(p.layout, 0);
+      if (inRange(rooms, roomsMin, roomsMax)) {
         score++;
         reasons.push("房數符合");
+      }
+    }
+
+    if (bathMin !== null || bathMax !== null) {
+      total++;
+      const bath = parseLayoutPart(p.layout, 2);
+      if (inRange(bath, bathMin, bathMax)) {
+        score++;
+        reasons.push("衛浴符合");
       }
     }
 
