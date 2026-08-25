@@ -4,6 +4,8 @@ import { useAuth } from "../AuthContext";
 import RecommendedProperties from "./RecommendedProperties";
 import { normalizeNeedRanges, rangeStatText } from "../lib/needsFields";
 import { TAIWAN_REGIONS, TAIWAN_CITIES } from "../lib/taiwanRegions";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { mobileFontSize } from "../lib/mobileFont";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -45,6 +47,8 @@ export default function BuyerNeeds({ contactId, contactName }) {
   const { user } = useAuth();
   const { items, add, update, remove } = useNeedsCollection(user.uid);
   const myNeeds = items.filter((n) => n.contactId === contactId);
+  const isMobile = useIsMobile();
+  const mfs = (px) => mobileFontSize(px, isMobile);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -127,20 +131,20 @@ export default function BuyerNeeds({ contactId, contactName }) {
   const chip = (active) => ({
     padding: "6px 12px",
     borderRadius: 20,
-    fontSize: 12,
+    fontSize: mfs(12),
     fontWeight: 700,
     border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
     background: active ? "var(--accent)" : "#fff",
     color: active ? "#fff" : "var(--ink)",
     cursor: "pointer",
   });
-  const fieldBox = { padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 };
+  const fieldBox = { padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: mfs(13) };
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>客需（{myNeeds.length}）</div>
-        <button className="btn ghost" onClick={openNew} style={{ fontSize: 12 }}>＋ 新增客需</button>
+        <div style={{ fontSize: mfs(13), fontWeight: 700 }}>客需（{myNeeds.length}）</div>
+        <button className="btn ghost" onClick={openNew} style={{ fontSize: mfs(12) }}>＋ 新增客需</button>
       </div>
 
       {showForm && (
@@ -149,11 +153,11 @@ export default function BuyerNeeds({ contactId, contactName }) {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 16 }}>{form.title}</div>
+                  <div style={{ fontWeight: 700, fontSize: mfs(16) }}>{form.title}</div>
                   <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: mfs(11),
                         background: form.statusTag === "正在找" ? "var(--accent)" : "#F0EEE8",
                         color: form.statusTag === "正在找" ? "#fff" : "var(--muted)",
                         padding: "3px 10px",
@@ -163,16 +167,16 @@ export default function BuyerNeeds({ contactId, contactName }) {
                     >
                       {form.statusTag}
                     </span>
-                    {form.shared && <span style={{ fontSize: 11, color: "var(--muted)" }}>已分享</span>}
+                    {form.shared && <span style={{ fontSize: mfs(11), color: "var(--muted)" }}>已分享</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   {canEditFull && (
-                    <button className="btn ghost" type="button" style={{ fontSize: 12 }} onClick={() => setEditMode(true)}>
+                    <button className="btn ghost" type="button" style={{ fontSize: mfs(12) }} onClick={() => setEditMode(true)}>
                       編輯
                     </button>
                   )}
-                  <button className="btn ghost" type="button" style={{ fontSize: 12 }} onClick={() => setShowForm(false)}>
+                  <button className="btn ghost" type="button" style={{ fontSize: mfs(12) }} onClick={() => setShowForm(false)}>
                     關閉
                   </button>
                 </div>
@@ -193,14 +197,14 @@ export default function BuyerNeeds({ contactId, contactName }) {
                 >
                   {viewStats.map((s, i) => (
                     <div key={i}>
-                      <div style={{ fontSize: 16, fontWeight: 700 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: "var(--muted)" }}>{s.label}</div>
+                      <div style={{ fontSize: mfs(16), fontWeight: 700 }}>{s.value}</div>
+                      <div style={{ fontSize: mfs(10), color: "var(--muted)" }}>{s.label}</div>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div style={{ fontSize: 13, marginBottom: 10 }}>
+              <div style={{ fontSize: mfs(13), marginBottom: 10 }}>
                 {viewAreaText && (
                   <div style={{ marginBottom: 4 }}>
                     <span style={{ color: "var(--muted)" }}>區域：</span>
@@ -227,7 +231,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
                 <button
                   className="btn danger"
                   type="button"
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: mfs(12) }}
                   onClick={async () => {
                     if (window.confirm("確定要刪除這筆客需嗎？")) {
                       await remove(editingId);
@@ -260,34 +264,34 @@ export default function BuyerNeeds({ contactId, contactName }) {
                 </select>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: mfs(12), color: "var(--muted)", marginBottom: 14 }}>
                 <input type="checkbox" checked={!!form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} />
                 分享給同事（協助介紹物件）
               </label>
 
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>找房條件</div>
+              <div style={{ fontSize: mfs(11), fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>找房條件</div>
 
               <div style={{ marginBottom: 10 }}>
                 {form.areas.map((a, idx) => {
                   const cityValid = TAIWAN_CITIES.includes(a.city);
                   return (
-                    <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                      <select value={cityValid ? a.city : ""} onChange={(e) => updateAreaCity(idx, e.target.value)} style={{ ...fieldBox, width: 100 }}>
+                    <div key={idx} style={{ display: "flex", flexWrap: isMobile ? "wrap" : "nowrap", gap: 6, marginBottom: 6 }}>
+                      <select value={cityValid ? a.city : ""} onChange={(e) => updateAreaCity(idx, e.target.value)} style={{ ...fieldBox, flex: isMobile ? "1 1 45%" : "0 0 100px", minWidth: 0 }}>
                         <option value="">縣市</option>
                         {TAIWAN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <select value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} disabled={!cityValid} style={{ ...fieldBox, width: 100 }}>
+                      <select value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} disabled={!cityValid} style={{ ...fieldBox, flex: isMobile ? "1 1 45%" : "0 0 100px", minWidth: 0 }}>
                         <option value="">鄉鎮市區</option>
                         {(TAIWAN_REGIONS[a.city] || []).map((d) => <option key={d} value={d}>{d}</option>)}
                       </select>
-                      <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: 1 }} />
+                      <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: isMobile ? "1 1 100%" : 1, minWidth: 0 }} />
                       {form.areas.length > 1 && (
-                        <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>✕</button>
+                        <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: mfs(12) }}>✕</button>
                       )}
                     </div>
                   );
                 })}
-                <button type="button" className="btn ghost" onClick={addArea} style={{ fontSize: 12 }}>＋ 新增區域</button>
+                <button type="button" className="btn ghost" onClick={addArea} style={{ fontSize: mfs(12) }}>＋ 新增區域</button>
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
@@ -313,7 +317,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
                   { label: "樓層", minKey: "floorMin", maxKey: "floorMax" },
                 ].map((r) => (
                   <div key={r.label}>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>{r.label}</div>
+                    <div style={{ fontSize: mfs(11), color: "var(--muted)", marginBottom: 4 }}>{r.label}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <input
                         type="number"
@@ -335,7 +339,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
                 ))}
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: mfs(12), color: "var(--muted)", marginBottom: 10 }}>
                 <input type="checkbox" checked={!!form.topFloorOnly} onChange={(e) => setForm({ ...form, topFloorOnly: e.target.checked })} />
                 偏好頂樓
               </label>
@@ -369,7 +373,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
         </div>
       )}
 
-      {myNeeds.length === 0 && !showForm && <div style={{ fontSize: 12, color: "var(--muted)" }}>還沒有客需資料</div>}
+      {myNeeds.length === 0 && !showForm && <div style={{ fontSize: mfs(12), color: "var(--muted)" }}>還沒有客需資料</div>}
       {myNeeds.map((n) => {
         const introducedCount = (n.recommendedProperties || []).filter((r) => r.introduced).length;
         const totalCount = (n.recommendedProperties || []).length;
@@ -385,13 +389,13 @@ export default function BuyerNeeds({ contactId, contactName }) {
         return (
           <div key={n.id} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", marginBottom: 10 }}>
             <div onClick={() => openEdit(n)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: stats.length > 0 ? 10 : 4 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{n.title}</div>
+              <div style={{ fontWeight: 700, fontSize: mfs(14) }}>{n.title}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {n.topFloorOnly && <span title="偏好頂樓" style={{ fontSize: 11, color: "var(--muted)" }}>頂樓</span>}
-                {n.shared && <span title="已分享" style={{ fontSize: 11, color: "var(--muted)" }}>已分享</span>}
+                {n.topFloorOnly && <span title="偏好頂樓" style={{ fontSize: mfs(11), color: "var(--muted)" }}>頂樓</span>}
+                {n.shared && <span title="已分享" style={{ fontSize: mfs(11), color: "var(--muted)" }}>已分享</span>}
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: mfs(11),
                     background: n.statusTag === "正在找" ? "var(--accent)" : "#F0EEE8",
                     color: n.statusTag === "正在找" ? "#fff" : "var(--muted)",
                     padding: "3px 10px",
@@ -419,29 +423,29 @@ export default function BuyerNeeds({ contactId, contactName }) {
               >
                 {stats.map((s, i) => (
                   <div key={i}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{s.value}</div>
-                    <div style={{ fontSize: 10, color: "var(--muted)" }}>{s.label}</div>
+                    <div style={{ fontSize: mfs(15), fontWeight: 700 }}>{s.value}</div>
+                    <div style={{ fontSize: mfs(10), color: "var(--muted)" }}>{s.label}</div>
                   </div>
                 ))}
               </div>
             )}
 
-            {areaText && <div style={{ fontSize: 12, color: "var(--muted)" }}>{areaText}</div>}
+            {areaText && <div style={{ fontSize: mfs(12), color: "var(--muted)" }}>{areaText}</div>}
             {totalCount > 0 && (
-              <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 4, fontWeight: 700 }}>
+              <div style={{ fontSize: mfs(11), color: "var(--accent)", marginTop: 4, fontWeight: 700 }}>
                 推薦物件 {totalCount} 筆・已介紹 {introducedCount} 筆
               </div>
             )}
 
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button className="btn ghost" type="button" style={{ fontSize: 11 }} onClick={() => openEdit(n)}>
+              <button className="btn ghost" type="button" style={{ fontSize: mfs(11) }} onClick={() => openEdit(n)}>
                 查看詳情
               </button>
               {itemEditable(n) && (
                 <button
                   className="btn ghost"
                   type="button"
-                  style={{ fontSize: 11 }}
+                  style={{ fontSize: mfs(11) }}
                   onClick={() => openEdit(n, { startInEditMode: true })}
                 >
                   編輯

@@ -6,6 +6,8 @@ import { useAuth } from "../AuthContext";
 import RecommendedProperties from "./RecommendedProperties";
 import { normalizeNeedRanges, rangeStatText } from "../lib/needsFields";
 import { TAIWAN_REGIONS, TAIWAN_CITIES } from "../lib/taiwanRegions";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { mobileFontSize } from "../lib/mobileFont";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -46,6 +48,8 @@ export default function Needs() {
   const { items, add, update, remove } = useNeedsCollection(user.uid);
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyers = contacts.filter((c) => (c.tags || []).includes("買方"));
+  const isMobile = useIsMobile();
+  const mfs = (px) => mobileFontSize(px, isMobile);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -157,14 +161,14 @@ export default function Needs() {
   const chip = (active) => ({
     padding: "6px 12px",
     borderRadius: 20,
-    fontSize: 12,
+    fontSize: mfs(12),
     fontWeight: 700,
     border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
     background: active ? "var(--accent)" : "#fff",
     color: active ? "#fff" : "var(--ink)",
     cursor: "pointer",
   });
-  const fieldBox = { padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 };
+  const fieldBox = { padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: mfs(13) };
 
   return (
     <main>
@@ -179,12 +183,12 @@ export default function Needs() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 16 }}>{form.title}</div>
-                  {form.contactName && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>買方：{form.contactName}</div>}
+                  <div style={{ fontWeight: 700, fontSize: mfs(16) }}>{form.title}</div>
+                  {form.contactName && <div style={{ fontSize: mfs(12), color: "var(--muted)", marginTop: 4 }}>買方：{form.contactName}</div>}
                   <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: mfs(11),
                         background: form.statusTag === "正在找" ? "var(--accent)" : "#F0EEE8",
                         color: form.statusTag === "正在找" ? "#fff" : "var(--muted)",
                         padding: "3px 10px",
@@ -194,16 +198,16 @@ export default function Needs() {
                     >
                       {form.statusTag}
                     </span>
-                    {form.shared && <span style={{ fontSize: 11, color: "var(--muted)" }}>已分享</span>}
+                    {form.shared && <span style={{ fontSize: mfs(11), color: "var(--muted)" }}>已分享</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   {canEditFull && (
-                    <button className="btn ghost" type="button" style={{ fontSize: 12 }} onClick={() => setEditMode(true)}>
+                    <button className="btn ghost" type="button" style={{ fontSize: mfs(12) }} onClick={() => setEditMode(true)}>
                       編輯
                     </button>
                   )}
-                  <button className="btn ghost" type="button" style={{ fontSize: 12 }} onClick={() => setShowForm(false)}>
+                  <button className="btn ghost" type="button" style={{ fontSize: mfs(12) }} onClick={() => setShowForm(false)}>
                     關閉
                   </button>
                 </div>
@@ -224,14 +228,14 @@ export default function Needs() {
                 >
                   {viewStats.map((s, i) => (
                     <div key={i}>
-                      <div style={{ fontSize: 16, fontWeight: 700 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: "var(--muted)" }}>{s.label}</div>
+                      <div style={{ fontSize: mfs(16), fontWeight: 700 }}>{s.value}</div>
+                      <div style={{ fontSize: mfs(10), color: "var(--muted)" }}>{s.label}</div>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div style={{ fontSize: 13, marginBottom: 10 }}>
+              <div style={{ fontSize: mfs(13), marginBottom: 10 }}>
                 {viewAreaText && (
                   <div style={{ marginBottom: 4 }}>
                     <span style={{ color: "var(--muted)" }}>區域：</span>
@@ -258,7 +262,7 @@ export default function Needs() {
                 <button
                   className="btn danger"
                   type="button"
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: mfs(12) }}
                   onClick={async () => {
                     if (window.confirm("確定要刪除這筆客需嗎？")) {
                       await remove(editingId);
@@ -300,34 +304,34 @@ export default function Needs() {
                 </select>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: mfs(12), color: "var(--muted)", marginBottom: 14 }}>
                 <input type="checkbox" checked={!!form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} />
                 分享給同事（協助介紹物件）
               </label>
 
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>找房條件</div>
+              <div style={{ fontSize: mfs(11), fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}>找房條件</div>
 
               <div style={{ marginBottom: 10 }}>
                 {form.areas.map((a, idx) => {
                   const cityValid = TAIWAN_CITIES.includes(a.city);
                   return (
-                    <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                      <select value={cityValid ? a.city : ""} onChange={(e) => updateAreaCity(idx, e.target.value)} style={{ ...fieldBox, width: 100 }}>
+                    <div key={idx} style={{ display: "flex", flexWrap: isMobile ? "wrap" : "nowrap", gap: 6, marginBottom: 6 }}>
+                      <select value={cityValid ? a.city : ""} onChange={(e) => updateAreaCity(idx, e.target.value)} style={{ ...fieldBox, flex: isMobile ? "1 1 45%" : "0 0 100px", minWidth: 0 }}>
                         <option value="">縣市</option>
                         {TAIWAN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <select value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} disabled={!cityValid} style={{ ...fieldBox, width: 100 }}>
+                      <select value={a.district} onChange={(e) => updateArea(idx, "district", e.target.value)} disabled={!cityValid} style={{ ...fieldBox, flex: isMobile ? "1 1 45%" : "0 0 100px", minWidth: 0 }}>
                         <option value="">鄉鎮市區</option>
                         {(TAIWAN_REGIONS[a.city] || []).map((d) => <option key={d} value={d}>{d}</option>)}
                       </select>
-                      <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: 1 }} />
+                      <input value={a.community} onChange={(e) => updateArea(idx, "community", e.target.value)} placeholder="社區（選填）" style={{ ...fieldBox, flex: isMobile ? "1 1 100%" : 1, minWidth: 0 }} />
                       {form.areas.length > 1 && (
-                        <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>✕</button>
+                        <button type="button" onClick={() => removeArea(idx)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: mfs(12) }}>✕</button>
                       )}
                     </div>
                   );
                 })}
-                <button type="button" className="btn ghost" onClick={addArea} style={{ fontSize: 12 }}>＋ 新增區域</button>
+                <button type="button" className="btn ghost" onClick={addArea} style={{ fontSize: mfs(12) }}>＋ 新增區域</button>
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
@@ -353,7 +357,7 @@ export default function Needs() {
                   { label: "樓層", minKey: "floorMin", maxKey: "floorMax" },
                 ].map((r) => (
                   <div key={r.label}>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>{r.label}</div>
+                    <div style={{ fontSize: mfs(11), color: "var(--muted)", marginBottom: 4 }}>{r.label}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <input
                         type="number"
@@ -375,7 +379,7 @@ export default function Needs() {
                 ))}
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: mfs(12), color: "var(--muted)", marginBottom: 10 }}>
                 <input type="checkbox" checked={!!form.topFloorOnly} onChange={(e) => setForm({ ...form, topFloorOnly: e.target.checked })} />
                 偏好頂樓
               </label>
@@ -441,11 +445,11 @@ export default function Needs() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div className="name">{item.title}</div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          {item.topFloorOnly && <span style={{ fontSize: 10, color: "var(--muted)" }}>頂樓</span>}
-                          {item.shared && <span style={{ fontSize: 10, color: "var(--muted)" }}>已分享</span>}
+                          {item.topFloorOnly && <span style={{ fontSize: mfs(10), color: "var(--muted)" }}>頂樓</span>}
+                          {item.shared && <span style={{ fontSize: mfs(10), color: "var(--muted)" }}>已分享</span>}
                         </div>
                       </div>
-                      {item.contactName && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>買方：{item.contactName}</div>}
+                      {item.contactName && <div style={{ fontSize: mfs(11), color: "var(--muted)", marginTop: 2 }}>買方：{item.contactName}</div>}
 
                     {stats.length > 0 && (
                       <div
@@ -462,31 +466,31 @@ export default function Needs() {
                       >
                         {stats.map((s, i) => (
                           <div key={i}>
-                            <div style={{ fontSize: 14, fontWeight: 700 }}>{s.value}</div>
-                            <div style={{ fontSize: 9, color: "var(--muted)" }}>{s.label}</div>
+                            <div style={{ fontSize: mfs(14), fontWeight: 700 }}>{s.value}</div>
+                            <div style={{ fontSize: mfs(9), color: "var(--muted)" }}>{s.label}</div>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {areaText && <div style={{ fontSize: 11, color: "var(--muted)" }}>{areaText}</div>}
-                    {(item.types || []).length > 0 && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{item.types.join("、")}</div>}
+                    {areaText && <div style={{ fontSize: mfs(11), color: "var(--muted)" }}>{areaText}</div>}
+                    {(item.types || []).length > 0 && <div style={{ fontSize: mfs(11), color: "var(--muted)", marginTop: 2 }}>{item.types.join("、")}</div>}
                     {totalCount > 0 && (
-                      <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 6, fontWeight: 700 }}>
+                      <div style={{ fontSize: mfs(11), color: "var(--accent)", marginTop: 6, fontWeight: 700 }}>
                         推薦物件 {totalCount} 筆・已介紹 {introducedCount} 筆
                       </div>
                     )}
                     </div>
 
                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                      <button className="btn ghost" type="button" style={{ fontSize: 11 }} onClick={() => openEdit(item)}>
+                      <button className="btn ghost" type="button" style={{ fontSize: mfs(11) }} onClick={() => openEdit(item)}>
                         查看詳情
                       </button>
                       {itemEditable(item) && (
                         <button
                           className="btn ghost"
                           type="button"
-                          style={{ fontSize: 11 }}
+                          style={{ fontSize: mfs(11) }}
                           onClick={() => openEdit(item, { startInEditMode: true })}
                         >
                           編輯
