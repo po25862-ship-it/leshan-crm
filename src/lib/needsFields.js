@@ -23,6 +23,8 @@ export function normalizeNeedRanges(need) {
     roomsMax: n.roomsMax ?? "",
     bathMin: n.bathMin ?? "",
     bathMax: n.bathMax ?? "",
+    ageMin: n.ageMin ?? "",
+    ageMax: n.ageMax ?? "",
   };
 }
 

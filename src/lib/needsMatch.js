@@ -3,6 +3,7 @@
 import { normalizeRegionText } from "./taiwanRegions";
 import { normalizeNeedRanges, toNum } from "./needsFields";
 import { parseFloor, isTopFloor } from "./floor";
+import { parseAge } from "./age";
 
 // 客需表單的物件類型標籤，對應到「案件控台」實際使用的物件類別
 const TYPE_TO_CATEGORIES = {
@@ -59,6 +60,8 @@ export function matchPropertiesForNeed(need, properties) {
   const roomsMax = toNum(ranges.roomsMax);
   const bathMin = toNum(ranges.bathMin);
   const bathMax = toNum(ranges.bathMax);
+  const ageMin = toNum(ranges.ageMin);
+  const ageMax = toNum(ranges.ageMax);
   const floorMin = toNum(need.floorMin);
   const floorMax = toNum(need.floorMax);
   const topFloorOnly = !!need.topFloorOnly;
@@ -74,6 +77,8 @@ export function matchPropertiesForNeed(need, properties) {
     roomsMax !== null ||
     bathMin !== null ||
     bathMax !== null ||
+    ageMin !== null ||
+    ageMax !== null ||
     floorMin !== null ||
     floorMax !== null ||
     topFloorOnly;
@@ -116,10 +121,22 @@ export function matchPropertiesForNeed(need, properties) {
 
     if (mainAreaMin !== null || mainAreaMax !== null) {
       total++;
-      const ping = toNum(p.titlePing) ?? toNum(p.mainBuildingPing);
+      // 「主建物坪數」要比對的是 mainBuildingPing，不是權狀坪數 titlePing——
+      // 兩者是不同欄位，權狀坪數通常比主建物大很多，混用會導致篩選結果整批跑掉。
+      // 只有物件還沒填 mainBuildingPing 時，才退而求其次用 titlePing 當備援，避免舊資料完全比對不到。
+      const ping = toNum(p.mainBuildingPing) ?? toNum(p.titlePing);
       if (inRange(ping, mainAreaMin, mainAreaMax)) {
         score++;
         reasons.push("坪數符合");
+      }
+    }
+
+    if (ageMin !== null || ageMax !== null) {
+      total++;
+      const age = parseAge(p.age);
+      if (inRange(age, ageMin, ageMax)) {
+        score++;
+        reasons.push("屋齡符合");
       }
     }
 
