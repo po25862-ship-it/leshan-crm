@@ -66,7 +66,12 @@ export default function Buyers() {
     });
     setEditingId(item.id);
     setEditMode(false);
-    setShowForm(true);
+  };
+
+  // 收合原地展開的客戶明細（不影響清單順序）
+  const closeInline = () => {
+    setEditingId(null);
+    setEditMode(false);
   };
 
   // 支援用網址直接開啟指定客戶（?open=ID），或帶著待辦事項轉來的草稿內容開新表單（?draftNote=文字）
@@ -146,39 +151,10 @@ export default function Buyers() {
         />
       </div>
 
-      {showForm && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: editingId ? "minmax(320px, 640px) 1fr" : "minmax(320px, 640px)",
-            gap: 24,
-            marginBottom: 24,
-            alignItems: "start",
-          }}
-        >
-          <div className="panel">
-            {editingId && !editMode && (
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
-                  <div>
-                    <div className="section-title" style={{ fontSize: 22, marginBottom: 8 }}>{form.name || "未命名客戶"}</div>
-                    {(form.tags || []).map((tag) => <span key={tag} className={`tag ${tag === "買方" ? "buyer" : ""}`} style={{ marginRight: 5 }}>{tag}</span>)}
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {form.phone && <a className="btn ghost" href={`tel:${form.phone}`} style={{ textDecoration: "none" }}>撥打電話</a>}
-                    <button className="btn" type="button" onClick={() => setEditMode(true)}>編輯資料</button>
-                    <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>關閉</button>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
-                  <BuyerDetailValue label="電話" value={form.phone} />
-                  <BuyerDetailValue label="客戶來源" value={form.source} />
-                  <BuyerDetailValue label="最後聯絡" value={formatDate(form.lastContactDate)} />
-                </div>
-                <BuyerDetailValue label="備註／需求摘要" value={form.notes} />
-              </div>
-            )}
-            <form className="form-grid" onSubmit={onSubmit} style={{ display: !editingId || editMode ? "grid" : "none" }}>
+      {showForm && !editingId && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="panel" style={{ maxWidth: 640 }}>
+            <form className="form-grid" onSubmit={onSubmit}>
               <div className="form-field">
                 <label>姓名</label>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例如：陳小姐" required />
@@ -220,40 +196,11 @@ export default function Buyers() {
                 <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
               </div>
               <div style={{ display: "flex", gap: 10 }}>
-                <button className="btn" type="submit">{editingId ? "儲存變更" : "新增買方"}</button>
-                <button className="btn ghost" type="button" onClick={() => editingId ? setEditMode(false) : setShowForm(false)}>{editingId ? "返回瀏覽" : "取消"}</button>
-                {editingId && (
-                  <button
-                    className="btn danger"
-                    type="button"
-                    onClick={async () => {
-                      if (window.confirm("確定要刪除這位客戶嗎？")) {
-                        await remove(editingId);
-                        setShowForm(false);
-                      }
-                    }}
-                  >
-                    刪除
-                  </button>
-                )}
+                <button className="btn" type="submit">新增買方</button>
+                <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
               </div>
             </form>
           </div>
-
-          {editingId && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div className="panel">
-                <BuyerNeeds contactId={editingId} contactName={form.name} />
-              </div>
-              <div className="panel">
-                <BuyerActivityLog
-                  contactId={editingId}
-                  contactName={form.name}
-                  onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })}
-                />
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -266,32 +213,147 @@ export default function Buyers() {
         )}
         {filtered.map((item) => {
           const days = daysSince(item.lastContactDate);
+          const isOpen = editingId === item.id;
           return (
-            <div className="list-row" key={item.id} onClick={() => openEdit(item)} style={{ cursor: "pointer" }}>
-              <div>
-                <div className="name">{item.name}</div>
-                <div className="meta">
-                  {item.phone && <span>{item.phone}　</span>}
-                  最後聯絡：{formatDate(item.lastContactDate)}
-                  {days !== null && <span className="mono"> （{days} 天前）</span>}
-                  {item.source && <>　來源：{item.source}</>}
-                </div>
-                {item.lastContactNote && (
-                  <div className="meta" style={{ marginTop: 2 }}>
-                    內容：{item.lastContactNote}
+            <React.Fragment key={item.id}>
+              <div className="list-row" onClick={() => (isOpen ? closeInline() : openEdit(item))} style={{ cursor: "pointer" }}>
+                <div>
+                  <div className="name">{item.name}</div>
+                  <div className="meta">
+                    {item.phone && <span>{item.phone}　</span>}
+                    最後聯絡：{formatDate(item.lastContactDate)}
+                    {days !== null && <span className="mono"> （{days} 天前）</span>}
+                    {item.source && <>　來源：{item.source}</>}
                   </div>
-                )}
-                <div style={{ marginTop: 6 }}>
-                  {(item.tags || []).map((t) => (
-                    <span key={t} className={`tag ${t === "買方" ? "buyer" : ""}`}>{t}</span>
-                  ))}
+                  {item.lastContactNote && (
+                    <div className="meta" style={{ marginTop: 2 }}>
+                      內容：{item.lastContactNote}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 6 }}>
+                    {(item.tags || []).map((t) => (
+                      <span key={t} className={`tag ${t === "買方" ? "buyer" : ""}`}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="actions">
+                  <button className="btn ghost" onClick={(e) => { e.stopPropagation(); logFollowUp(item); }}>記錄今日跟進</button>
+                  <button className="btn ghost" onClick={(e) => { e.stopPropagation(); isOpen ? closeInline() : openEdit(item); }}>{isOpen ? "收合" : "查看資料"}</button>
                 </div>
               </div>
-              <div className="actions">
-                <button className="btn ghost" onClick={(e) => { e.stopPropagation(); logFollowUp(item); }}>記錄今日跟進</button>
-                <button className="btn ghost" onClick={(e) => { e.stopPropagation(); openEdit(item); }}>查看資料</button>
-              </div>
-            </div>
+
+              {isOpen && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(320px, 640px) 1fr",
+                    gap: 24,
+                    margin: "0 0 20px",
+                    padding: "18px 4px 4px",
+                    borderTop: "1px dashed var(--border)",
+                    alignItems: "start",
+                  }}
+                >
+                  <div>
+                    {!editMode && (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
+                          <div>
+                            <div className="section-title" style={{ fontSize: 22, marginBottom: 8 }}>{form.name || "未命名客戶"}</div>
+                            {(form.tags || []).map((tag) => <span key={tag} className={`tag ${tag === "買方" ? "buyer" : ""}`} style={{ marginRight: 5 }}>{tag}</span>)}
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            {form.phone && <a className="btn ghost" href={`tel:${form.phone}`} style={{ textDecoration: "none" }}>撥打電話</a>}
+                            <button className="btn" type="button" onClick={() => setEditMode(true)}>編輯資料</button>
+                            <button className="btn ghost" type="button" onClick={closeInline}>收合</button>
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
+                          <BuyerDetailValue label="電話" value={form.phone} />
+                          <BuyerDetailValue label="客戶來源" value={form.source} />
+                          <BuyerDetailValue label="最後聯絡" value={formatDate(form.lastContactDate)} />
+                        </div>
+                        <BuyerDetailValue label="備註／需求摘要" value={form.notes} />
+                      </div>
+                    )}
+                    {editMode && (
+                      <form className="form-grid" onSubmit={onSubmit}>
+                        <div className="form-field">
+                          <label>姓名</label>
+                          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例如：陳小姐" required />
+                        </div>
+                        <div className="form-field">
+                          <label>電話</label>
+                          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="09xx-xxx-xxx" />
+                        </div>
+                        <div className="form-field">
+                          <label>身分標籤</label>
+                          <div className="checkbox-row">
+                            <label>
+                              <input type="checkbox" checked={form.tags.includes("賣方")} onChange={() => toggleTag("賣方")} />
+                              也是賣方
+                            </label>
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+                            這裡建立的客戶預設會標記「買方」；如果這位客戶同時也要賣房子，去「賣方」頁面登錄委託即可。
+                          </div>
+                        </div>
+                        <div className="form-field">
+                          <label>客戶來源（自由輸入，例如：FB 粉專、朋友介紹、591…）</label>
+                          <input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} placeholder="例如：FB 粉專廣告" />
+                        </div>
+                        <div className="form-field">
+                          <label>最後聯絡日期</label>
+                          <input type="date" value={form.lastContactDate} onChange={(e) => setForm({ ...form, lastContactDate: e.target.value })} />
+                          <RocDateHint date={form.lastContactDate} />
+                        </div>
+                        <div className="form-field">
+                          <label>備註</label>
+                          <textarea rows="3" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="需求、預算、偏好區域…" />
+                        </div>
+                        <div className="form-field">
+                          <label>建立資料</label>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>{ownerName(form.ownerUid)}</div>
+                        </div>
+                        <div className="form-field">
+                          <ShareWithPicker value={form.sharedWith} onChange={(sharedWith) => setForm({ ...form, sharedWith })} />
+                        </div>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <button className="btn" type="submit">儲存變更</button>
+                          <button className="btn ghost" type="button" onClick={() => setEditMode(false)}>返回瀏覽</button>
+                          <button
+                            className="btn danger"
+                            type="button"
+                            onClick={async () => {
+                              if (window.confirm("確定要刪除這位客戶嗎？")) {
+                                await remove(editingId);
+                                closeInline();
+                              }
+                            }}
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    <div className="panel">
+                      <BuyerNeeds contactId={editingId} contactName={form.name} />
+                    </div>
+                    <div className="panel">
+                      <BuyerActivityLog
+                        contactId={editingId}
+                        contactName={form.name}
+                        onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
           );
         })}
       </div>
