@@ -67,7 +67,16 @@ export default function RecommendedProperties({ value, onChange, need }) {
     >
       <div style={{ fontSize: 13 }}>
         <div style={{ fontWeight: 700 }}>
-          {p.title} <span className="tag">{p.category}</span>
+          <a
+            href={`#/properties?open=${p.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--text)", textDecoration: "none" }}
+            title="在新分頁開啟物件詳情，方便傳給客戶"
+          >
+            {p.title} 🔗
+          </a>{" "}
+          <span className="tag">{p.category}</span>
         </div>
         <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
           {p.address}
@@ -184,7 +193,16 @@ export default function RecommendedProperties({ value, onChange, need }) {
           >
             <div style={{ fontSize: 13 }}>
               <div style={{ fontWeight: 700 }}>
-                {p.title} <span className="tag">{p.category}</span>
+                <a
+                  href={`#/properties?open=${p.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--text)", textDecoration: "none" }}
+                  title="在新分頁開啟物件詳情，方便傳給客戶"
+                >
+                  {p.title} 🔗
+                </a>{" "}
+                <span className="tag">{p.category}</span>
                 {(p.status || "active") !== "active" && (
                   <span style={{ fontSize: 11, color: "var(--danger)", marginLeft: 6 }}>
                     （{p.status === "sold" ? "已售出" : "暫時不賣"}）
@@ -227,13 +245,24 @@ export default function RecommendedProperties({ value, onChange, need }) {
             {filtered.slice(0, 30).map((p) => (
               <div
                 key={p.id}
-                onClick={() => addProperty(p.id)}
-                style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", fontSize: 13, cursor: "pointer" }}
+                style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}
               >
-                <div style={{ fontWeight: 700 }}>{p.title} <span className="tag">{p.category}</span></div>
-                <div style={{ color: "var(--muted)", fontSize: 12 }}>
-                  {p.address}　{p.layout && <>{p.layout}　</>}{p.totalPrice && <>總價 {p.totalPrice} 萬</>}
+                <div style={{ cursor: "pointer", flex: 1 }} onClick={() => addProperty(p.id)}>
+                  <div style={{ fontWeight: 700 }}>{p.title} <span className="tag">{p.category}</span></div>
+                  <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                    {p.address}　{p.layout && <>{p.layout}　</>}{p.totalPrice && <>總價 {p.totalPrice} 萬</>}
+                  </div>
                 </div>
+                <a
+                  href={`#/properties?open=${p.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ flexShrink: 0, fontSize: 12, color: "var(--accent)" }}
+                  title="在新分頁開啟物件詳情"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  查看詳情 🔗
+                </a>
               </div>
             ))}
           </div>

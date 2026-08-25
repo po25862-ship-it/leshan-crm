@@ -48,14 +48,18 @@ export default function BuyerNeeds({ contactId, contactName }) {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(makeEmptyForm(contactId, contactName));
 
   const openNew = () => {
     setForm(makeEmptyForm(contactId, contactName));
     setEditingId(null);
+    setEditMode(true);
     setShowForm(true);
   };
-  const openEdit = (item) => {
+  // 點客需卡片預設先進「查看詳情」（唯讀），要改內容再另外按「編輯」；
+  // 從卡片上的「編輯」按鈕點進來的話 startInEditMode 傳 true，直接跳到可編輯的表單
+  const openEdit = (item, { startInEditMode = false } = {}) => {
     setForm({
       ...makeEmptyForm(contactId, contactName),
       ...item,
@@ -63,6 +67,7 @@ export default function BuyerNeeds({ contactId, contactName }) {
       areas: item.areas?.length ? item.areas : [{ ...emptyArea }],
     });
     setEditingId(item.id);
+    setEditMode(startInEditMode);
     setShowForm(true);
   };
 
@@ -87,21 +92,37 @@ export default function BuyerNeeds({ contactId, contactName }) {
   const removeArea = (idx) => setForm({ ...form, areas: form.areas.filter((_, i) => i !== idx) });
 
   const canEditFull = !editingId || form.ownerUid === user.uid || user.uid === MAIN_OWNER_UID;
+  const itemEditable = (item) => item.ownerUid === user.uid || user.uid === MAIN_OWNER_UID;
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (canEditFull) {
-      if (!form.title.trim()) return;
-      if (editingId) {
-        await update(editingId, { ...form, lastModifiedByUid: user.uid });
-      } else {
-        await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
-      }
+    if (!form.title.trim()) return;
+    if (editingId) {
+      await update(editingId, { ...form, lastModifiedByUid: user.uid });
+      setEditMode(false);
     } else {
-      await update(editingId, { recommendedProperties: form.recommendedProperties, lastModifiedByUid: user.uid });
+      await add({ ...form, ownerUid: user.uid, lastModifiedByUid: user.uid });
+      setShowForm(false);
     }
-    setShowForm(false);
   };
+
+  // 推薦物件的加入/移除/標記已介紹不管在查看還是編輯模式都直接存檔，不用另外按「儲存變更」
+  const handleRecommendedChange = async (recommendedProperties) => {
+    setForm((f) => ({ ...f, recommendedProperties }));
+    if (editingId) {
+      await update(editingId, { recommendedProperties, lastModifiedByUid: user.uid });
+    }
+  };
+
+  const viewAreaText = (form.areas || []).map(areaLabel).filter(Boolean).join("、");
+  const viewRanges = normalizeNeedRanges(form);
+  const viewStats = [
+    rangeStatText(viewRanges.budgetMin, viewRanges.budgetMax, "萬") && { value: rangeStatText(viewRanges.budgetMin, viewRanges.budgetMax, "萬"), label: "總價" },
+    rangeStatText(viewRanges.mainAreaMin, viewRanges.mainAreaMax, "坪") && { value: rangeStatText(viewRanges.mainAreaMin, viewRanges.mainAreaMax, "坪"), label: "主建物坪數" },
+    rangeStatText(viewRanges.roomsMin, viewRanges.roomsMax, "房") && { value: rangeStatText(viewRanges.roomsMin, viewRanges.roomsMax, "房"), label: "房數" },
+    rangeStatText(viewRanges.bathMin, viewRanges.bathMax, "衛") && { value: rangeStatText(viewRanges.bathMin, viewRanges.bathMax, "衛"), label: "衛浴數" },
+    rangeStatText(form.floorMin, form.floorMax, "樓") && { value: rangeStatText(form.floorMin, form.floorMax, "樓"), label: "樓層" },
+  ].filter(Boolean);
 
   const chip = (active) => ({
     padding: "6px 12px",
@@ -124,11 +145,101 @@ export default function BuyerNeeds({ contactId, contactName }) {
 
       {showForm && (
         <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 10, padding: 16, marginBottom: 14 }}>
-          {!canEditFull && (
-            <div style={{ background: "var(--accent-soft)", color: "var(--accent)", fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
-              唯讀：只有提供這筆客需的人可以修改內容，你可以協助標記下面的推薦物件。
+          {editingId && !editMode ? (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{form.title}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        background: form.statusTag === "正在找" ? "var(--accent)" : "#F0EEE8",
+                        color: form.statusTag === "正在找" ? "#fff" : "var(--muted)",
+                        padding: "3px 10px",
+                        borderRadius: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {form.statusTag}
+                    </span>
+                    {form.shared && <span style={{ fontSize: 11, color: "var(--muted)" }}>已分享</span>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {canEditFull && (
+                    <button className="btn ghost" type="button" style={{ fontSize: 12 }} onClick={() => setEditMode(true)}>
+                      編輯
+                    </button>
+                  )}
+                  <button className="btn ghost" type="button" style={{ fontSize: 12 }} onClick={() => setShowForm(false)}>
+                    關閉
+                  </button>
+                </div>
+              </div>
+
+              {viewStats.length > 0 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${viewStats.length}, 1fr)`,
+                    gap: 8,
+                    textAlign: "center",
+                    background: "#fff",
+                    borderRadius: 8,
+                    padding: "12px 0",
+                    marginBottom: 12,
+                  }}
+                >
+                  {viewStats.map((s, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{s.value}</div>
+                      <div style={{ fontSize: 10, color: "var(--muted)" }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ fontSize: 13, marginBottom: 10 }}>
+                {viewAreaText && (
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ color: "var(--muted)" }}>區域：</span>
+                    {viewAreaText}
+                  </div>
+                )}
+                {form.topFloorOnly && (
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ color: "var(--muted)" }}>樓層：</span>偏好頂樓
+                  </div>
+                )}
+                {(form.types.length > 0 || form.purposes.length > 0 || form.motivation) && (
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ color: "var(--muted)" }}>類型：</span>
+                    {[...form.types, ...form.purposes, form.motivation].filter(Boolean).join("、")}
+                  </div>
+                )}
+                {form.notes && (
+                  <div style={{ marginTop: 8, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{form.notes}</div>
+                )}
+              </div>
+
+              {canEditFull && (
+                <button
+                  className="btn danger"
+                  type="button"
+                  style={{ fontSize: 12 }}
+                  onClick={async () => {
+                    if (window.confirm("確定要刪除這筆客需嗎？")) {
+                      await remove(editingId);
+                      setShowForm(false);
+                    }
+                  }}
+                >
+                  刪除
+                </button>
+              )}
             </div>
-          )}
+          ) : (
           <form onSubmit={onSubmit}>
             <div style={{ opacity: canEditFull ? 1 : 0.55, pointerEvents: canEditFull ? "auto" : "none" }}>
 
@@ -238,22 +349,23 @@ export default function BuyerNeeds({ contactId, contactName }) {
               />
             </div>
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-              <RecommendedProperties
-                value={form.recommendedProperties}
-                onChange={(recommendedProperties) => setForm({ ...form, recommendedProperties })}
-                need={form}
-              />
-            </div>
-
             <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
               <button className="btn" type="submit">{editingId ? "儲存變更" : "新增客需"}</button>
-              <button className="btn ghost" type="button" onClick={() => setShowForm(false)}>取消</button>
+              <button className="btn ghost" type="button" onClick={() => (editingId ? setEditMode(false) : setShowForm(false))}>取消</button>
               {editingId && canEditFull && (
                 <button className="btn danger" type="button" onClick={async () => { if (window.confirm("確定要刪除這筆客需嗎？")) { await remove(editingId); setShowForm(false); } }}>刪除</button>
               )}
             </div>
           </form>
+          )}
+
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+            <RecommendedProperties
+              value={form.recommendedProperties}
+              onChange={handleRecommendedChange}
+              need={form}
+            />
+          </div>
         </div>
       )}
 
@@ -271,8 +383,8 @@ export default function BuyerNeeds({ contactId, contactName }) {
         ].filter(Boolean);
         const areaText = (n.areas || []).map(areaLabel).filter(Boolean).join("、");
         return (
-          <div key={n.id} onClick={() => openEdit(n)} style={{ cursor: "pointer", background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: stats.length > 0 ? 10 : 4 }}>
+          <div key={n.id} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", marginBottom: 10 }}>
+            <div onClick={() => openEdit(n)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: stats.length > 0 ? 10 : 4 }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{n.title}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {n.topFloorOnly && <span title="偏好頂樓" style={{ fontSize: 11, color: "var(--muted)" }}>頂樓</span>}
@@ -320,6 +432,22 @@ export default function BuyerNeeds({ contactId, contactName }) {
                 推薦物件 {totalCount} 筆・已介紹 {introducedCount} 筆
               </div>
             )}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button className="btn ghost" type="button" style={{ fontSize: 11 }} onClick={() => openEdit(n)}>
+                查看詳情
+              </button>
+              {itemEditable(n) && (
+                <button
+                  className="btn ghost"
+                  type="button"
+                  style={{ fontSize: 11 }}
+                  onClick={() => openEdit(n, { startInEditMode: true })}
+                >
+                  編輯
+                </button>
+              )}
+            </div>
           </div>
         );
       })}

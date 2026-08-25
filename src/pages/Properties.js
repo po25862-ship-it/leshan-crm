@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -189,6 +190,20 @@ export default function Properties() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   };
+
+  // 支援用網址直接開啟指定物件（?open=ID），讓其他頁面（例如客需的推薦物件）可以連結過來直接看到該筆物件
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) {
+      const found = items.find((p) => p.id === openId);
+      if (found) {
+        openEdit(found);
+        setSearchParams({}, { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, searchParams]);
 
   const addCustomField = () => {
     setForm({ ...form, customFields: [...form.customFields, { label: "", value: "" }] });
