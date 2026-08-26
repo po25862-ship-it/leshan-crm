@@ -30,22 +30,31 @@ service cloud.firestore {
 
     // 買方／賣方聯絡人：擁有者、被分享的同事、或你（主要負責人）都能讀寫
     match /contacts/{contactId} {
-      allow read, update: if request.auth != null && (
+      allow read: if request.auth != null && (
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
         resource.data.ownerUid == request.auth.uid ||
         (request.auth.uid in resource.data.sharedWith)
       );
-      allow create: if request.auth != null;
+      allow update: if request.auth != null &&
+        request.resource.data.ownerUid == resource.data.ownerUid &&
+        (
+          request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+          resource.data.ownerUid == request.auth.uid ||
+          (
+            (request.auth.uid in resource.data.sharedWith) &&
+            request.resource.data.sharedWith == resource.data.sharedWith
+          )
+        );
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
 
       match /listings/{listingId} {
-        allow read, update: if request.auth != null && (
-          request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
-          resource.data.ownerUid == request.auth.uid ||
-          (request.auth.uid in resource.data.sharedWith)
+        allow read, update: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+        allow create: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)).data);
+        allow delete: if request.auth != null && (
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.ownerUid == request.auth.uid ||
+          request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
         );
-        allow create: if request.auth != null;
-        allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
         match /{subcollection}/{docId} {
           allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/contacts/$(contactId)/listings/$(listingId)).data);
         }
@@ -57,12 +66,17 @@ service cloud.firestore {
 
     // 出租：擁有者、被分享的同事、或你都能讀寫
     match /rentals/{rentalId} {
-      allow read, update: if request.auth != null && (
+      allow read: if request.auth != null && (
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
         resource.data.ownerUid == request.auth.uid ||
         (request.auth.uid in resource.data.sharedWith)
       );
-      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.resource.data.ownerUid == resource.data.ownerUid && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        resource.data.ownerUid == request.auth.uid ||
+        ((request.auth.uid in resource.data.sharedWith) && request.resource.data.sharedWith == resource.data.sharedWith)
+      );
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
       match /{subcollection}/{docId} {
         allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/rentals/$(rentalId)).data);
@@ -71,12 +85,17 @@ service cloud.firestore {
 
     // 商談事項：擁有者、被分享的同事、或你都能讀寫
     match /topics/{topicId} {
-      allow read, update: if request.auth != null && (
+      allow read: if request.auth != null && (
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
         resource.data.ownerUid == request.auth.uid ||
         (request.auth.uid in resource.data.sharedWith)
       );
-      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.resource.data.ownerUid == resource.data.ownerUid && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        resource.data.ownerUid == request.auth.uid ||
+        ((request.auth.uid in resource.data.sharedWith) && request.resource.data.sharedWith == resource.data.sharedWith)
+      );
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
       allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
       match /{subcollection}/{docId} {
         allow read, write: if isOwnerOrShared(get(/databases/$(database)/documents/topics/$(topicId)).data);
@@ -103,7 +122,7 @@ service cloud.firestore {
         resource.data.ownerUid == request.auth.uid ||
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
       );
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
     }
 
     // 判斷是不是資料的擁有者、被分享的同事、或主要負責人

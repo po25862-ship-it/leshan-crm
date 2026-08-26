@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useCollection } from "../hooks/useCollection";
@@ -8,6 +8,9 @@ import BuyerNeeds from "./BuyerNeeds";
 import RocDateHint from "./RocDateHint";
 import ShareWithPicker from "./ShareWithPicker";
 import { useAuth } from "../AuthContext";
+import { useNeedsCollection } from "../hooks/useNeedsCollection";
+import { matchPropertiesForNeed } from "../lib/needsMatch";
+import { timestampToMillis } from "../lib/propertyPresentation";
 
 const emptyForm = {
   name: "",
@@ -32,6 +35,8 @@ export default function Buyers() {
   const { user } = useAuth();
   const { items, add, update, remove } = useSharedCollection("contacts", "name", user.uid);
   const { items: colleagues } = useCollection("colleagues", "name");
+  const { items: needs } = useNeedsCollection(user.uid);
+  const { items: properties } = useCollection("properties", "createdAt");
   const ownerName = (uid) => {
     if (!uid) return "（尚未標記）";
     if (uid === "KiYlsnWcChW5muRkG167r7Mi1132") return colleagues.find((c) => c.id === uid)?.name || "劉昭佑";
@@ -45,6 +50,22 @@ export default function Buyers() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const buyers = items.filter((c) => (c.tags || []).includes("買方"));
+  const buyerStats = useMemo(() => {
+    const stats = {};
+    buyers.forEach((buyer) => {
+      const buyerNeeds = needs.filter((need) => need.contactId === buyer.id && (need.statusTag || "正在找") === "正在找");
+      const matches = buyerNeeds.flatMap((need) => matchPropertiesForNeed(need, properties)).sort((a, b) => b.percent - a.percent);
+      const qualified = [...new Map(matches.filter((match) => match.percent >= 80).map((match) => [match.property.id, match])).values()];
+      const lastContactMs = buyer.lastContactDate ? new Date(`${buyer.lastContactDate}T00:00:00`).getTime() : Date.now() - 7 * 86400000;
+      stats[buyer.id] = {
+        needsCount: buyerNeeds.length,
+        matchesCount: qualified.length,
+        newMatchesCount: qualified.filter((match) => timestampToMillis(match.property.createdAt) > lastContactMs).length,
+        maxPercent: matches[0]?.percent || 0,
+      };
+    });
+    return stats;
+  }, [buyers, needs, properties]);
 
   const openNew = () => {
     setForm(emptyForm);
@@ -204,7 +225,8 @@ export default function Buyers() {
         </div>
       )}
 
-      <div className="panel">
+      <div className="panel buyers-v2-list">
+        {filtered.length > 0 && <div className="buyer-table-head"><span>買方</span><span>客需數</span><span>未聯絡</span><span>符合物件</span><span>新配對</span><span>最高配對</span><span>操作</span></div>}
         {filtered.length === 0 && (
           <div className="empty-state">
             <div className="big">{buyers.length === 0 ? "還沒有買方客戶" : "找不到符合的客戶"}</div>
@@ -213,11 +235,12 @@ export default function Buyers() {
         )}
         {filtered.map((item) => {
           const days = daysSince(item.lastContactDate);
+          const stats = buyerStats[item.id] || { needsCount: 0, matchesCount: 0, newMatchesCount: 0, maxPercent: 0 };
           const isOpen = editingId === item.id;
           return (
             <React.Fragment key={item.id}>
-              <div className="list-row" onClick={() => (isOpen ? closeInline() : openEdit(item))} style={{ cursor: "pointer" }}>
-                <div>
+              <div className="list-row buyer-v2-row" onClick={() => (isOpen ? closeInline() : openEdit(item))} style={{ cursor: "pointer" }}>
+                <div className="buyer-identity">
                   <div className="name">{item.name}</div>
                   <div className="meta">
                     {item.phone && <span>{item.phone}　</span>}
@@ -236,6 +259,11 @@ export default function Buyers() {
                     ))}
                   </div>
                 </div>
+                <div className="buyer-stat"><strong>{stats.needsCount}</strong><span>組</span></div>
+                <div className={`buyer-stat ${days !== null && days >= 7 ? "attention" : ""}`}><strong>{days ?? "—"}</strong><span>{days === null ? "" : "天"}</span></div>
+                <div className="buyer-stat"><strong>{stats.matchesCount}</strong><span>間</span></div>
+                <div className={`buyer-stat ${stats.newMatchesCount ? "new" : ""}`}><strong>{stats.newMatchesCount}</strong><span>間</span></div>
+                <div className="buyer-best-match"><strong>{stats.maxPercent}%</strong><span>V2</span></div>
                 <div className="actions">
                   <button className="btn ghost" onClick={(e) => { e.stopPropagation(); logFollowUp(item); }}>記錄今日跟進</button>
                   <button className="btn ghost" onClick={(e) => { e.stopPropagation(); isOpen ? closeInline() : openEdit(item); }}>{isOpen ? "收合" : "查看資料"}</button>

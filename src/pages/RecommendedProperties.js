@@ -1,333 +1,114 @@
 import React, { useMemo, useState } from "react";
+import { Image as ImageIcon, Check, X, ExternalLink } from "lucide-react";
 import { useCollection } from "../hooks/useCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
-import { useIsMobile } from "../hooks/useIsMobile";
-import { mobileFontSize } from "../lib/mobileFont";
+import { getPropertyImage, propertyParkingText } from "../lib/propertyPresentation";
 import PropertyShare from "./PropertyShare";
 
-// value 是推薦物件陣列 [{propertyId, introduced, addedAt}]，onChange 傳回更新後的陣列
-// need（選填）是客需表單目前的內容（區域／類型／預算／坪數／房數），有帶入時會自動配對系統建議物件
+function MatchBadge({ percent }) {
+  const value = Number.isFinite(percent) ? percent : null;
+  return <span className={`match-badge ${value >= 90 ? "excellent" : value >= 80 ? "good" : "neutral"}`}>{value === null ? "手動" : `${value}%`}</span>;
+}
+
+function PropertyMatchCard({ property, match, action, selected, onSelect, introduced, onIntroduced, onRemove }) {
+  const image = getPropertyImage(property);
+  return (
+    <article className={`property-match-card ${selected ? "selected" : ""}`}>
+      <div className="property-match-media">
+        {image ? <img src={image} alt={`${property.title} 物件照片`} /> : <div className="property-image-empty"><ImageIcon size={28} /><span>尚未上傳案件照片</span></div>}
+        <MatchBadge percent={match?.percent} />
+        {onSelect && <input className="property-select" type="checkbox" checked={!!selected} onChange={onSelect} aria-label={`選取 ${property.title}`} />}
+      </div>
+      <div className="property-match-body">
+        <div className="property-match-title-row">
+          <div><span className="property-category">{property.category || "未分類"}</span><h4>{property.title || "未命名物件"}</h4></div>
+          <a href={`#/properties?open=${property.id}`} target="_blank" rel="noopener noreferrer" aria-label="查看物件詳情"><ExternalLink size={17} /></a>
+        </div>
+        <div className="property-price">{property.totalPrice ? Number(property.totalPrice).toLocaleString() : "—"}<small> 萬</small></div>
+        <div className="property-facts">
+          <span>{property.titlePing || property.mainBuildingPing || "—"} 坪</span>
+          <span>{property.layout || "格局未填"}</span>
+          <span>{property.floor || "樓層未填"}</span>
+          <span>{propertyParkingText(property)}</span>
+        </div>
+        <div className="property-address">{property.address || "地址未填"}</div>
+        {match && (
+          <div className="match-reasons">
+            {match.reasons.slice(0, 4).map((reason) => <span className="hit" key={reason}><Check size={12} />{reason}</span>)}
+            {match.missedReasons.slice(0, 3).map((reason) => <span className="miss" key={reason}><X size={12} />{reason}</span>)}
+          </div>
+        )}
+        <div className="property-match-actions">
+          {action}
+          {onIntroduced && <label><input type="checkbox" checked={!!introduced} onChange={onIntroduced} /> 已介紹</label>}
+          {onRemove && <button type="button" className="text-danger" onClick={onRemove}>移除</button>}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function RecommendedProperties({ value, onChange, need }) {
   const { items: properties } = useCollection("properties", "title");
   const recommended = value || [];
-  const recommendedIds = recommended.map((r) => r.propertyId);
-  const isMobile = useIsMobile();
-  const mfs = (px) => mobileFontSize(px, isMobile);
-
+  const recommendedIds = recommended.map((item) => item.propertyId);
+  const [showAll, setShowAll] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [keyword, setKeyword] = useState("");
-  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
-  const [showPartialSuggestions, setShowPartialSuggestions] = useState(false);
-  const [hideSuggestions, setHideSuggestions] = useState(false);
-
-  // 勾選傳送：跟物件列表的「勾選傳送」是同一套（共用 PropertyShare 面板），
-  // 差別是這裡本來就在某個客需底下，勾選範圍只在「推薦物件」清單裡，方便直接把網址整理好傳給這位買方。
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showShare, setShowShare] = useState(false);
-  const toggleSelect = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
-  const propertyMap = {};
-  properties.forEach((p) => (propertyMap[p.id] = p));
+  const propertyMap = useMemo(() => Object.fromEntries(properties.map((property) => [property.id, property])), [properties]);
+  const matches = useMemo(() => matchPropertiesForNeed(need, properties), [need, properties]);
+  const matchMap = useMemo(() => Object.fromEntries(matches.map((match) => [match.property.id, match])), [matches]);
+  const suggestions = matches.filter((match) => !recommendedIds.includes(match.property.id));
+  const strongSuggestions = suggestions.filter((match) => match.percent >= 80);
+  const visibleSuggestions = showAll ? strongSuggestions : strongSuggestions.slice(0, 6);
 
-  const allMatches = useMemo(
-    () => matchPropertiesForNeed(need, properties).filter((m) => !recommendedIds.includes(m.property.id)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [need, properties, recommendedIds.join(",")]
-  );
-  // 完全符合：有填的條件全部都符合，才會直接列出來，避免像只設了「區域」就把整個區域的物件都列出來
-  // 部分符合：至少符合一項，但沒有全部符合，收在「還有 N 筆部分符合」裡面，預設收合，需要的時候再展開看
-  const exactMatches = allMatches.filter((m) => m.total > 0 && m.score === m.total);
-  const partialMatches = allMatches.filter((m) => m.total > 0 && m.score < m.total);
-  const visibleSuggestions = showAllSuggestions ? exactMatches : exactMatches.slice(0, 5);
-  const visiblePartialSuggestions = partialMatches.slice(0, 5);
-
-  const filtered = properties.filter((p) => {
-    if (recommendedIds.includes(p.id)) return false;
-    if (!keyword.trim()) return true;
-    const k = keyword.trim();
-    return (p.title || "").includes(k) || (p.address || "").includes(k);
+  const addProperty = (propertyId) => onChange([...recommended, { propertyId, introduced: false, addedAt: new Date().toISOString().slice(0, 10) }]);
+  const removeProperty = (propertyId) => onChange(recommended.filter((item) => item.propertyId !== propertyId));
+  const toggleIntroduced = (propertyId) => onChange(recommended.map((item) => item.propertyId === propertyId ? { ...item, introduced: !item.introduced } : item));
+  const toggleSelect = (propertyId) => setSelectedIds((current) => {
+    const next = new Set(current);
+    if (next.has(propertyId)) next.delete(propertyId); else next.add(propertyId);
+    return next;
   });
-
-  const addProperty = (propertyId) => {
-    onChange([...recommended, { propertyId, introduced: false, addedAt: new Date().toISOString().slice(0, 10) }]);
-  };
-  const removeProperty = (propertyId) => {
-    onChange(recommended.filter((r) => r.propertyId !== propertyId));
-  };
-  const toggleIntroduced = (propertyId) => {
-    onChange(
-      recommended.map((r) => (r.propertyId === propertyId ? { ...r, introduced: !r.introduced } : r))
-    );
-  };
-
-  const suggestionRow = (p, reasons, { muted = false } = {}) => (
-    <div
-      key={p.id}
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: 10,
-        padding: "10px 12px",
-        background: "#fff",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        marginBottom: 8,
-        opacity: muted ? 0.85 : 1,
-      }}
-    >
-      <div style={{ fontSize: mfs(13) }}>
-        <div style={{ fontWeight: 700 }}>
-          <a
-            href={`#/properties?open=${p.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "var(--text)", textDecoration: "none" }}
-            title="在新分頁開啟物件詳情，方便傳給客戶"
-          >
-            {p.title} 🔗
-          </a>{" "}
-          <span className="tag">{p.category}</span>
-        </div>
-        <div style={{ color: "var(--muted)", fontSize: mfs(12), marginTop: 2 }}>
-          {p.address}
-          {p.layout && <>{p.layout}　</>}
-          {p.titlePing && <>{p.titlePing} 坪　</>}
-          {p.totalPrice && <>總價 {p.totalPrice} 萬</>}
-        </div>
-        {reasons.length > 0 && (
-          <div style={{ marginTop: 4 }}>
-            {reasons.map((r) => (
-              <span key={r} style={{ fontSize: mfs(10), color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "1px 7px", marginRight: 4 }}>
-                {r}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      <button type="button" className="btn ghost" style={{ flexShrink: 0, fontSize: mfs(12) }} onClick={() => addProperty(p.id)}>
-        ＋ 加入推薦
-      </button>
-    </div>
-  );
+  const filtered = properties.filter((property) => !recommendedIds.includes(property.id) && (!keyword.trim() || `${property.title} ${property.address}`.includes(keyword.trim())));
 
   return (
-    <div>
-      {allMatches.length > 0 && (
-        <div style={{ background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: hideSuggestions ? 0 : 8 }}>
-            <div style={{ fontSize: mfs(12), fontWeight: 700, color: "var(--accent)" }}>
-              系統配對建議（{exactMatches.length}）
-            </div>
-            <button
-              type="button"
-              onClick={() => setHideSuggestions((v) => !v)}
-              style={{ border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: mfs(12), fontWeight: 700 }}
-            >
-              {hideSuggestions ? "顯示" : "隱藏"}
-            </button>
-          </div>
-
-          {!hideSuggestions && (
-            <>
-              {exactMatches.length === 0 && (
-                <div style={{ fontSize: mfs(12), color: "var(--muted)", marginBottom: 8 }}>
-                  沒有完全符合所有條件的物件，可以展開下面部分符合的物件參考看看。
-                </div>
-              )}
-              {visibleSuggestions.map(({ property: p, reasons }) => suggestionRow(p, reasons))}
-              {exactMatches.length > visibleSuggestions.length && (
-                <button type="button" className="btn ghost" style={{ fontSize: mfs(12) }} onClick={() => setShowAllSuggestions(true)}>
-                  顯示全部 {exactMatches.length} 筆完全符合
-                </button>
-              )}
-
-              {partialMatches.length > 0 && (
-                <div style={{ marginTop: exactMatches.length > 0 ? 10 : 0 }}>
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    style={{ fontSize: mfs(12) }}
-                    onClick={() => setShowPartialSuggestions((v) => !v)}
-                  >
-                    {showPartialSuggestions ? "收合部分符合的物件" : `還有 ${partialMatches.length} 筆部分符合（少一兩個條件）`}
-                  </button>
-                  {showPartialSuggestions && (
-                    <div style={{ marginTop: 8 }}>
-                      {visiblePartialSuggestions.map(({ property: p, reasons }) => suggestionRow(p, reasons, { muted: true }))}
-                      {partialMatches.length > visiblePartialSuggestions.length && (
-                        <div style={{ fontSize: mfs(11), color: "var(--muted)" }}>
-                          還有 {partialMatches.length - visiblePartialSuggestions.length} 筆部分符合的物件沒有列出，可以用下面「從物件清單挑選」搜尋。
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div style={{ fontSize: mfs(11), fontWeight: 700, color: "var(--muted)" }}>
-          推薦物件（{recommended.length}）
-        </div>
-        {recommended.length > 0 && (
-          <button
-            type="button"
-            className={selectionMode ? "btn" : "btn ghost"}
-            style={{ fontSize: mfs(12) }}
-            onClick={() => {
-              setSelectionMode((v) => !v);
-              setSelectedIds(new Set());
-              setShowShare(false);
-            }}
-          >
-            {selectionMode ? "結束勾選" : "勾選傳送"}
-          </button>
-        )}
+    <div className="recommended-properties-v2">
+      <div className="recommendation-heading">
+        <div><span>MATCHING ENGINE V2</span><h3>系統推薦物件</h3><p>區域硬篩、預算 10% 容忍，依必要與偏好條件加權排序。</p></div>
+        <div className="recommendation-count"><strong>{strongSuggestions.length}</strong><span>筆 80%+</span></div>
       </div>
 
-      {recommended.length === 0 && (
-        <div style={{ fontSize: mfs(13), color: "var(--muted)", marginBottom: 10 }}>還沒有推薦任何物件</div>
-      )}
-
-      {selectedIds.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: mfs(12), color: "var(--accent)", fontWeight: 700 }}>已選 {selectedIds.size} 筆物件</span>
-          <button type="button" className="btn" style={{ fontSize: mfs(12) }} onClick={() => setShowShare(true)}>分享給客人</button>
-          <button type="button" className="btn ghost" style={{ fontSize: mfs(12) }} onClick={() => setSelectedIds(new Set())}>清除選取</button>
+      {visibleSuggestions.length > 0 ? (
+        <div className="property-match-grid">
+          {visibleSuggestions.map((match) => <PropertyMatchCard key={match.property.id} property={match.property} match={match} action={<button type="button" className="btn" onClick={() => addProperty(match.property.id)}>＋ 加入推薦</button>} />)}
         </div>
-      )}
+      ) : <div className="match-empty">目前沒有 80% 以上的新配對；可調整必要條件或從物件清單手動加入。</div>}
+      {strongSuggestions.length > 6 && <button type="button" className="btn ghost" onClick={() => setShowAll((current) => !current)}>{showAll ? "收合推薦" : `查看全部 ${strongSuggestions.length} 筆`}</button>}
 
-      {showShare && (
-        <PropertyShare
-          properties={recommended.map((r) => propertyMap[r.propertyId]).filter((p) => p && selectedIds.has(p.id))}
-          onClose={() => setShowShare(false)}
-          defaultBuyerId={need?.contactId || ""}
-        />
-      )}
+      <div className="recommended-list-heading">
+        <div><strong>已加入推薦</strong><span>{recommended.length} 筆</span></div>
+        {recommended.length > 0 && <button type="button" className={selectionMode ? "btn" : "btn ghost"} onClick={() => { setSelectionMode((current) => !current); setSelectedIds(new Set()); setShowShare(false); }}>{selectionMode ? "結束勾選" : "勾選傳送"}</button>}
+      </div>
+      {selectedIds.size > 0 && <div className="share-selection-bar"><strong>已選 {selectedIds.size} 筆</strong><button type="button" className="btn" onClick={() => setShowShare(true)}>分享給客人</button><button type="button" className="btn ghost" onClick={() => setSelectedIds(new Set())}>清除</button></div>}
+      {showShare && <PropertyShare properties={recommended.map((item) => propertyMap[item.propertyId]).filter((property) => property && selectedIds.has(property.id))} onClose={() => setShowShare(false)} defaultBuyerId={need?.contactId || ""} />}
+      <div className="property-match-grid recommended-grid">
+        {recommended.map((item) => {
+          const property = propertyMap[item.propertyId];
+          if (!property) return <div className="match-empty" key={item.propertyId}>物件已刪除或無法讀取 <button type="button" onClick={() => removeProperty(item.propertyId)}>移除</button></div>;
+          return <PropertyMatchCard key={item.propertyId} property={property} match={matchMap[item.propertyId]} selected={selectedIds.has(item.propertyId)} onSelect={selectionMode ? () => toggleSelect(item.propertyId) : null} introduced={item.introduced} onIntroduced={() => toggleIntroduced(item.propertyId)} onRemove={() => removeProperty(item.propertyId)} />;
+        })}
+      </div>
 
-      {recommended.map((r) => {
-        const p = propertyMap[r.propertyId];
-        if (!p) {
-          return (
-            <div key={r.propertyId} style={{ padding: "8px 10px", background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 8, fontSize: mfs(12), color: "var(--muted)" }}>
-              （物件已被刪除或找不到）
-              <button type="button" onClick={() => removeProperty(r.propertyId)} style={{ marginLeft: 10, border: "none", background: "none", color: "var(--danger)", cursor: "pointer" }}>移除</button>
-            </div>
-          );
-        }
-        return (
-          <div
-            key={r.propertyId}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 10,
-              padding: "10px 12px",
-              background: selectedIds.has(p.id) || r.introduced ? "var(--accent-soft)" : "#FAFAF8",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              marginBottom: 8,
-            }}
-          >
-            {selectionMode && (
-              <input
-                type="checkbox"
-                checked={selectedIds.has(p.id)}
-                onChange={() => toggleSelect(p.id)}
-                style={{ marginTop: 3, flexShrink: 0 }}
-              />
-            )}
-            <div style={{ fontSize: mfs(13), flex: 1 }}>
-              <div style={{ fontWeight: 700 }}>
-                <a
-                  href={`#/properties?open=${p.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: "var(--text)", textDecoration: "none" }}
-                  title="在新分頁開啟物件詳情，方便傳給客戶"
-                >
-                  {p.title} 🔗
-                </a>{" "}
-                <span className="tag">{p.category}</span>
-                {(p.status || "active") !== "active" && (
-                  <span style={{ fontSize: mfs(11), color: "var(--danger)", marginLeft: 6 }}>
-                    （{p.status === "sold" ? "已售出" : "暫時不賣"}）
-                  </span>
-                )}
-              </div>
-              <div style={{ color: "var(--muted)", fontSize: mfs(12), marginTop: 2 }}>
-                {p.address}　
-                {p.layout && <>{p.layout}　</>}
-                {p.titlePing && <>{p.titlePing} 坪　</>}
-                {p.totalPrice && <>總價 {p.totalPrice} 萬</>}
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: mfs(12), cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input type="checkbox" checked={!!r.introduced} onChange={() => toggleIntroduced(r.propertyId)} />
-                已介紹
-              </label>
-              <button type="button" onClick={() => removeProperty(r.propertyId)} style={{ border: "none", background: "none", color: "var(--muted)", cursor: "pointer", fontSize: mfs(11) }}>移除</button>
-            </div>
-          </div>
-        );
-      })}
-
-      {!showPicker ? (
-        <button type="button" className="btn ghost" onClick={() => setShowPicker(true)}>
-          ＋ 從物件清單挑選
-        </button>
-      ) : (
-        <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginTop: 6 }}>
-          <input
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜尋案名、地址…"
-            style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: mfs(13), marginBottom: 8 }}
-            autoFocus
-          />
-          <div style={{ maxHeight: 260, overflowY: "auto" }}>
-            {filtered.length === 0 && <div style={{ fontSize: mfs(12), color: "var(--muted)" }}>找不到符合的物件</div>}
-            {filtered.slice(0, 30).map((p) => (
-              <div
-                key={p.id}
-                style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", fontSize: mfs(13), display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}
-              >
-                <div style={{ cursor: "pointer", flex: 1 }} onClick={() => addProperty(p.id)}>
-                  <div style={{ fontWeight: 700 }}>{p.title} <span className="tag">{p.category}</span></div>
-                  <div style={{ color: "var(--muted)", fontSize: mfs(12) }}>
-                    {p.address}　{p.layout && <>{p.layout}　</>}{p.totalPrice && <>總價 {p.totalPrice} 萬</>}
-                  </div>
-                </div>
-                <a
-                  href={`#/properties?open=${p.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ flexShrink: 0, fontSize: mfs(12), color: "var(--accent)" }}
-                  title="在新分頁開啟物件詳情"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  查看詳情 🔗
-                </a>
-              </div>
-            ))}
-          </div>
-          <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => setShowPicker(false)}>
-            關閉
-          </button>
+      {!showPicker ? <button type="button" className="btn ghost" onClick={() => setShowPicker(true)}>＋ 從物件清單挑選</button> : (
+        <div className="property-picker-v2">
+          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜尋案名、地址…" autoFocus />
+          {filtered.slice(0, 30).map((property) => <button type="button" key={property.id} onClick={() => addProperty(property.id)}><span><strong>{property.title}</strong><small>{property.address}・{property.totalPrice || "—"} 萬</small></span><b>加入</b></button>)}
+          <button type="button" className="btn ghost" onClick={() => setShowPicker(false)}>關閉</button>
         </div>
       )}
     </div>

@@ -1,183 +1,162 @@
-// 根據「客需」的找房條件，自動從物件清單中配對出可能符合的物件，
-// 給客需表單裡的「系統配對建議」用，讓仲介不用自己一筆一筆手動搜尋。
+// Matching Engine V2：保留舊客需欄位相容，新增必要／偏好／排除與可解釋的加權百分比。
 import { normalizeRegionText } from "./taiwanRegions";
 import { normalizeNeedRanges, toNum } from "./needsFields";
 import { parseFloor, isTopFloor } from "./floor";
 import { parseAge } from "./age";
 
-// 客需表單的物件類型標籤，對應到「案件控台」實際使用的物件類別
 const TYPE_TO_CATEGORIES = {
-  公寓: ["公寓"],
-  大樓: ["電梯大樓"],
-  廠房: ["工廠", "廠辦", "工業地"],
-  透天: ["透天厝"],
-  土地: ["建地", "農地", "土地類其他"],
-  車位: ["車位"],
+  公寓: ["公寓"], 大樓: ["電梯大樓"], 廠房: ["工廠", "廠辦", "工業地"],
+  透天: ["透天厝"], 土地: ["建地", "農地", "土地類其他"], 車位: ["車位"],
 };
 
-// 樓層／房型格式通常是「3/2/2」（房/廳/衛），依序取房數／衛浴數
+export const MATCH_WEIGHTS = {
+  area: 25, budget: 25, type: 12, rooms: 15, parking: 15,
+  mainArea: 8, floor: 5, age: 4, bath: 3, topFloor: 5, features: 5,
+};
+
+const DEFAULT_LEVELS = {
+  type: "preferred", mainArea: "preferred", rooms: "preferred", bath: "preferred",
+  age: "preferred", floor: "preferred", topFloor: "preferred",
+};
+
 function parseLayoutPart(layout, index) {
   if (!layout) return null;
-  const part = String(layout).split("/")[index];
-  const m = (part || "").match(/\d+/);
-  return m ? parseInt(m[0], 10) : null;
+  const match = String(layout).split("/")[index]?.match(/\d+/);
+  return match ? parseInt(match[0], 10) : null;
 }
 
-// 判斷一個數值是否落在 [min, max] 範圍內；min／max 沒填的那一端不比對，兩者都沒填視為「沒有這個條件」
 function inRange(value, min, max) {
-  const hasMin = min !== null;
-  const hasMax = max !== null;
-  if (!hasMin && !hasMax) return null; // 沒設條件
+  if (min === null && max === null) return null;
   if (value === null) return false;
-  if (hasMin && value < min) return false;
-  if (hasMax && value > max) return false;
-  return true;
+  return !(min !== null && value < min) && !(max !== null && value > max);
 }
 
-// 判斷一筆物件地址是否落在某個找房區域內（縣市／鄉鎮市區／社區皆為模糊比對，沒填的欄位不比對）
 function matchesArea(address, area) {
-  const addr = normalizeRegionText(address || "");
-  if (area.city && !addr.includes(normalizeRegionText(area.city))) return false;
-  if (area.district && !addr.includes(normalizeRegionText(area.district))) return false;
-  if (area.community && !addr.includes(normalizeRegionText(area.community))) return false;
+  const normalizedAddress = normalizeRegionText(address || "");
+  if (area.city && !normalizedAddress.includes(normalizeRegionText(area.city))) return false;
+  if (area.district && !normalizedAddress.includes(normalizeRegionText(area.district))) return false;
+  if (area.community && !normalizedAddress.includes(normalizeRegionText(area.community))) return false;
   return true;
 }
 
-// 針對一筆客需，從物件清單中配對出可能符合的物件，依符合程度（score）排序。
-// 區域、預算超出太多的物件會直接排除；其他條件（類型／坪數／房數／衛浴數）沒符合只是不加分，不會被排除，
-// 避免因為單一條件沒填好就漏掉原本該推薦的物件。
-// 回傳 [{ property, score, total, reasons }]
+function propertyHasParking(property) {
+  const description = String(property.parkingDescription || "").trim();
+  if (description === "無") return false;
+  return Number(property.parkingCount || 0) > 0 || Number(property.parkingPing || 0) > 0 || Boolean(description);
+}
+
+function isMechanicalParking(property) {
+  return /機械|升降|塔式/.test(String(property.parkingDescription || ""));
+}
+
+function isGroundFloor(property) {
+  return parseFloor(property.floor) === 1 || /一樓|1樓/.test(String(property.floor || ""));
+}
+
+function toFeatureList(value) {
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+  return String(value || "").split(/[、,，\n]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function propertySearchText(property) {
+  return [property.title, property.address, property.category, property.parkingDescription, property.notes,
+    property.orientation, ...(property.customFields || []).flatMap((field) => [field.label, field.value])]
+    .filter(Boolean).join(" ").toLowerCase();
+}
+
+function criterionLevel(need, key) {
+  return need.criteriaLevels?.[key] || DEFAULT_LEVELS[key] || "preferred";
+}
+
+// 區域仍為硬篩，預算上限仍保留 10% 容忍；必要或排除條件不符時不回傳該物件。
 export function matchPropertiesForNeed(need, properties) {
   if (!need) return [];
-  const areas = (need.areas || []).filter((a) => a.city || a.district || a.community);
-  const wantedCategories = (need.types || []).flatMap((t) => TYPE_TO_CATEGORIES[t] || [t]);
+  const areas = (need.areas || []).filter((area) => area.city || area.district || area.community);
+  const wantedCategories = (need.types || []).flatMap((type) => TYPE_TO_CATEGORIES[type] || [type]);
   const ranges = normalizeNeedRanges(need);
-  const budgetMin = toNum(ranges.budgetMin);
-  const budgetMax = toNum(ranges.budgetMax);
-  const mainAreaMin = toNum(ranges.mainAreaMin);
-  const mainAreaMax = toNum(ranges.mainAreaMax);
-  const roomsMin = toNum(ranges.roomsMin);
-  const roomsMax = toNum(ranges.roomsMax);
-  const bathMin = toNum(ranges.bathMin);
-  const bathMax = toNum(ranges.bathMax);
-  const ageMin = toNum(ranges.ageMin);
-  const ageMax = toNum(ranges.ageMax);
-  const floorMin = toNum(need.floorMin);
-  const floorMax = toNum(need.floorMax);
-  const topFloorOnly = !!need.topFloorOnly;
-
-  const hasAnyCriteria =
-    areas.length > 0 ||
-    wantedCategories.length > 0 ||
-    budgetMin !== null ||
-    budgetMax !== null ||
-    mainAreaMin !== null ||
-    mainAreaMax !== null ||
-    roomsMin !== null ||
-    roomsMax !== null ||
-    bathMin !== null ||
-    bathMax !== null ||
-    ageMin !== null ||
-    ageMax !== null ||
-    floorMin !== null ||
-    floorMax !== null ||
-    topFloorOnly;
+  const budgetMin = toNum(ranges.budgetMin), budgetMax = toNum(ranges.budgetMax);
+  const mainAreaMin = toNum(ranges.mainAreaMin), mainAreaMax = toNum(ranges.mainAreaMax);
+  const roomsMin = toNum(ranges.roomsMin), roomsMax = toNum(ranges.roomsMax);
+  const bathMin = toNum(ranges.bathMin), bathMax = toNum(ranges.bathMax);
+  const ageMin = toNum(ranges.ageMin), ageMax = toNum(ranges.ageMax);
+  const floorMin = toNum(need.floorMin), floorMax = toNum(need.floorMax);
+  const preferredFeatures = toFeatureList(need.preferredFeatures);
+  const excludedFeatures = toFeatureList(need.excludedFeatures);
+  const hasAnyCriteria = areas.length || wantedCategories.length || budgetMin !== null || budgetMax !== null ||
+    mainAreaMin !== null || mainAreaMax !== null || roomsMin !== null || roomsMax !== null ||
+    bathMin !== null || bathMax !== null || ageMin !== null || ageMax !== null || floorMin !== null ||
+    floorMax !== null || need.topFloorOnly || need.parkingRequired || need.excludeGroundFloor ||
+    need.excludeTopFloor || need.excludeMechanicalParking || preferredFeatures.length || excludedFeatures.length;
   if (!hasAnyCriteria) return [];
 
   const results = [];
-  (properties || []).forEach((p) => {
-    if ((p.status || "active") !== "active") return;
-    let score = 0;
-    let total = 0;
-    const reasons = [];
+  (properties || []).forEach((property) => {
+    if ((property.status || "active") !== "active") return;
+    const searchable = propertySearchText(property);
+    if (need.excludeGroundFloor && isGroundFloor(property)) return;
+    if (need.excludeTopFloor && isTopFloor(property.floor)) return;
+    if (need.excludeMechanicalParking && isMechanicalParking(property)) return;
+    if (excludedFeatures.some((feature) => searchable.includes(feature.toLowerCase()))) return;
 
-    if (areas.length > 0) {
-      total++;
-      if (!areas.some((a) => matchesArea(p.address, a))) return; // 區域不符直接排除
-      score++;
-      reasons.push("區域相符");
-    }
+    let matchedWeight = 0, totalWeight = 0, rejected = false;
+    const reasons = [], missedReasons = [];
+    const addCriterion = ({ key, active, matched, label, missedLabel, ratio = 1, alwaysRequired = false }) => {
+      if (!active || rejected) return;
+      const level = alwaysRequired ? "required" : criterionLevel(need, key);
+      if (level === "ignored") return;
+      const weight = MATCH_WEIGHTS[key] || 1;
+      totalWeight += weight;
+      if (matched) {
+        matchedWeight += weight * ratio;
+        reasons.push(label);
+      } else if (level === "required") rejected = true;
+      else missedReasons.push(missedLabel || `${label}未命中`);
+    };
+
+    addCriterion({ key: "area", active: areas.length > 0, matched: areas.some((area) => matchesArea(property.address, area)), label: "區域相符", alwaysRequired: true });
+    if (rejected) return;
 
     if (budgetMin !== null || budgetMax !== null) {
-      total++;
-      const price = toNum(p.totalPrice);
-      if (price === null) {
-        // 沒填總價的物件不加分，但也不排除
-      } else {
-        if (budgetMin !== null && price < budgetMin) return; // 明顯低於預算下限也一併排除，避免推薦到條件太不符的物件
-        if (budgetMax !== null && price > budgetMax * 1.1) return; // 超出預算上限太多就不推薦
-        score++;
-        reasons.push(budgetMax !== null && price > budgetMax ? "接近預算" : "預算內");
+      const price = toNum(property.totalPrice);
+      if (price !== null && budgetMin !== null && price < budgetMin) return;
+      if (price !== null && budgetMax !== null && price > budgetMax * 1.1) return;
+      let ratio = 1, label = "預算內";
+      if (price === null) { ratio = 0; label = "未提供價格"; }
+      else if (budgetMax !== null && price > budgetMax) {
+        ratio = Math.max(0.55, 1 - ((price - budgetMax) / (budgetMax * 0.1)) * 0.45);
+        label = `接近預算（高 ${Math.round(((price / budgetMax) - 1) * 100)}%）`;
       }
+      totalWeight += MATCH_WEIGHTS.budget;
+      matchedWeight += MATCH_WEIGHTS.budget * ratio;
+      if (ratio > 0) reasons.push(label); else missedReasons.push("物件未提供價格");
     }
 
-    if (wantedCategories.length > 0) {
-      total++;
-      if (wantedCategories.includes(p.category)) {
-        score++;
-        reasons.push("類型相符");
-      }
+    addCriterion({ key: "type", active: wantedCategories.length > 0, matched: wantedCategories.includes(property.category), label: "類型相符", missedLabel: "物件類型不同" });
+    addCriterion({ key: "mainArea", active: mainAreaMin !== null || mainAreaMax !== null, matched: inRange(toNum(property.mainBuildingPing) ?? toNum(property.titlePing), mainAreaMin, mainAreaMax), label: "坪數符合", missedLabel: "坪數未達偏好" });
+    addCriterion({ key: "rooms", active: roomsMin !== null || roomsMax !== null, matched: inRange(parseLayoutPart(property.layout, 0), roomsMin, roomsMax), label: "房數符合", missedLabel: "房數不符" });
+    addCriterion({ key: "bath", active: bathMin !== null || bathMax !== null, matched: inRange(parseLayoutPart(property.layout, 2), bathMin, bathMax), label: "衛浴符合", missedLabel: "衛浴數不符" });
+    addCriterion({ key: "age", active: ageMin !== null || ageMax !== null, matched: inRange(parseAge(property.age), ageMin, ageMax), label: "屋齡符合", missedLabel: "屋齡超出偏好" });
+    addCriterion({ key: "floor", active: floorMin !== null || floorMax !== null, matched: inRange(parseFloor(property.floor), floorMin, floorMax), label: "樓層符合", missedLabel: "樓層未達偏好" });
+    addCriterion({ key: "topFloor", active: !!need.topFloorOnly, matched: isTopFloor(property.floor), label: "頂樓偏好命中", missedLabel: "非頂樓" });
+    addCriterion({ key: "parking", active: !!need.parkingRequired, matched: propertyHasParking(property), label: "具車位", missedLabel: "無符合車位", alwaysRequired: true });
+    if (rejected) return;
+
+    if (preferredFeatures.length > 0) {
+      const hits = preferredFeatures.filter((feature) => searchable.includes(feature.toLowerCase()));
+      totalWeight += MATCH_WEIGHTS.features;
+      matchedWeight += MATCH_WEIGHTS.features * (hits.length / preferredFeatures.length);
+      hits.forEach((feature) => reasons.push(`偏好：${feature}`));
+      preferredFeatures.filter((feature) => !hits.includes(feature)).forEach((feature) => missedReasons.push(`未命中：${feature}`));
     }
 
-    if (mainAreaMin !== null || mainAreaMax !== null) {
-      total++;
-      // 「主建物坪數」要比對的是 mainBuildingPing，不是權狀坪數 titlePing——
-      // 兩者是不同欄位，權狀坪數通常比主建物大很多，混用會導致篩選結果整批跑掉。
-      // 只有物件還沒填 mainBuildingPing 時，才退而求其次用 titlePing 當備援，避免舊資料完全比對不到。
-      const ping = toNum(p.mainBuildingPing) ?? toNum(p.titlePing);
-      if (inRange(ping, mainAreaMin, mainAreaMax)) {
-        score++;
-        reasons.push("坪數符合");
-      }
-    }
-
-    if (ageMin !== null || ageMax !== null) {
-      total++;
-      const age = parseAge(p.age);
-      if (inRange(age, ageMin, ageMax)) {
-        score++;
-        reasons.push("屋齡符合");
-      }
-    }
-
-    if (roomsMin !== null || roomsMax !== null) {
-      total++;
-      const rooms = parseLayoutPart(p.layout, 0);
-      if (inRange(rooms, roomsMin, roomsMax)) {
-        score++;
-        reasons.push("房數符合");
-      }
-    }
-
-    if (bathMin !== null || bathMax !== null) {
-      total++;
-      const bath = parseLayoutPart(p.layout, 2);
-      if (inRange(bath, bathMin, bathMax)) {
-        score++;
-        reasons.push("衛浴符合");
-      }
-    }
-
-    if (floorMin !== null || floorMax !== null) {
-      total++;
-      if (inRange(parseFloor(p.floor), floorMin, floorMax)) {
-        score++;
-        reasons.push("樓層符合");
-      }
-    }
-
-    if (topFloorOnly) {
-      total++;
-      if (isTopFloor(p.floor)) {
-        score++;
-        reasons.push("頂樓");
-      }
-    }
-
-    if (total === 0) return;
-    results.push({ property: p, score, total, reasons });
+    if (totalWeight === 0) return;
+    const percent = Math.max(0, Math.min(100, Math.round((matchedWeight / totalWeight) * 100)));
+    results.push({ property, percent, score: percent, total: 100, reasons, missedReasons, matchedWeight, totalWeight });
   });
+  return results.sort((a, b) => b.percent - a.percent || b.matchedWeight - a.matchedWeight);
+}
 
-  results.sort((a, b) => b.score - a.score || b.total - a.total);
-  return results;
+export function reverseMatchProperty(property, needs) {
+  return (needs || []).flatMap((need) => matchPropertiesForNeed(need, [property]).map((match) => ({ ...match, need })))
+    .sort((a, b) => b.percent - a.percent);
 }

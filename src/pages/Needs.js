@@ -8,6 +8,7 @@ import { normalizeNeedRanges, rangeStatText } from "../lib/needsFields";
 import { TAIWAN_REGIONS, TAIWAN_CITIES } from "../lib/taiwanRegions";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { mobileFontSize } from "../lib/mobileFont";
+import NeedCriteriaTiers, { NeedTierSummary } from "./NeedCriteriaTiers";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -38,6 +39,13 @@ const emptyForm = {
   floorMin: "",
   floorMax: "",
   topFloorOnly: false,
+  criteriaLevels: {},
+  parkingRequired: false,
+  preferredFeatures: "",
+  excludeGroundFloor: false,
+  excludeTopFloor: false,
+  excludeMechanicalParking: false,
+  excludedFeatures: "",
   notes: "",
   shared: false,
   recommendedProperties: [],
@@ -261,6 +269,8 @@ export default function Needs() {
                 )}
               </div>
 
+              <NeedTierSummary need={form} />
+
               {canEditFull && (
                 <button
                   className="btn danger"
@@ -387,6 +397,8 @@ export default function Needs() {
                 <input type="checkbox" checked={!!form.topFloorOnly} onChange={(e) => setForm({ ...form, topFloorOnly: e.target.checked })} />
                 偏好頂樓
               </label>
+
+              <NeedCriteriaTiers form={form} setForm={setForm} />
 
               <textarea
                 rows="2"

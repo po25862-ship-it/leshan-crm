@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import CalendarPage from "./pages/Calendar";
 import LineBroadcast from "./pages/LineBroadcast";
 import SmartTools from "./pages/SmartTools";
+import MatchingRecommendations from "./pages/MatchingRecommendations";
 import MobileMore from "./pages/MobileMore";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
@@ -39,18 +40,23 @@ import {
   WandSparkles,
   Settings as SettingsIcon,
   LogOut,
+  ChevronDown,
 } from "lucide-react";
 import "./mobile.css";
 
 const desktopNavItems = [
-  { to: "/", label: "總覽", icon: LayoutDashboard, end: true },
-  { to: "/sellers", label: "賣方", icon: KeyRound },
+  { to: "/", label: "首頁", icon: LayoutDashboard, end: true },
   { to: "/buyers", label: "買方", icon: Users },
+  { to: "/needs", label: "客需", icon: SearchCheck },
+  { to: "/properties", label: "物件", icon: Building2 },
+  { to: "/matching", label: "配對推薦", icon: WandSparkles },
+];
+
+const desktopSecondaryNavItems = [
+  { to: "/sellers", label: "賣方", icon: KeyRound },
   { to: "/rentals", label: "出租", icon: Home },
   { to: "/quicknotes", label: "待辦", icon: ListTodo },
   { to: "/cases", label: "成交", icon: BadgeCheck },
-  { to: "/properties", label: "物件", icon: Building2 },
-  { to: "/needs", label: "客需", icon: SearchCheck },
   { to: "/topics", label: "商談", icon: MessagesSquare },
   { to: "/calendar", label: "行事曆", icon: CalendarDays },
   { to: "/line", label: "個人LINE", icon: MessageCircle },
@@ -77,6 +83,14 @@ function DesktopHeader() {
             <span>{label}</span>
           </NavLink>
         ))}
+        <details className="nav-more">
+          <summary><span>其他功能</span><ChevronDown size={14} /></summary>
+          <div className="nav-more-menu">
+            {desktopSecondaryNavItems.map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to}><Icon size={16} /><span>{label}</span></NavLink>
+            ))}
+          </div>
+        </details>
         <button className="nav-logout" onClick={logout} aria-label="登出">
           <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
         </button>
@@ -98,6 +112,7 @@ function AppRoutes() {
       <Route path="/cases" element={<Cases />} />
       <Route path="/properties" element={<Properties />} />
       <Route path="/needs" element={<Needs />} />
+      <Route path="/matching" element={<MatchingRecommendations />} />
       <Route path="/topics" element={<Topics />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/calendar" element={<CalendarPage />} />

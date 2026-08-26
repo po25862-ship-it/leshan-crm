@@ -16,6 +16,9 @@ import { parseAge } from "../lib/age";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { X } from "lucide-react";
+import { useAuth } from "../AuthContext";
+import { useNeedsCollection } from "../hooks/useNeedsCollection";
+import ReverseMatchesPanel from "./ReverseMatchesPanel";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -95,10 +98,12 @@ function DetailValue({ label, value, accent = false }) {
 }
 
 export default function Properties() {
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection("properties", "createdAt");
   const { items: linkedCases } = useCollection("cases", "createdAt");
+  const { items: needs, update: updateNeed } = useNeedsCollection(user.uid);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -1344,6 +1349,7 @@ export default function Properties() {
 
           {editingId && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <ReverseMatchesPanel property={{ ...form, id: editingId }} needs={needs} updateNeed={updateNeed} />
               {(() => {
                 const usedIn = linkedCases.filter((c) => c.propertyId === editingId);
                 if (usedIn.length === 0) return null;
