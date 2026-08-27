@@ -182,7 +182,7 @@ export default function Needs() {
   const fieldBox = { padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: mfs(13) };
 
   return (
-    <main>
+    <main className="needs-page">
       <div className="top-actions">
         <div className="section-title">客需（{items.length}）</div>
         <button className="btn" onClick={openNew}>＋ 新增客需</button>

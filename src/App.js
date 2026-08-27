@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { HashRouter, Routes, Route, NavLink } from "react-router-dom";
+import { HashRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { useDoc } from "./hooks/useDoc";
@@ -133,6 +133,12 @@ function AppRoutes() {
   );
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => window.scrollTo({ top: 0, left: 0 }), [pathname]);
+  return null;
+}
+
 function NamePrompt({ uid, email, onDone }) {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -199,6 +205,7 @@ function AppShell() {
 
   return (
     <HashRouter>
+      <ScrollToTop />
       {isMobile ? (
         <div className="mobile-shell">
           <MobileTopBar />
