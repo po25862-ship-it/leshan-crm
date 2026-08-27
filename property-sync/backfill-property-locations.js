@@ -33,7 +33,8 @@ async function main() {
       const inferred = inferPropertyLocation(record);
       const updates = {};
       if (!String(record.communityName || "").trim() && inferred.communityName) updates.communityName = inferred.communityName;
-      if (!String(record.area || "").trim() && inferred.area) updates.area = inferred.area;
+      const currentArea = String(record.area || "").trim();
+      if ((!currentArea || currentArea === "A7重劃區") && inferred.area && inferred.area !== currentArea) updates.area = inferred.area;
       if (Object.keys(updates).length === 0) return [];
       return [{ id: record.id, title: record.title || "", address: record.address || "", updates }];
     });
@@ -43,7 +44,11 @@ async function main() {
       community: changes.filter((item) => item.updates.communityName).length,
       area: changes.filter((item) => item.updates.area).length,
     };
-    console.log(JSON.stringify({ mode: APPLY ? "apply" : "dry-run", counts, sample: changes.slice(0, 30) }, null, 2));
+    const areaBreakdown = changes.reduce((result, item) => {
+      if (item.updates.area) result[item.updates.area] = (result[item.updates.area] || 0) + 1;
+      return result;
+    }, {});
+    console.log(JSON.stringify({ mode: APPLY ? "apply" : "dry-run", counts, areaBreakdown, sample: changes.slice(0, 30) }, null, 2));
     if (!APPLY || changes.length === 0) return;
 
     const outputDir = path.join(__dirname, "output", "location-backfill");
@@ -55,7 +60,7 @@ async function main() {
       changes.slice(index, index + 450).forEach((change) => batch.update(doc(db, "properties", change.id), {
         ...change.updates,
         locationAutoFilledAt: new Date().toISOString(),
-        locationAutoFillVersion: 1,
+        locationAutoFillVersion: 2,
       }));
       await batch.commit();
     }
