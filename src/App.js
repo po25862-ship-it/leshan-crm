@@ -135,7 +135,9 @@ function AppRoutes() {
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => window.scrollTo({ top: 0, left: 0 }), [pathname]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname]);
   return null;
 }
 
