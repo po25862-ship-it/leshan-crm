@@ -3,13 +3,11 @@ import { Link } from "react-router-dom";
 import { collectionGroup, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
-import { useCollectionGroup } from "../hooks/useCollectionGroup";
-import { useSharedCollectionGroup } from "../hooks/useSharedCollectionGroup";
 import { useListingsForContacts } from "../hooks/useListingsForContacts";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useAuth } from "../AuthContext";
 import { useGoogleAuth } from "../GoogleAuthContext";
-import { formatDate, nextMonthlyDueDate } from "../lib/dates";
+import { nextMonthlyDueDate } from "../lib/dates";
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -19,6 +17,18 @@ function toDateStr(d) {
 }
 function monthLabel(d) {
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`;
+}
+function addDays(date, amount) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+function startOfWeek(date) {
+  const next = new Date(date);
+  const day = next.getDay();
+  next.setDate(next.getDate() - (day === 0 ? 6 : day - 1));
+  next.setHours(0, 0, 0, 0);
+  return next;
 }
 
 // 監聽所有客戶底下的 appointments 子集合（收集群組查詢）
@@ -61,6 +71,8 @@ export default function CalendarPage() {
     d.setDate(1);
     return d;
   });
+  const [weekCursor, setWeekCursor] = useState(() => startOfWeek(new Date()));
+  const [viewMode, setViewMode] = useState("week");
   const [googleEvents, setGoogleEvents] = useState([]);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [eventForm, setEventForm] = useState({ title: "", date: toDateStr(new Date()), time: "09:00", notes: "" });
@@ -69,6 +81,9 @@ export default function CalendarPage() {
 
   const monthStart = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
   const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+  const weekDays = useMemo(() => Array.from({ length: 5 }, (_, index) => addDays(weekCursor, index)), [weekCursor]);
+  const rangeStart = viewMode === "week" ? weekDays[0] : monthStart;
+  const rangeEnd = viewMode === "week" ? weekDays[4] : monthEnd;
 
   useEffect(() => {
     if (!isConnected) {
@@ -76,14 +91,14 @@ export default function CalendarPage() {
       return;
     }
     setLoadingGoogle(true);
-    const timeMin = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1).toISOString();
-    const timeMax = new Date(monthEnd.getFullYear(), monthEnd.getMonth(), monthEnd.getDate() + 1).toISOString();
+    const timeMin = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate()).toISOString();
+    const timeMax = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate() + 1).toISOString();
     listEvents(timeMin, timeMax)
       .then((events) => setGoogleEvents(events))
       .catch(() => setGoogleEvents([]))
       .finally(() => setLoadingGoogle(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, monthCursor, googleRefreshKey]);
+  }, [isConnected, monthCursor, weekCursor, viewMode, googleRefreshKey]);
 
   const addGoogleEvent = async (e) => {
     e.preventDefault();
@@ -163,7 +178,7 @@ export default function CalendarPage() {
     return list;
   }, [cases, appointments, listings, rentals]);
 
-  const monthSystemEvents = systemEvents.filter((e) => e.date >= toDateStr(monthStart) && e.date <= toDateStr(monthEnd));
+  const visibleSystemEvents = systemEvents.filter((e) => e.date >= toDateStr(rangeStart) && e.date <= toDateStr(rangeEnd));
 
   // 已經同步過的 Google 事件，系統這邊已經有對應項目了，避免重複顯示
   const knownGoogleEventIds = new Set(
@@ -187,7 +202,7 @@ export default function CalendarPage() {
       };
     });
 
-  const allEvents = [...monthSystemEvents, ...monthGoogleEvents].sort((a, b) => {
+  const allEvents = [...visibleSystemEvents, ...monthGoogleEvents].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     return (a.time || "").localeCompare(b.time || "");
   });
@@ -207,116 +222,62 @@ export default function CalendarPage() {
 
   const todayStr = toDateStr(new Date());
 
+  const goToday = () => {
+    const today = new Date();
+    setWeekCursor(startOfWeek(today));
+    setMonthCursor(new Date(today.getFullYear(), today.getMonth(), 1));
+  };
+  const moveCursor = (direction) => {
+    if (viewMode === "week") setWeekCursor((current) => addDays(current, direction * 7));
+    else setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
+  };
+  const currentLabel = viewMode === "week"
+    ? `${weekDays[0].getFullYear()}年${weekDays[0].getMonth() + 1}月 ${weekDays[0].getDate()}–${weekDays[4].getDate()}日`
+    : monthLabel(monthCursor);
+
   return (
-    <main>
-      <div className="top-actions">
-        <div className="section-title">行事曆</div>
-        {!isConnected && (
-          <Link to="/settings" className="btn ghost" style={{ textDecoration: "none" }}>
-            前往設定連結 Google 帳號
-          </Link>
-        )}
+    <main className="calendar-page-v2">
+      <div className="top-actions calendar-title-row">
+        <div><div className="eyebrow">SCHEDULE</div><div className="section-title">行事曆整合</div><p>約帶看、成交里程碑與 Google Calendar 集中管理。</p></div>
+        {!isConnected ? <Link to="/settings" className="btn ghost">連結 Google 帳號</Link> : <span className="calendar-connected">已同步 Google Calendar</span>}
       </div>
 
       <form className="panel calendar-quick-add" onSubmit={addGoogleEvent}>
-        <div className="calendar-quick-copy">
-          <strong>快速新增 Google 行程</strong>
-          <span>{isConnected ? "會寫入你自己的 Google 帳號" : "首次使用請先連結 Google 帳號"}</span>
-        </div>
-        <input aria-label="行程名稱" placeholder="行程名稱，例如：林小姐 A7 帶看" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} required />
+        <div className="calendar-quick-copy"><strong>快速新增行程</strong><span>{isConnected ? "自動寫入 Google Calendar" : "首次使用請先連結 Google 帳號"}</span></div>
+        <input aria-label="行程名稱" placeholder="例如：林小姐 A7 帶看" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} required />
         <input aria-label="日期" type="date" value={eventForm.date} onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })} required />
         <input aria-label="時間" type="time" value={eventForm.time} onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })} />
         <input aria-label="備註" placeholder="地址或備註" value={eventForm.notes} onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })} />
-        <button className="btn" type="submit" disabled={creatingEvent}>{creatingEvent ? "新增中…" : isConnected ? "新增行程" : "連結 Google"}</button>
+        <button className="btn" type="submit" disabled={creatingEvent}>{creatingEvent ? "新增中…" : isConnected ? "+ 新增行程" : "連結 Google"}</button>
       </form>
 
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 24, alignItems: "start" }}>
-        <div className="panel">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <button
-              className="btn ghost"
-              onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}
-            >
-              ‹
-            </button>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{monthLabel(monthCursor)}</div>
-            <button
-              className="btn ghost"
-              onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}
-            >
-              ›
-            </button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, fontSize: 11, textAlign: "center" }}>
-            {["日", "一", "二", "三", "四", "五", "六"].map((d) => (
-              <div key={d} style={{ color: "var(--muted)", fontWeight: 700, paddingBottom: 6 }}>{d}</div>
-            ))}
-            {calendarCells.map((d, idx) => {
-              if (!d) return <div key={idx}></div>;
-              const dStr = toDateStr(d);
-              const isToday = dStr === todayStr;
-              const hasEvent = eventDatesSet.has(dStr);
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    padding: "8px 0",
-                    borderRadius: 6,
-                    background: isToday ? "var(--ink)" : hasEvent ? "var(--accent-soft)" : "transparent",
-                    color: isToday ? "#fff" : hasEvent ? "var(--accent)" : "var(--ink)",
-                    fontWeight: isToday || hasEvent ? 700 : 400,
-                  }}
-                >
-                  {d.getDate()}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ marginTop: 16, fontSize: 11, color: "var(--muted)" }}>
-            <span style={{ color: "var(--accent)" }}>●</span> 當天有行程　
-            <span style={{ color: "var(--ink)" }}>●</span> 今天
-          </div>
-        </div>
+      <section className="panel calendar-workspace">
+        <header className="calendar-toolbar">
+          <div className="calendar-toolbar-left"><button className="btn ghost" onClick={goToday}>今天</button><button className="calendar-arrow" aria-label="上一期" onClick={() => moveCursor(-1)}>‹</button><button className="calendar-arrow" aria-label="下一期" onClick={() => moveCursor(1)}>›</button><strong>{currentLabel}</strong></div>
+          <div className="calendar-toolbar-right">{loadingGoogle && <span>同步中…</span>}{isConnected && <button className="btn ghost" onClick={() => setGoogleRefreshKey((key) => key + 1)}>重新同步</button>}<div className="calendar-view-toggle"><button className={viewMode === "week" ? "active" : ""} onClick={() => setViewMode("week")}>週</button><button className={viewMode === "month" ? "active" : ""} onClick={() => setViewMode("month")}>月</button></div></div>
+        </header>
 
-        <div className="panel">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{monthLabel(monthCursor)} 行程{loadingGoogle && "（讀取 Google 行事曆中…）"}</div>
-            {isConnected && <button className="btn ghost" onClick={() => setGoogleRefreshKey((key) => key + 1)}>重新同步</button>}
-          </div>
-          {allEvents.length === 0 && (
-            <div className="empty-state">這個月沒有排定的行程</div>
-          )}
-          {allEvents.map((e, i) => (
-            <div key={i} style={{ display: "flex", gap: 14, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ width: 60, flexShrink: 0, textAlign: "center" }}>
-                <div className="mono" style={{ fontSize: 18, fontWeight: 700 }}>{e.date.slice(8, 10)}</div>
-                <div style={{ fontSize: 10, color: "var(--muted)" }}>{e.date.slice(5, 7)}月{e.time ? `　${e.time}` : ""}</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                  {e.link && e.source === "google" ? (
-                    <a href={e.link} target="_blank" rel="noreferrer">{e.title}</a>
-                  ) : e.link ? (
-                    <Link to={e.link}>{e.title}</Link>
-                  ) : (
-                    e.title
-                  )}
-                </div>
-                {e.detail && <div style={{ fontSize: 12, color: "var(--muted)" }}>{e.detail}</div>}
-                <span
-                  style={{
-                    display: "inline-block", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, marginTop: 4,
-                    background: e.source === "google" ? "#E8F0FE" : "var(--accent-soft)",
-                    color: e.source === "google" ? "#2D5586" : "var(--accent)",
-                  }}
-                >
-                  {e.source === "google" ? "Google 行事曆" : "系統"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        {viewMode === "week" ? <div className="calendar-week-scroll"><div className="calendar-week-grid">
+          <div className="calendar-week-corner" />
+          {weekDays.map((day, index) => <div className={`calendar-week-day ${toDateStr(day) === todayStr ? "today" : ""}`} key={toDateStr(day)}><strong>{day.getDate()}</strong><span>（{["一", "二", "三", "四", "五"][index]}）</span></div>)}
+          {Array.from({ length: 10 }, (_, index) => index + 9).flatMap((hour) => [
+            <div className="calendar-time-label" key={`time-${hour}`}>{pad(hour)}:00</div>,
+            ...weekDays.map((day) => {
+              const date = toDateStr(day);
+              const cellEvents = allEvents.filter((event) => event.date === date && (event.time ? Number(event.time.slice(0, 2)) === hour : hour === 9));
+              return <div className="calendar-time-cell" key={`${date}-${hour}`}>{cellEvents.map((event, eventIndex) => <div className={`calendar-event event-${event.source} event-tone-${eventIndex % 3}`} key={`${event.title}-${eventIndex}`}><small>{event.time || "全天"}</small><strong>{event.link && event.source === "google" ? <a href={event.link} target="_blank" rel="noreferrer">{event.title}</a> : event.link ? <Link to={event.link}>{event.title}</Link> : event.title}</strong>{event.detail && <span>{event.detail}</span>}</div>)}</div>;
+            }),
+          ])}
+        </div></div> : <div className="calendar-month-layout">
+          <div className="calendar-month-grid"><div className="calendar-month-weekdays">{["日", "一", "二", "三", "四", "五", "六"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-month-days">{calendarCells.map((day, index) => {
+            if (!day) return <div key={index} />;
+            const date = toDateStr(day);
+            const dayEvents = allEvents.filter((event) => event.date === date);
+            return <div className={`${date === todayStr ? "today" : ""} ${eventDatesSet.has(date) ? "has-event" : ""}`} key={date}><strong>{day.getDate()}</strong>{dayEvents.slice(0, 2).map((event, eventIndex) => <span key={`${event.title}-${eventIndex}`}>{event.time || "全天"} {event.title}</span>)}</div>;
+          })}</div></div>
+          <div className="calendar-agenda"><h3>{monthLabel(monthCursor)} 行程</h3>{allEvents.length === 0 ? <div className="empty-state">這個月沒有排定的行程</div> : allEvents.map((event, index) => <div className="calendar-agenda-row" key={`${event.title}-${index}`}><time><strong>{event.date.slice(8, 10)}</strong><span>{event.date.slice(5, 7)}月 {event.time || "全天"}</span></time><div><strong>{event.title}</strong>{event.detail && <span>{event.detail}</span>}<small>{event.source === "google" ? "Google Calendar" : "系統行程"}</small></div></div>)}</div>
+        </div>}
+      </section>
     </main>
   );
 }
