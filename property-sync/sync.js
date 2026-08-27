@@ -9,6 +9,7 @@ const iconv = require("iconv-lite");
 const ExcelJS = require("exceljs");
 const { decode } = require("html-entities");
 const { execFileSync } = require("child_process");
+const { inferPropertyLocation } = require("./location-inference");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -83,7 +84,7 @@ function preserve(existing, incoming, field) {
 }
 
 function crmRecord(existing, incoming) {
-  const detailFields = ["address", "mainBuildingPing", "auxiliaryBuildingPing", "commonAreaPing", "parkingPing", "parkingDescription"];
+  const detailFields = ["address", "communityName", "area", "mainBuildingPing", "auxiliaryBuildingPing", "commonAreaPing", "parkingPing", "parkingDescription"];
   const record = { ...incoming };
   for (const field of detailFields) {
     record[field] = incoming.detailEnriched && incoming[field] !== null && incoming[field] !== ""
@@ -91,7 +92,7 @@ function crmRecord(existing, incoming) {
       : preserve(existing, incoming, field);
   }
   record.notes = preserve(existing, incoming, "notes");
-  return record;
+  return { ...record, ...inferPropertyLocation({ ...existing, ...record }) };
 }
 
 async function applyToCrm(incomingRecords) {
@@ -120,8 +121,9 @@ async function applyToCrm(incomingRecords) {
       const old = byListingNo.get(incoming.listingNo);
       if (!old) {
         const ref = doc(collection(db, "properties"));
+        const inferredLocation = inferPropertyLocation(incoming);
         const data = {
-          ...incoming, status: "active", statusChangedAt: today, missingSyncCount: 0,
+          ...incoming, ...inferredLocation, status: "active", statusChangedAt: today, missingSyncCount: 0,
           autoMissingOnHold: false, lastSeenAt: nowIso, updatedAt: today,
           lastPriceChange: null, customFields: [], createdAt: serverTimestamp(),
         };

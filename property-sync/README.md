@@ -19,3 +19,7 @@
 ## 安全測試
 
 `npm run test:archive` 只讀取測試封存，不會連線或寫入 Firebase。正式寫入必須明確加上 `--apply-crm`，且 64 份來源全部驗證成功。
+
+## 社區與商圈回填
+
+`node backfill-property-locations.js` 只會預覽可由案名、地址與 A7／A8／A9 路段可靠判斷的結果。確認後使用 `node backfill-property-locations.js --apply` 才會先備份現有資料並補入空白欄位；人工已填內容不會被覆蓋。每日同步也會保留並沿用同一套判斷規則。
