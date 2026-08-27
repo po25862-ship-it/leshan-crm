@@ -43,6 +43,7 @@ import {
   Search,
   Bell,
   ShieldCheck,
+  Send,
 } from "lucide-react";
 import "./mobile.css";
 
@@ -57,6 +58,7 @@ const desktopNavItems = [
 const desktopSecondaryNavItems = [
   { to: "/activity", label: "互動紀錄", icon: MessageCircle },
   { to: "/calendar", label: "行事曆", icon: CalendarDays },
+  { to: "/line", label: "LINE 分享", icon: Send },
   { to: "/topics", label: "商談管理", icon: MessagesSquare },
   { to: "/rentals", label: "出租管理", icon: Home },
   { to: "/cases", label: "成交管理", icon: BadgeCheck },
@@ -87,7 +89,7 @@ function DesktopSidebar() {
         ))}
         <div className="sidebar-divider" />
         {desktopSecondaryNavItems.map(({ to, label, icon: Icon }) => (
-          <NavLink key={`${to}-${label}`} to={to}><Icon size={16} /><span>{label}</span></NavLink>
+          <NavLink key={`${to}-${label}`} to={to} className={({ isActive }) => (isActive ? "active" : "")}><Icon size={16} /><span>{label}</span></NavLink>
         ))}
       </nav>
       <div className="sidebar-profile">
