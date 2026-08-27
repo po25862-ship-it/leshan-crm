@@ -1,16 +1,17 @@
 import React, { useMemo, useState } from "react";
-import { Image as ImageIcon, Check, X, ExternalLink } from "lucide-react";
+import { Image as ImageIcon, Check, X, ExternalLink, RotateCcw } from "lucide-react";
 import { useCollection } from "../hooks/useCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { getPropertyImage, propertyParkingText } from "../lib/propertyPresentation";
 import PropertyShare from "./PropertyShare";
+import { getRecommendationStatus, isActiveRecommendation, RECOMMENDATION_STATUS_LABELS } from "../lib/recommendationStatus";
 
 function MatchBadge({ percent }) {
   const value = Number.isFinite(percent) ? percent : null;
   return <span className={`match-badge ${value >= 90 ? "excellent" : value >= 80 ? "good" : "neutral"}`}>{value === null ? "手動" : `${value}%`}</span>;
 }
 
-function PropertyMatchCard({ property, match, action, selected, onSelect, introduced, onIntroduced, onRemove }) {
+function PropertyMatchCard({ property, match, action, selected, onSelect, status, onStatus, onRemove }) {
   const image = getPropertyImage(property);
   return (
     <article className={`property-match-card ${selected ? "selected" : ""}`}>
@@ -40,7 +41,7 @@ function PropertyMatchCard({ property, match, action, selected, onSelect, introd
         )}
         <div className="property-match-actions">
           {action}
-          {onIntroduced && <label><input type="checkbox" checked={!!introduced} onChange={onIntroduced} /> 已介紹</label>}
+          {onStatus && <label className="recommendation-status-control"><span>客戶反應</span><select value={status} onChange={(event) => onStatus(event.target.value)} aria-label={`${property.title} 客戶反應`}>{Object.entries(RECOMMENDATION_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
           {onRemove && <button type="button" className="text-danger" onClick={onRemove}>移除</button>}
         </div>
       </div>
@@ -58,6 +59,7 @@ export default function RecommendedProperties({ value, onChange, need }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showShare, setShowShare] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const propertyMap = useMemo(() => Object.fromEntries(properties.map((property) => [property.id, property])), [properties]);
   const matches = useMemo(() => matchPropertiesForNeed(need, properties), [need, properties]);
@@ -66,9 +68,12 @@ export default function RecommendedProperties({ value, onChange, need }) {
   const strongSuggestions = suggestions.filter((match) => match.percent >= 80);
   const visibleSuggestions = showAll ? strongSuggestions : strongSuggestions.slice(0, 6);
 
-  const addProperty = (propertyId) => onChange([...recommended, { propertyId, introduced: false, addedAt: new Date().toISOString().slice(0, 10) }]);
+  const activeRecommendations = recommended.filter(isActiveRecommendation);
+  const recommendationHistory = recommended.filter((item) => !isActiveRecommendation(item));
+
+  const addProperty = (propertyId) => onChange([...recommended, { propertyId, status: "pending", introduced: false, addedAt: new Date().toISOString().slice(0, 10) }]);
   const removeProperty = (propertyId) => onChange(recommended.filter((item) => item.propertyId !== propertyId));
-  const toggleIntroduced = (propertyId) => onChange(recommended.map((item) => item.propertyId === propertyId ? { ...item, introduced: !item.introduced } : item));
+  const updateStatus = (propertyId, status) => onChange(recommended.map((item) => item.propertyId === propertyId ? { ...item, status, introduced: status === "introduced", statusUpdatedAt: new Date().toISOString() } : item));
   const toggleSelect = (propertyId) => setSelectedIds((current) => {
     const next = new Set(current);
     if (next.has(propertyId)) next.delete(propertyId); else next.add(propertyId);
@@ -91,18 +96,30 @@ export default function RecommendedProperties({ value, onChange, need }) {
       {strongSuggestions.length > 6 && <button type="button" className="btn ghost" onClick={() => setShowAll((current) => !current)}>{showAll ? "收合推薦" : `查看全部 ${strongSuggestions.length} 筆`}</button>}
 
       <div className="recommended-list-heading">
-        <div><strong>已加入推薦</strong><span>{recommended.length} 筆</span></div>
-        {recommended.length > 0 && <button type="button" className={selectionMode ? "btn" : "btn ghost"} onClick={() => { setSelectionMode((current) => !current); setSelectedIds(new Set()); setShowShare(false); }}>{selectionMode ? "結束勾選" : "勾選傳送"}</button>}
+        <div><strong>待處理推薦</strong><span>{activeRecommendations.length} 筆</span></div>
+        {activeRecommendations.length > 0 && <button type="button" className={selectionMode ? "btn" : "btn ghost"} onClick={() => { setSelectionMode((current) => !current); setSelectedIds(new Set()); setShowShare(false); }}>{selectionMode ? "結束勾選" : "勾選傳送"}</button>}
       </div>
       {selectedIds.size > 0 && <div className="share-selection-bar"><strong>已選 {selectedIds.size} 筆</strong><button type="button" className="btn" onClick={() => setShowShare(true)}>分享給客人</button><button type="button" className="btn ghost" onClick={() => setSelectedIds(new Set())}>清除</button></div>}
       {showShare && <PropertyShare properties={recommended.map((item) => propertyMap[item.propertyId]).filter((property) => property && selectedIds.has(property.id))} onClose={() => setShowShare(false)} defaultBuyerId={need?.contactId || ""} />}
       <div className="property-match-grid recommended-grid">
-        {recommended.map((item) => {
+        {activeRecommendations.map((item) => {
           const property = propertyMap[item.propertyId];
           if (!property) return <div className="match-empty" key={item.propertyId}>物件已刪除或無法讀取 <button type="button" onClick={() => removeProperty(item.propertyId)}>移除</button></div>;
-          return <PropertyMatchCard key={item.propertyId} property={property} match={matchMap[item.propertyId]} selected={selectedIds.has(item.propertyId)} onSelect={selectionMode ? () => toggleSelect(item.propertyId) : null} introduced={item.introduced} onIntroduced={() => toggleIntroduced(item.propertyId)} onRemove={() => removeProperty(item.propertyId)} />;
+          return <PropertyMatchCard key={item.propertyId} property={property} match={matchMap[item.propertyId]} selected={selectedIds.has(item.propertyId)} onSelect={selectionMode ? () => toggleSelect(item.propertyId) : null} status={getRecommendationStatus(item)} onStatus={(status) => updateStatus(item.propertyId, status)} onRemove={() => removeProperty(item.propertyId)} />;
         })}
       </div>
+      {activeRecommendations.length === 0 && <div className="match-empty">目前沒有待處理推薦。已介紹與沒興趣的物件會保留在下方歷程，不會重新冒出。</div>}
+
+      {recommendationHistory.length > 0 && <div className="recommendation-history">
+        <button type="button" className="recommendation-history-toggle" onClick={() => setShowHistory((current) => !current)}><span><strong>介紹／客戶反應歷程</strong><small>{recommendationHistory.length} 筆（沒興趣的物件不再重複推薦）</small></span><b>{showHistory ? "收合" : "查看"}</b></button>
+        {showHistory && <div className="property-match-grid recommended-grid">{recommendationHistory.map((item) => {
+          const property = propertyMap[item.propertyId];
+          if (!property) return null;
+          const status = getRecommendationStatus(item);
+          return <PropertyMatchCard key={item.propertyId} property={property} match={matchMap[item.propertyId]} status={status} onStatus={(nextStatus) => updateStatus(item.propertyId, nextStatus)} action={<span className={`recommendation-state ${status}`}>{RECOMMENDATION_STATUS_LABELS[status]}</span>} />;
+        })}</div>}
+        {showHistory && <p className="recommendation-history-help"><RotateCcw size={13} /> 要重新推薦時，將客戶反應改回「待介紹」即可。</p>}
+      </div>}
 
       {!showPicker ? <button type="button" className="btn ghost" onClick={() => setShowPicker(true)}>＋ 從物件清單挑選</button> : (
         <div className="property-picker-v2">

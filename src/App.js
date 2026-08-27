@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { HashRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, NavLink, Link, useLocation } from "react-router-dom";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { useDoc } from "./hooks/useDoc";
@@ -24,6 +24,10 @@ import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { GoogleAuthProvider } from "./GoogleAuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { useNeedsCollection } from "./hooks/useNeedsCollection";
+import { useCollection } from "./hooks/useCollection";
+import { getRecentPriceDrop } from "./lib/propertyPresentation";
+import { recommendationCounts } from "./lib/recommendationStatus";
 import { MobileTopBar, MobileBottomNav } from "./MobileShell";
 import {
   LayoutDashboard,
@@ -42,6 +46,7 @@ import {
   LogOut,
   Search,
   Bell,
+  X,
   ShieldCheck,
   Send,
 } from "lucide-react";
@@ -104,9 +109,29 @@ function DesktopSidebar() {
 function DesktopTopBar() {
   const { user } = useAuth();
   const { data: profile } = useDoc(`colleagues/${user.uid}`, { name: "" });
+  const { items: needs } = useNeedsCollection(user.uid);
+  const { items: properties } = useCollection("properties", "createdAt");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const pendingRecommendations = needs.reduce((total, need) => {
+    const counts = recommendationCounts(need.recommendedProperties);
+    return total + counts.pending + counts.interested;
+  }, 0);
+  const recentPriceDrops = properties.filter((property) => getRecentPriceDrop(property)).length;
+  const notificationCount = pendingRecommendations + recentPriceDrops;
   return <header className="desktop-topbar">
     <label><Search size={15} /><input placeholder="搜尋工作台" /></label>
-    <div className="desktop-topbar-actions"><button aria-label="通知"><Bell size={16} /></button><span className="topbar-avatar">{(profile.name || user.email || "樂").slice(0, 1)}</span><strong>{profile.name || "樂善房仲"}</strong></div>
+    <div className="desktop-topbar-actions">
+      <div className="notification-wrap">
+        <button className="notification-button" aria-label={`工作提醒${notificationCount ? `，${notificationCount} 筆` : ""}`} aria-expanded={showNotifications} onClick={() => setShowNotifications((current) => !current)}><Bell size={16} />{notificationCount > 0 && <span className="notification-badge">{notificationCount > 99 ? "99+" : notificationCount}</span>}</button>
+        {showNotifications && <div className="notification-popover">
+          <div className="notification-popover-head"><div><strong>工作提醒</strong><span>依目前 CRM 資料即時整理</span></div><button type="button" onClick={() => setShowNotifications(false)} aria-label="關閉提醒"><X size={15} /></button></div>
+          <Link to="/needs" onClick={() => setShowNotifications(false)}><span className="notification-icon orange"><SearchCheck size={16} /></span><div><strong>待處理客需推薦</strong><small>{pendingRecommendations ? `${pendingRecommendations} 筆待介紹或持續追蹤` : "目前已全部處理"}</small></div><b>{pendingRecommendations}</b></Link>
+          <Link to="/matching?mode=repriced" onClick={() => setShowNotifications(false)}><span className="notification-icon green"><WandSparkles size={16} /></span><div><strong>近 14 天降價重配</strong><small>{recentPriceDrops ? `${recentPriceDrops} 間物件可重新聯絡買方` : "目前沒有新降價"}</small></div><b>{recentPriceDrops}</b></Link>
+          <Link to="/calendar" onClick={() => setShowNotifications(false)}><span className="notification-icon blue"><CalendarDays size={16} /></span><div><strong>查看今日行程</strong><small>開啟週行事曆與 Google Calendar</small></div></Link>
+        </div>}
+      </div>
+      <span className="topbar-avatar">{(profile.name || user.email || "樂").slice(0, 1)}</span><strong>{profile.name || "樂善房仲"}</strong>
+    </div>
   </header>;
 }
 

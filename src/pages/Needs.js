@@ -9,6 +9,7 @@ import { TAIWAN_REGIONS, TAIWAN_CITIES } from "../lib/taiwanRegions";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { mobileFontSize } from "../lib/mobileFont";
 import NeedCriteriaTiers, { NeedTierSummary } from "./NeedCriteriaTiers";
+import { recommendationCounts } from "../lib/recommendationStatus";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -460,8 +461,8 @@ export default function Needs() {
                 {tag} <span>{list.length}</span>
               </div>
               {list.map((item) => {
-                const introducedCount = (item.recommendedProperties || []).filter((r) => r.introduced).length;
-                const totalCount = (item.recommendedProperties || []).length;
+                const recommendationSummary = recommendationCounts(item.recommendedProperties);
+                const { total: totalCount, pending: pendingCount, introduced: introducedCount, interested: interestedCount, notInterested: notInterestedCount } = recommendationSummary;
                 const ranges = normalizeNeedRanges(item);
                 const stats = [
                   rangeStatText(ranges.budgetMin, ranges.budgetMax, "萬") && { value: rangeStatText(ranges.budgetMin, ranges.budgetMax, "萬"), label: "總價" },
@@ -510,7 +511,7 @@ export default function Needs() {
                     {(item.types || []).length > 0 && <div style={{ fontSize: mfs(11), color: "var(--muted)", marginTop: 2 }}>{item.types.join("、")}</div>}
                     {totalCount > 0 && (
                       <div style={{ fontSize: mfs(11), color: "var(--accent)", marginTop: 6, fontWeight: 700 }}>
-                        推薦物件 {totalCount} 筆・已介紹 {introducedCount} 筆
+                        待處理 {pendingCount + interestedCount} 筆・已介紹 {introducedCount} 筆・沒興趣 {notInterestedCount} 筆
                       </div>
                     )}
                     </div>

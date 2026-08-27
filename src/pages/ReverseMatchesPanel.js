@@ -10,7 +10,7 @@ export default function ReverseMatchesPanel({ property, needs, updateNeed }) {
     const existing = match.need.recommendedProperties || [];
     if (existing.some((item) => item.propertyId === property.id)) return;
     setSavingId(match.need.id);
-    await updateNeed(match.need.id, { recommendedProperties: [...existing, { propertyId: property.id, introduced: false, addedAt: new Date().toISOString().slice(0, 10) }] });
+    await updateNeed(match.need.id, { recommendedProperties: [...existing, { propertyId: property.id, status: "pending", introduced: false, addedAt: new Date().toISOString().slice(0, 10) }] });
     setSavingId("");
   };
   return <div className="panel reverse-match-panel">
