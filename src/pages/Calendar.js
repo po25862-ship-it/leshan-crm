@@ -55,7 +55,7 @@ function useAllAppointments(currentUid) {
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const { items: cases } = useCollection("cases", "createdAt");
+  const { items: cases } = useCollection("cases", "createdAt", user.uid === MAIN_OWNER_UID_CAL);
   const { items: rentals } = useSharedCollection("rentals", "createdAt", user.uid);
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const sellerContactIds = useMemo(
