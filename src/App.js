@@ -40,63 +40,72 @@ import {
   WandSparkles,
   Settings as SettingsIcon,
   LogOut,
-  ChevronDown,
+  Search,
+  Bell,
+  ShieldCheck,
 } from "lucide-react";
 import "./mobile.css";
 
 const desktopNavItems = [
   { to: "/", label: "首頁", icon: LayoutDashboard, end: true },
-  { to: "/buyers", label: "買方", icon: Users },
-  { to: "/needs", label: "客需", icon: SearchCheck },
-  { to: "/properties", label: "物件", icon: Building2 },
-  { to: "/matching", label: "配對推薦", icon: WandSparkles },
+  { to: "/buyers", label: "買方管理", icon: Users },
+  { to: "/needs", label: "客需管理", icon: SearchCheck },
+  { to: "/properties", label: "物件管理", icon: Building2 },
+  { to: "/matching", label: "推薦配對", icon: WandSparkles },
 ];
 
 const desktopSecondaryNavItems = [
-  { to: "/sellers", label: "賣方", icon: KeyRound },
-  { to: "/rentals", label: "出租", icon: Home },
-  { to: "/quicknotes", label: "待辦", icon: ListTodo },
-  { to: "/cases", label: "成交", icon: BadgeCheck },
-  { to: "/topics", label: "商談", icon: MessagesSquare },
+  { to: "/activity", label: "互動紀錄", icon: MessageCircle },
   { to: "/calendar", label: "行事曆", icon: CalendarDays },
-  { to: "/line", label: "個人LINE", icon: MessageCircle },
-  { to: "/tools", label: "智慧工具", icon: WandSparkles },
-  { to: "/settings", label: "設定", icon: SettingsIcon },
+  { to: "/topics", label: "商談管理", icon: MessagesSquare },
+  { to: "/rentals", label: "出租管理", icon: Home },
+  { to: "/cases", label: "成交管理", icon: BadgeCheck },
+  { to: "/sellers", label: "賣方管理", icon: KeyRound },
+  { to: "/quicknotes", label: "待辦事項", icon: ListTodo },
+  { to: "/settings", label: "權限設定", icon: ShieldCheck },
+  { to: "/tools", label: "系統設定", icon: SettingsIcon },
 ];
 
-function DesktopHeader() {
+function DesktopSidebar() {
   const { user, logout } = useAuth();
   const { data: profile } = useDoc(`colleagues/${user.uid}`, { name: "" });
   return (
-    <header className="app-header">
+    <aside className="desktop-sidebar">
       <div className="brand">
-        <div className="brand-mark" aria-hidden="true">樂</div>
+        <div className="brand-mark" aria-hidden="true">⌂</div>
         <div className="brand-copy">
-          <h1>案件控台</h1>
-          <span>{profile.name || user.email} · 捷運樂善直營店</span>
+          <h1>樂善房仲 CRM</h1>
+          <span>成交導向・智慧配對</span>
         </div>
       </div>
-      <nav className="app-nav" aria-label="主要導覽">
+      <nav className="sidebar-nav" aria-label="主要導覽">
         {desktopNavItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? "active" : "")}>
             <Icon size={16} strokeWidth={2.1} aria-hidden="true" />
             <span>{label}</span>
           </NavLink>
         ))}
-        <details className="nav-more">
-          <summary><span>其他功能</span><ChevronDown size={14} /></summary>
-          <div className="nav-more-menu">
-            {desktopSecondaryNavItems.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to}><Icon size={16} /><span>{label}</span></NavLink>
-            ))}
-          </div>
-        </details>
-        <button className="nav-logout" onClick={logout} aria-label="登出">
-          <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
-        </button>
+        <div className="sidebar-divider" />
+        {desktopSecondaryNavItems.map(({ to, label, icon: Icon }) => (
+          <NavLink key={`${to}-${label}`} to={to}><Icon size={16} /><span>{label}</span></NavLink>
+        ))}
       </nav>
-    </header>
+      <div className="sidebar-profile">
+        <span className="sidebar-avatar">{(profile.name || user.email || "樂").slice(0, 1)}</span>
+        <div><strong>{profile.name || user.email}</strong><small>主要負責人</small></div>
+        <button onClick={logout} aria-label="登出"><LogOut size={15} /></button>
+      </div>
+    </aside>
   );
+}
+
+function DesktopTopBar() {
+  const { user } = useAuth();
+  const { data: profile } = useDoc(`colleagues/${user.uid}`, { name: "" });
+  return <header className="desktop-topbar">
+    <label><Search size={15} /><input placeholder="搜尋工作台" /></label>
+    <div className="desktop-topbar-actions"><button aria-label="通知"><Bell size={16} /></button><span className="topbar-avatar">{(profile.name || user.email || "樂").slice(0, 1)}</span><strong>{profile.name || "樂善房仲"}</strong></div>
+  </header>;
 }
 
 function AppRoutes() {
@@ -106,6 +115,7 @@ function AppRoutes() {
       <Route path="/sellers" element={<Sellers />} />
       <Route path="/sellers/:contactId/:listingId" element={<SellerDetail />} />
       <Route path="/buyers" element={<Buyers />} />
+      <Route path="/activity" element={<Buyers />} />
       <Route path="/rentals" element={<Rentals />} />
       <Route path="/rentals/:rentalId" element={<RentalDetail />} />
       <Route path="/quicknotes" element={<QuickNotes />} />
@@ -196,10 +206,13 @@ function AppShell() {
           <MobileBottomNav />
         </div>
       ) : (
-        <>
-          <DesktopHeader />
-          <AppRoutes />
-        </>
+        <div className="desktop-shell">
+          <DesktopSidebar />
+          <div className="desktop-content">
+            <DesktopTopBar />
+            <AppRoutes />
+          </div>
+        </div>
       )}
     </HashRouter>
   );

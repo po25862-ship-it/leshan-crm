@@ -69,7 +69,7 @@ export default function Dashboard() {
       <section className="workbench-grid">
         <div className="workbench-card workbench-buyers">
           <div className="workbench-card-head"><div><span>PRIORITY BUYERS</span><h3>待聯絡高機會買方</h3></div><Link to="/buyers">查看全部</Link></div>
-          {highOpportunity.length === 0 ? <div className="workbench-empty">目前沒有同時符合「80%+ 配對」與待聯絡條件的買方。</div> : highOpportunity.slice(0, 7).map((buyer, index) => (
+          {highOpportunity.length === 0 ? <div className="workbench-empty">目前沒有同時符合「80%+ 配對」與待聯絡條件的買方。</div> : highOpportunity.slice(0, 5).map((buyer, index) => (
             <button type="button" className="priority-buyer-row" key={buyer.id} onClick={() => navigate(`/buyers?open=${buyer.id}`)}>
               <span className="priority-rank">{String(index + 1).padStart(2, "0")}</span>
               <span className="buyer-avatar">{buyer.name?.slice(0, 1) || "客"}</span>
@@ -81,26 +81,28 @@ export default function Dashboard() {
           ))}
         </div>
 
-        <div className="workbench-card today-schedule">
-          <div className="workbench-card-head"><div><span>TODAY</span><h3>今日行程</h3></div><Link to="/calendar">行事曆</Link></div>
-          {todayAppointments.length === 0 ? <div className="workbench-empty">今天尚未安排帶看或約訪。</div> : todayAppointments.slice(0, 8).map((appointment) => (
-            <div className="schedule-row" key={`${appointment.parentId}-${appointment.id}`}><div className="schedule-time">{appointment.time || "全天"}</div><div><strong>{contactMap[appointment.parentId]?.name || appointment.contactName || "買方行程"}</strong><span>{appointment.propertyLabel || appointment.notes || "約帶看"}</span></div></div>
-          ))}
-          <Link className="schedule-add" to="/calendar"><CalendarDays size={15} /> 安排新行程</Link>
+        <div className="workbench-card latest-matches dashboard-latest-panel">
+          <div className="workbench-card-head"><div><span>TOP MATCHES</span><h3>最新高配對物件</h3></div><Link to="/matching">查看全部</Link></div>
+          <div className="dashboard-match-grid">
+            {highMatches.slice(0, 3).map((match) => {
+              const image = getPropertyImage(match.property);
+              return <button type="button" className="dashboard-match-card" key={`${match.need.id}-${match.property.id}`} onClick={() => navigate(`/properties?open=${match.property.id}`)}>
+                <div className="dashboard-match-image">{image ? <img src={image} alt={`${match.property.title} 物件照片`} /> : <span><ImageIcon size={22} />尚未上傳照片</span>}<b>{match.percent}%</b></div>
+                <div className="dashboard-match-copy"><small>{match.need.contactName || "未指定買方"}</small><strong>{match.property.title}</strong><span>{match.property.totalPrice ? `${Number(match.property.totalPrice).toLocaleString()} 萬` : "價格未填"}・{match.property.layout || "格局未填"}</span></div>
+              </button>;
+            })}
+            {highMatches.length === 0 && <div className="workbench-empty">目前沒有 90% 以上配對。</div>}
+          </div>
         </div>
       </section>
 
-      <section className="workbench-card latest-matches">
-        <div className="workbench-card-head"><div><span>TOP MATCHES</span><h3>最新高配對物件</h3></div><Link to="/needs">前往配對推薦</Link></div>
-        <div className="dashboard-match-grid">
-          {highMatches.slice(0, 6).map((match) => {
-            const image = getPropertyImage(match.property);
-            return <button type="button" className="dashboard-match-card" key={`${match.need.id}-${match.property.id}`} onClick={() => navigate(`/properties?open=${match.property.id}`)}>
-              <div className="dashboard-match-image">{image ? <img src={image} alt={`${match.property.title} 物件照片`} /> : <span><ImageIcon size={22} />尚未上傳照片</span>}<b>{match.percent}%</b></div>
-              <div className="dashboard-match-copy"><small>{match.need.contactName || "未指定買方"}・{match.need.title}</small><strong>{match.property.title}</strong><span>{match.property.totalPrice ? `${Number(match.property.totalPrice).toLocaleString()} 萬` : "價格未填"}・{match.property.layout || "格局未填"}・{match.property.floor || "樓層未填"}</span><em>{match.reasons.slice(0, 3).join("・")}</em></div>
-            </button>;
-          })}
-          {highMatches.length === 0 && <div className="workbench-empty">目前沒有 90% 以上配對，請先建立客需或補齊物件資料。</div>}
+      <section className="workbench-card today-schedule schedule-horizontal">
+        <div className="workbench-card-head"><div><span>TODAY</span><h3>今日行程</h3></div><Link to="/calendar">行事曆</Link></div>
+        <div className="schedule-horizontal-grid">
+          {todayAppointments.length === 0 ? <div className="workbench-empty">今天尚未安排帶看或約訪。</div> : todayAppointments.slice(0, 4).map((appointment) => (
+            <div className="schedule-row" key={`${appointment.parentId}-${appointment.id}`}><div className="schedule-time">{appointment.time || "全天"}</div><div><strong>{contactMap[appointment.parentId]?.name || appointment.contactName || "買方行程"}</strong><span>{appointment.propertyLabel || appointment.notes || "約帶看"}</span></div></div>
+          ))}
+          <Link className="schedule-add" to="/calendar"><CalendarDays size={15} /> 安排新行程</Link>
         </div>
       </section>
     </main>
