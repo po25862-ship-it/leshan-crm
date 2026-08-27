@@ -1088,8 +1088,9 @@ export default function Properties() {
                   <span className="tag" style={{ marginLeft: 6 }}>{STATUS_LABELS[form.status || "active"]}</span>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {form.websiteUrl && <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟網頁</a>}
-                  {form.websiteUrl && <button type="button" className="btn ghost" onClick={() => copyUrl(form.websiteUrl)}>複製網址</button>}
+                  {form.websiteUrl && form.websitePublished === true && <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟網頁</a>}
+                  {form.websiteUrl && form.websitePublished === true && <button type="button" className="btn ghost" onClick={() => copyUrl(form.websiteUrl)}>複製網址</button>}
+                  {form.websiteUrl && form.websitePublished !== true && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>}
                   <button type="button" className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
                   <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>關閉</button>
                 </div>
@@ -1270,16 +1271,17 @@ export default function Properties() {
                   value={form.websiteUrl}
                   onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
                 />
-                {form.websiteUrl && (
+                {form.websiteUrl && form.websitePublished === true && (
                   <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                     開啟網頁
                   </a>
                 )}
-                {form.websiteUrl && (
+                {form.websiteUrl && form.websitePublished === true && (
                   <button type="button" className="btn ghost" style={{ whiteSpace: "nowrap" }} onClick={() => copyUrl(form.websiteUrl)}>
                     複製網址
                   </button>
                 )}
+                {form.websiteUrl && form.websitePublished !== true && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB", whiteSpace: "nowrap" }}>× 官網未上架</span>}
               </div>
             </div>
             <div className="form-field">
@@ -1436,12 +1438,12 @@ export default function Properties() {
             </div>
             </div>
             <div className="actions" onClick={(e) => e.stopPropagation()}>
-              {p.websiteUrl && (
+              {p.websiteUrl && p.websitePublished === true && (
                 <a href={withAgid(p.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   開啟網頁
                 </a>
               )}
-              {p.websiteUrl && p.websitePublished === false && !isMobile && (
+              {p.websitePublished !== true && !isMobile && (
                 <span
                   role="img"
                   aria-label={`${p.title || "物件"} 官網目前未上架`}
@@ -1451,13 +1453,13 @@ export default function Properties() {
                   <X size={15} strokeWidth={2.5} aria-hidden="true" />
                 </span>
               )}
-              {p.websiteUrl && p.websitePublished === false && !isMobile && (
+              {p.websitePublished !== true && !isMobile && (
                 <span className="tag" style={{ color: "#B42318", background: "#FEECEB" }}>官網未上架</span>
               )}
-              {p.websiteUrl && p.websitePublished === false && isMobile && (
+              {p.websitePublished !== true && isMobile && (
                 <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>
               )}
-              {p.websiteUrl && (
+              {p.websiteUrl && p.websitePublished === true && (
                 <button className="btn ghost" onClick={() => copyUrl(p.websiteUrl)}>
                   複製網址
                 </button>
