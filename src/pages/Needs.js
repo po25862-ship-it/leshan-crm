@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
@@ -65,6 +65,7 @@ export default function Needs() {
   const [editingId, setEditingId] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const didAutoOpen = useRef(false);
 
   const openNew = () => {
     setForm(emptyForm);
@@ -99,6 +100,21 @@ export default function Needs() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, searchParams]);
+
+  useEffect(() => {
+    if (
+      !isMobile &&
+      !didAutoOpen.current &&
+      !showForm &&
+      items.length > 0 &&
+      !searchParams.get("open")
+    ) {
+      didAutoOpen.current = true;
+      openEdit(items[0]);
+    }
+    // Desktop master-detail should open with a selected need, matching the reference layout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, items, searchParams, showForm]);
 
   const onContactChange = (id) => {
     const c = contacts.find((x) => x.id === id);
