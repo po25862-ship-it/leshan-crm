@@ -8,6 +8,11 @@ test("A7 road and title infer community and market area", () => {
   });
 });
 
+test("confirmed A7 community names are extracted from marketing titles", () => {
+  assert.equal(inferPropertyLocation({ title: "A7皇翔歡喜城三房車", address: "桃園市龜山區文青路222號" }).communityName, "皇翔歡喜城");
+  assert.equal(inferPropertyLocation({ title: "根津苑中庭楓景兩房車", address: "桃園市龜山區樂善三路106號" }).communityName, "根津苑");
+});
+
 test("full address falls back to city district", () => {
   assert.deepEqual(inferPropertyLocation({ title: "採光三房", address: "桃園市桃園區中正路1209號" }), {
     communityName: "", area: "桃園市桃園區",
