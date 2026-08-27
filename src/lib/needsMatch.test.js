@@ -19,6 +19,13 @@ test("保留區域硬篩與預算 10% 容忍", () => {
   expect(matchPropertiesForNeed(baseNeed, [property({ totalPrice: "2000" })])).toHaveLength(0);
 });
 
+test("客需可用社區名稱或商圈命中區域硬篩", () => {
+  const communityNeed = { ...baseNeed, areas: [{ city: "", district: "", community: "富宇悅峰" }] };
+  const areaNeed = { ...baseNeed, areas: [{ city: "", district: "", community: "A7" }] };
+  expect(matchPropertiesForNeed(communityNeed, [property({ address: "", communityName: "富宇悅峰" })])).toHaveLength(1);
+  expect(matchPropertiesForNeed(areaNeed, [property({ address: "", area: "A7重劃區" })])).toHaveLength(1);
+});
+
 test("必要條件不符淘汰，偏好條件不符則保留並扣分", () => {
   const oneRoom = property({ layout: "1/1/1" });
   const preferred = matchPropertiesForNeed(baseNeed, [oneRoom]);

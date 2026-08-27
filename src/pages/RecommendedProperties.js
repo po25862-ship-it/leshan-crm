@@ -32,7 +32,7 @@ function PropertyMatchCard({ property, match, action, selected, onSelect, status
           <span>{property.floor || "樓層未填"}</span>
           <span>{propertyParkingText(property)}</span>
         </div>
-        <div className="property-address">{property.address || "地址未填"}</div>
+        <div className="property-address">{[property.communityName, property.area, property.address].filter(Boolean).join("・") || "位置未填"}</div>
         {match && (
           <div className="match-reasons">
             {match.reasons.slice(0, 4).map((reason) => <span className="hit" key={reason}><Check size={12} />{reason}</span>)}
@@ -79,7 +79,7 @@ export default function RecommendedProperties({ value, onChange, need }) {
     if (next.has(propertyId)) next.delete(propertyId); else next.add(propertyId);
     return next;
   });
-  const filtered = properties.filter((property) => !recommendedIds.includes(property.id) && (!keyword.trim() || `${property.title} ${property.address}`.includes(keyword.trim())));
+  const filtered = properties.filter((property) => !recommendedIds.includes(property.id) && (!keyword.trim() || `${property.title} ${property.communityName || ""} ${property.area || ""} ${property.address || ""}`.includes(keyword.trim())));
 
   return (
     <div className="recommended-properties-v2">
@@ -123,8 +123,8 @@ export default function RecommendedProperties({ value, onChange, need }) {
 
       {!showPicker ? <button type="button" className="btn ghost" onClick={() => setShowPicker(true)}>＋ 從物件清單挑選</button> : (
         <div className="property-picker-v2">
-          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜尋案名、地址…" autoFocus />
-          {filtered.slice(0, 30).map((property) => <button type="button" key={property.id} onClick={() => addProperty(property.id)}><span><strong>{property.title}</strong><small>{property.address}・{property.totalPrice || "—"} 萬</small></span><b>加入</b></button>)}
+          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜尋案名、社區、商圈、地址…" autoFocus />
+          {filtered.slice(0, 30).map((property) => <button type="button" key={property.id} onClick={() => addProperty(property.id)}><span><strong>{property.title}</strong><small>{[property.communityName, property.area, property.address].filter(Boolean).join("・") || "位置未填"}・{property.totalPrice || "—"} 萬</small></span><b>加入</b></button>)}
           <button type="button" className="btn ghost" onClick={() => setShowPicker(false)}>關閉</button>
         </div>
       )}

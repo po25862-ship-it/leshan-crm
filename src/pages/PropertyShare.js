@@ -29,7 +29,7 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
       introText,
       "",
       ...properties.flatMap((p) => {
-        const line1 = [p.title, truncateAddress(p.address), p.totalPrice ? `${p.totalPrice}萬` : ""]
+        const line1 = [p.title, p.communityName, p.area, truncateAddress(p.address), p.totalPrice ? `${p.totalPrice}萬` : ""]
           .filter(Boolean)
           .join("・");
         const line2 = p.websiteUrl ? withAgid(p.websiteUrl, agid) : "";

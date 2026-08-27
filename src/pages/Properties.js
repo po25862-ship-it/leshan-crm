@@ -60,6 +60,8 @@ const emptyForm = {
   store: STORES[3],
   listingNo: "",
   title: "",
+  communityName: "",
+  area: "",
   address: "",
   landPing: "",
   titlePing: "",
@@ -363,6 +365,8 @@ export default function Properties() {
     const k = keyword.trim();
     return (
       (p.title || "").includes(k) ||
+      (p.communityName || "").includes(k) ||
+      (p.area || "").includes(k) ||
       (p.address || "").includes(k) ||
       (p.listingNo || "").includes(k) ||
       (p.store || "").includes(k)
@@ -947,7 +951,7 @@ export default function Properties() {
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder="搜尋案名、地址、委託書編號、店名…"
+          placeholder="搜尋案名、社區、商圈、地址、委託書編號、店名…"
           style={{ flex: 1, minWidth: 220, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
         />
         <select
@@ -1102,6 +1106,8 @@ export default function Properties() {
                 <DetailValue label="主建物" value={form.mainBuildingPing ? `${form.mainBuildingPing} 坪` : "—"} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
+                <DetailValue label="社區名稱" value={form.communityName} />
+                <DetailValue label="商圈／區域" value={form.area} />
                 <DetailValue label="地址" value={form.address} />
                 <DetailValue label="樓別／座向" value={[form.floor, form.orientation].filter(Boolean).join("・")} />
                 <DetailValue label="屋齡" value={form.age} />
@@ -1183,6 +1189,17 @@ export default function Properties() {
               <div className="form-field">
                 <label>案名</label>
                 <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+              </div>
+            </div>
+
+            <div style={fieldStyle2}>
+              <div className="form-field">
+                <label>社區名稱</label>
+                <input value={form.communityName} onChange={(e) => setForm({ ...form, communityName: e.target.value })} placeholder="例如：富宇悅峰" />
+              </div>
+              <div className="form-field">
+                <label>商圈／區域</label>
+                <input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="例如：A7、A8、林口" />
               </div>
             </div>
 
@@ -1405,6 +1422,8 @@ export default function Properties() {
                 {(p.sheetFiles || []).length > 0 && <span title="已上傳資料表"> 📄</span>}
               </div>
               <div className="meta">
+                {p.communityName && <><strong>{p.communityName}</strong>　</>}
+                {p.area && <>{p.area}　</>}
                 {p.store}　{p.listingNo}　{p.address}
               </div>
               <div className="meta">

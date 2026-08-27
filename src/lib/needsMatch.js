@@ -31,11 +31,15 @@ function inRange(value, min, max) {
   return !(min !== null && value < min) && !(max !== null && value > max);
 }
 
-function matchesArea(address, area) {
-  const normalizedAddress = normalizeRegionText(address || "");
-  if (area.city && !normalizedAddress.includes(normalizeRegionText(area.city))) return false;
-  if (area.district && !normalizedAddress.includes(normalizeRegionText(area.district))) return false;
-  if (area.community && !normalizedAddress.includes(normalizeRegionText(area.community))) return false;
+function matchesArea(property, area) {
+  const normalizedLocation = normalizeRegionText([
+    property?.address,
+    property?.communityName,
+    property?.area,
+  ].filter(Boolean).join(" "));
+  if (area.city && !normalizedLocation.includes(normalizeRegionText(area.city))) return false;
+  if (area.district && !normalizedLocation.includes(normalizeRegionText(area.district))) return false;
+  if (area.community && !normalizedLocation.includes(normalizeRegionText(area.community))) return false;
   return true;
 }
 
@@ -59,7 +63,7 @@ function toFeatureList(value) {
 }
 
 function propertySearchText(property) {
-  return [property.title, property.address, property.category, property.parkingDescription, property.notes,
+  return [property.title, property.communityName, property.area, property.address, property.category, property.parkingDescription, property.notes,
     property.orientation, ...(property.customFields || []).flatMap((field) => [field.label, field.value])]
     .filter(Boolean).join(" ").toLowerCase();
 }
@@ -113,7 +117,7 @@ export function matchPropertiesForNeed(need, properties) {
       else missedReasons.push(missedLabel || `${label}未命中`);
     };
 
-    addCriterion({ key: "area", active: areas.length > 0, matched: areas.some((area) => matchesArea(property.address, area)), label: "區域相符", alwaysRequired: true });
+    addCriterion({ key: "area", active: areas.length > 0, matched: areas.some((area) => matchesArea(property, area)), label: "區域相符", alwaysRequired: true });
     if (rejected) return;
 
     if (budgetMin !== null || budgetMax !== null) {
