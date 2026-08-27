@@ -8,7 +8,7 @@ import { useAppointmentsForContacts } from "../hooks/useAppointmentsForContacts"
 import { useAuth } from "../AuthContext";
 import { daysSince, todayStr } from "../lib/dates";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
-import { getPropertyImage, timestampToMillis } from "../lib/propertyPresentation";
+import { getPropertyImage, getRecentPriceDrop, timestampToMillis } from "../lib/propertyPresentation";
 
 const isRecent = (value, days = 7) => timestampToMillis(value) >= Date.now() - days * 86400000;
 
@@ -35,10 +35,7 @@ export default function Dashboard() {
   const contactMap = useMemo(() => Object.fromEntries(contacts.map((contact) => [contact.id, contact])), [contacts]);
   const recentProperties = useMemo(() => new Set(activeProperties.filter((property) => isRecent(property.createdAt, 7)).map((property) => property.id)), [activeProperties]);
   const newMatches = matches.filter((match) => recentProperties.has(match.property.id) && match.percent >= 80);
-  const priceDrops = useMemo(() => activeProperties.filter((property) => {
-    const change = property.lastPriceChange;
-    return change && Number(change.newPrice) < Number(change.oldPrice) && isRecent(change.date, 14);
-  }), [activeProperties]);
+  const priceDrops = useMemo(() => activeProperties.filter((property) => getRecentPriceDrop(property)), [activeProperties]);
   const highMatches = matches.filter((match) => match.percent >= 90);
 
   const buyerOpportunities = useMemo(() => buyers.map((buyer) => {
@@ -62,7 +59,7 @@ export default function Dashboard() {
       <section className="deal-kpi-grid">
         <KpiCard icon={Phone} label="待聯絡高機會買方" value={highOpportunity.length} hint="依配對與未聯絡天數排序" tone="orange" to="/buyers" />
         <KpiCard icon={Sparkles} label="新符合物件" value={newMatches.length} hint="近 7 天新增、配對 80%+" tone="blue" to="/needs" />
-        <KpiCard icon={TrendingDown} label="降價重配" value={priceDrops.length} hint="近 14 天降價案件" tone="green" to="/properties" />
+        <KpiCard icon={TrendingDown} label="降價重配" value={priceDrops.length} hint="近 14 天降價案件" tone="green" to="/matching?mode=repriced" />
         <KpiCard icon={Target} label="90%+ 配對" value={highMatches.length} hint="優先安排介紹與帶看" tone="purple" to="/needs" />
       </section>
 

@@ -21,3 +21,20 @@ export function timestampToMillis(value) {
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
 }
+
+export function getRecentPriceDrop(property, days = 14, now = Date.now()) {
+  const change = property?.lastPriceChange;
+  const oldPrice = Number(change?.oldPrice);
+  const newPrice = Number(change?.newPrice);
+  const changedAt = timestampToMillis(change?.date || change?.createdAt);
+  if (!oldPrice || !newPrice || newPrice >= oldPrice || !changedAt) return null;
+  if (changedAt < now - days * 86400000) return null;
+  const amount = oldPrice - newPrice;
+  return {
+    oldPrice,
+    newPrice,
+    amount,
+    percent: Math.round((amount / oldPrice) * 1000) / 10,
+    date: change.date || "",
+  };
+}
