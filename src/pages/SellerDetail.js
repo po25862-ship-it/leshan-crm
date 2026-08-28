@@ -63,6 +63,7 @@ export default function SellerDetail() {
   const [ownerForm, setOwnerForm] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
@@ -114,8 +115,8 @@ export default function SellerDetail() {
     return newRef.id;
   };
 
-  const onSave = async () => {
-    let resolved = { ...form, propertyUrl: withoutAgid(form.propertyUrl) };
+  const saveListingData = async (input) => {
+    let resolved = { ...input, propertyUrl: withoutAgid(input.propertyUrl) };
     if (!resolved.propertyId) {
       const match = properties.find((p) => p.title === (form.title || "").trim());
       if (match) resolved.propertyId = match.id;
@@ -163,6 +164,33 @@ export default function SellerDetail() {
     await saveContact({ sharedWith: resolved.sharedWith || [], lastModifiedByUid: user.uid });
     setForm(resolved);
     setEditMode(false);
+    return resolved;
+  };
+
+  const onSave = () => saveListingData(form);
+
+  const promoteToListed = async () => {
+    const agreementType = form.agreementType || "一般";
+    if (!window.confirm(`確定將「${form.title || "這筆屋主資料"}」轉為已委託嗎？\n\n委託形式：${agreementType}委託\n起始日：${form.agreementStartDate || todayStr()}\n\n確認後會同步到物件管理。`)) return;
+    setPromoting(true);
+    try {
+      const promoted = await saveListingData({
+        ...form,
+        status: "listed",
+        customerStage: "正式",
+        agreementType,
+        agreementStartDate: form.agreementStartDate || todayStr(),
+      });
+      const nextTags = (ownerForm.tags || []).filter((tag) => tag !== "觀察中");
+      await saveContact({ customerStage: "正式", tags: nextTags, lastModifiedByUid: user.uid });
+      setForm(promoted);
+      setOwnerForm((current) => ({ ...current, customerStage: "正式", tags: nextTags }));
+    } catch (error) {
+      console.error(error);
+      alert("轉為已委託失敗，請確認網路後再試一次。");
+    } finally {
+      setPromoting(false);
+    }
   };
 
   const onSaveOwner = async () => {
@@ -243,7 +271,10 @@ export default function SellerDetail() {
               <button className="btn danger" onClick={onDelete}>刪除</button>
             </>
           ) : (
-            <button className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
+            <>
+              {form.status === "tracking" && <button className="btn seller-promote-button" onClick={promoteToListed} disabled={promoting}>{promoting ? "轉換中…" : "✓ 轉為已委託"}</button>}
+              <button className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
+            </>
           )}
         </div>
       </div>
