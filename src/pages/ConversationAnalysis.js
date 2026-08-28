@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, FileText, LockKeyhole, Sparkles, Upload, WandSparkles, XCircle } from "lucide-react";
+import { CheckCircle2, FileJson, FileText, LockKeyhole, Sparkles, Upload, WandSparkles, XCircle } from "lucide-react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../AuthContext";
@@ -9,6 +9,7 @@ import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useCollection } from "../hooks/useCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { analysisNotes, analyzeLineConversation, analyzeSellerConversation, analyzeTeamConversation, parseLineChat, sellerAnalysisNotes, teamAnalysisNotes } from "../lib/lineConversationAnalyzer";
+import { parseDeepAnalysisImport } from "../lib/deepAnalysisImport";
 
 const SAMPLE_TEXT = `2026/8/27（四）
 10:15\t房仲\t想找哪一區與多少預算呢？
@@ -42,10 +43,12 @@ export default function ConversationAnalysis() {
   const buyers = contacts.filter((contact) => (contact.tags || []).includes("買方"));
   const sellers = contacts.filter((contact) => (contact.tags || []).includes("賣方"));
   const fileInput = useRef(null);
+  const aiFileInput = useRef(null);
   const [rawText, setRawText] = useState("");
   const [analysisMode, setAnalysisMode] = useState("buyer");
   const [fileName, setFileName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [isAiDragging, setIsAiDragging] = useState(false);
   const [participant, setParticipant] = useState("");
   const [contactId, setContactId] = useState("");
   const [result, setResult] = useState(null);
@@ -75,6 +78,47 @@ export default function ConversationAnalysis() {
     setResult(null);
     setSavedRecord(null);
     setError("");
+  };
+
+  const readAiAnalysisFile = async (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      setError("請選擇 ChatGPT 產生的 .json 深度分析檔。");
+      return;
+    }
+    if (file.size > 512 * 1024) {
+      setError("分析檔超過 512 KB，請確認選到的是 CRM 深度分析 JSON。");
+      return;
+    }
+    try {
+      const imported = parseDeepAnalysisImport(await file.text());
+      setAnalysisMode(imported.analysisType);
+      setParticipant(imported.participant);
+      setContactId("");
+      setRawText("");
+      setFileName(imported.sourceFileName || file.name);
+      setResult(imported);
+      setSavedRecord(null);
+      setError("");
+    } catch (importError) {
+      setError(importError.message || "深度分析檔無法讀取，請重新產生後再試一次。");
+    }
+  };
+
+  const loadAiFile = async (event) => {
+    await readAiAnalysisFile(event.target.files?.[0]);
+    event.target.value = "";
+  };
+
+  const dropAiFile = async (event) => {
+    event.preventDefault();
+    setIsAiDragging(false);
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length !== 1) {
+      setError("請一次拖入一個深度分析 .json 檔案。");
+      return;
+    }
+    await readAiAnalysisFile(files[0]);
   };
 
   const loadFile = async (event) => {
@@ -138,6 +182,8 @@ export default function ConversationAnalysis() {
           lastModifiedByUid: user.uid,
           sharedWith: [],
           teamRequestAnalysis: {
+            analysisSource: result.analysisSource || "local-rules",
+            deepAnalysis: result.deepAnalysis || null,
             score: result.score,
             priorityLevel: result.intentLevel,
             requestTypes: result.requestTypes,
@@ -190,6 +236,8 @@ export default function ConversationAnalysis() {
           ownerUid: user.uid,
           lastModifiedByUid: user.uid,
           sellerAnalysis: {
+            analysisSource: result.analysisSource || "local-rules",
+            deepAnalysis: result.deepAnalysis || null,
             score: result.score,
             intentLevel: result.intentLevel,
             motivations: result.motivations,
@@ -232,6 +280,8 @@ export default function ConversationAnalysis() {
       ownerUid: user.uid,
       lastModifiedByUid: user.uid,
       conversationAnalysis: {
+        analysisSource: result.analysisSource || "local-rules",
+        deepAnalysis: result.deepAnalysis || null,
         score: result.score,
         intentLevel: result.intentLevel,
         signals: result.signals,
@@ -280,7 +330,7 @@ export default function ConversationAnalysis() {
           onDragLeave={(event) => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget)) setIsDragging(false); }}
           onDrop={dropFile}
         >
-          <FileText size={28} /><strong>{isDragging ? "放開即可匯入 LINE 對話" : fileName || "拖拉 LINE .txt 到這裡"}</strong><small>{fileName ? `${parsed.messages.length} 則訊息・${parsed.participants.length} 位發言者` : "也可以點一下選擇檔案・內容只在本機解析"}</small>
+          <FileText size={28} /><strong>{isDragging ? "放開即可匯入 LINE 對話" : (rawText && fileName) || "拖拉 LINE .txt 到這裡"}</strong><small>{rawText && fileName ? `${parsed.messages.length} 則訊息・${parsed.participants.length} 位發言者` : "也可以點一下選擇檔案・內容只在本機解析"}</small>
         </button>
         <div className="conversation-divider"><span>或直接貼上</span></div>
         <textarea value={rawText} onChange={(event) => { setRawText(event.target.value); setFileName(""); setResult(null); }} rows={9} placeholder="貼上 LINE 聊天記錄…" />
@@ -301,18 +351,35 @@ export default function ConversationAnalysis() {
       </section>
     </div>
 
+    <section className="panel conversation-ai-import-card">
+      <div className="conversation-card-head"><span><FileJson size={18} /></span><div><h3>已有 ChatGPT 深度分析？直接拖進來</h3><p>適合重要客戶、屋主或同事案件：不呼叫 API、不產生額外 AI 費用</p></div></div>
+      <input ref={aiFileInput} type="file" accept=".json,application/json" onChange={loadAiFile} hidden />
+      <button
+        type="button"
+        className={`conversation-ai-dropzone${isAiDragging ? " is-dragging" : ""}`}
+        onClick={() => aiFileInput.current?.click()}
+        onDragEnter={(event) => { event.preventDefault(); setIsAiDragging(true); }}
+        onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsAiDragging(true); }}
+        onDragLeave={(event) => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget)) setIsAiDragging(false); }}
+        onDrop={dropAiFile}
+      >
+        <FileJson size={24} />
+        <span><strong>{isAiDragging ? "放開即可匯入深度分析" : "拖拉 .json 到這裡，或點一下選擇檔案"}</strong><small>只讀取固定分析欄位，不會執行檔案內容；匯入後先預覽，再由你確認寫入。</small></span>
+      </button>
+    </section>
+
     {result && <>
       <section className="conversation-results">
         <article className="panel conversation-score-card">
           <div className={`conversation-score-ring level-${result.intentLevel}`}><strong>{result.score}</strong><span>/ 100</span></div>
           <div><span className="conversation-label">{analysisMode === "seller" ? "委售意願" : analysisMode === "team" ? "處理優先程度" : "購屋意願"}</span><h3>{result.intentLevel}{analysisMode === "team" ? "優先訴求" : `意願${analysisMode === "seller" ? "屋主" : "買方"}`}</h3><p>{analysisMode === "seller" ? "依估價、現勘、物件資料、委託與價格訊號估算。" : analysisMode === "team" ? "依明確請求、影響、阻礙、時限與急迫語句估算。" : "依客需完整度、看屋／出價／貸款等訊號與異議估算。"}</p></div>
         </article>
-        <article className="panel"><span className="conversation-label">{analysisMode === "seller" ? "屋主狀況摘要" : analysisMode === "team" ? "同事訴求摘要" : "客需摘要"}</span><h3>{result.summary}</h3><p className="conversation-muted">分析 {result.messageCount} 則指定對象訊息，共 {result.totalMessageCount} 則對話。</p></article>
+        <article className="panel"><span className="conversation-label">{analysisMode === "seller" ? "屋主狀況摘要" : analysisMode === "team" ? "同事訴求摘要" : "客需摘要"}</span><h3>{result.summary}</h3><p className="conversation-muted">{result.analysisSource === "chatgpt-import" ? `深度分析來源：${fileName || "ChatGPT 匯入檔"}` : `分析 ${result.messageCount} 則指定對象訊息，共 ${result.totalMessageCount} 則對話。`}</p></article>
         <article className="panel"><span className="conversation-label">建議下一步</span><h3>{result.nextStep}</h3></article>
       </section>
 
       <section className="panel conversation-explanation-card">
-        <div className="conversation-explanation-head"><div><span className="conversation-label">ANALYSIS EXPLAINED</span><h3>這份分析到底代表什麼？</h3></div><span className={`conversation-priority level-${result.intentLevel}`}>{result.intentLevel}優先</span></div>
+        <div className="conversation-explanation-head"><div><span className="conversation-label">ANALYSIS EXPLAINED</span><h3>這份分析到底代表什麼？</h3></div><div className="conversation-analysis-badges">{result.analysisSource === "chatgpt-import" && <span className="conversation-ai-badge">ChatGPT 深度分析</span>}<span className={`conversation-priority level-${result.intentLevel}`}>{result.intentLevel}優先</span></div></div>
         <p className="conversation-plain-explanation">{result.plainLanguageExplanation}</p>
         <div className="conversation-explanation-grid">
           <div><h4>為什麼得到 {result.score} 分</h4><ul>{result.scoreReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
@@ -322,6 +389,27 @@ export default function ConversationAnalysis() {
         </div>
         <div className="conversation-reply-box"><div><span>可直接傳送的 LINE 回覆</span><p>{result.followUpMessage}</p></div><button type="button" className="btn ghost" onClick={copyFollowUp}>{copied ? "已複製 ✓" : "複製文字"}</button></div>
       </section>
+
+      {result.deepAnalysis && <section className="panel conversation-deep-card">
+        <div className="conversation-deep-head"><div><span className="conversation-label">DEEP READING</span><h3>進一步判讀與追蹤策略</h3><p>把「對方在想什麼、卡在哪裡、接下來怎麼做」拆開說明。</p></div></div>
+        <div className="conversation-deep-overview">
+          <div><small>核心動機</small><p>{result.deepAnalysis.coreMotivation || "待確認"}</p></div>
+          <div><small>情緒與信任變化</small><p>{result.deepAnalysis.emotionalTrend || "待確認"}</p></div>
+          <div><small>目前決策階段</small><p>{result.deepAnalysis.decisionStage || "待確認"}</p></div>
+        </div>
+        <div className="conversation-deep-grid">
+          <div><h4>誰會影響決定</h4><ResultList items={result.deepAnalysis.decisionMakers} empty="尚未辨識決策者。" /></div>
+          <div><h4>可能沒直接說出的顧慮</h4><ResultList items={result.deepAnalysis.hiddenConcerns} empty="尚未辨識隱藏顧慮。" tone="negative" /></div>
+          <div><h4>前後不一致或需核對</h4><ResultList items={result.deepAnalysis.contradictions} empty="目前沒有明顯矛盾。" tone="negative" /></div>
+          <div><h4>你目前做得好的地方</h4><ResultList items={result.deepAnalysis.agentStrengths} empty="尚無足夠內容判斷。" /></div>
+          <div><h4>這次可以補強的地方</h4><ResultList items={result.deepAnalysis.agentMissedOpportunities} empty="尚無明顯遺漏。" tone="negative" /></div>
+        </div>
+        <div className="conversation-action-plan">
+          <div><span>24 小時內</span><ol>{result.deepAnalysis.actionPlan.within24Hours.map((item) => <li key={item}>{item}</li>)}</ol></div>
+          <div><span>3 天內</span><ol>{result.deepAnalysis.actionPlan.within3Days.map((item) => <li key={item}>{item}</li>)}</ol></div>
+          <div><span>7 天內</span><ol>{result.deepAnalysis.actionPlan.within7Days.map((item) => <li key={item}>{item}</li>)}</ol></div>
+        </div>
+      </section>}
 
       <section className="conversation-detail-grid">
         <article className="panel"><div className="conversation-subhead"><CheckCircle2 size={17} /><h3>{analysisMode === "seller" ? "委託訊號" : analysisMode === "team" ? "訴求重點" : "成交訊號"}</h3></div><ResultList items={result.signals} empty={`尚未偵測到明確${analysisMode === "seller" ? "委託" : analysisMode === "team" ? "訴求" : "成交"}訊號。`} /></article>
