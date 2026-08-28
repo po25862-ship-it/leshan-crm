@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { doc, updateDoc, addDoc, deleteDoc, collection, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -16,6 +16,8 @@ import RocDateHint from "./RocDateHint";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import ContactConversationAnalyses from "./ContactConversationAnalyses";
+import { useSharedCollection } from "../hooks/useSharedCollection";
+import { useListingsForContacts } from "../hooks/useListingsForContacts";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -51,6 +53,10 @@ export default function SellerDetail() {
   const { data: contact, save: saveContact } = useDoc(`contacts/${contactId}`);
   const { items: properties } = useCollection("properties", "title");
   const { items: colleagues } = useCollection("colleagues", "name");
+  const { items: allContacts } = useSharedCollection("contacts", "name", user.uid);
+  const sellerContactIds = useMemo(() => allContacts.filter((item) => (item.tags || []).includes("賣方")).map((item) => item.id), [allContacts]);
+  const allSellerListings = useListingsForContacts(sellerContactIds);
+  const { items: currentAnalyses } = useCollection(`contacts/${contactId}/conversationAnalyses`, "createdAt");
   const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
   const ownerName = (uid) => {
     if (!uid) return "（尚未標記）";
@@ -64,6 +70,9 @@ export default function SellerDetail() {
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [promoting, setPromoting] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeTargetKey, setMergeTargetKey] = useState("");
+  const [merging, setMerging] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
@@ -193,6 +202,44 @@ export default function SellerDetail() {
     }
   };
 
+  const mergeIntoExistingListing = async () => {
+    const target = allSellerListings.find((item) => `${item.parentId}/${item.id}` === mergeTargetKey);
+    if (!target) return;
+    const targetOwner = allContacts.find((item) => item.id === target.parentId);
+    if (!window.confirm(`確定把這份對話分析併入：\n\n${target.title || "未命名案件"}\n屋主：${targetOwner?.name || "未命名"}\n\n原本這筆重複追蹤會標記為已合併，不會刪除分析。`)) return;
+    setMerging(true);
+    try {
+      await updateDoc(doc(db, `contacts/${target.parentId}/listings/${target.id}`), {
+        sellerAnalysis: form.sellerAnalysis || null,
+        lastModifiedByUid: user.uid,
+      });
+      const latest = currentAnalyses[0];
+      if (latest) {
+        const { id: ignoredId, createdAt: ignoredCreatedAt, ...analysisData } = latest;
+        await addDoc(collection(db, `contacts/${target.parentId}/conversationAnalyses`), {
+          ...analysisData,
+          customerStage: "正式",
+          linkedRecord: { type: "listing", id: target.id },
+          mergedFrom: { contactId, listingId },
+          ownerUid: user.uid,
+          lastModifiedByUid: user.uid,
+          createdAt: serverTimestamp(),
+        });
+      }
+      await saveListing({ status: "expired", mergedInto: { contactId: target.parentId, listingId: target.id, title: target.title || "" }, mergedAt: serverTimestamp(), lastModifiedByUid: user.uid });
+      if (target.parentId !== contactId) {
+        const nextTags = (ownerForm.tags || []).filter((tag) => tag !== "觀察中");
+        await saveContact({ customerStage: "已合併", tags: [...new Set([...nextTags, "已合併"])], lastModifiedByUid: user.uid });
+      }
+      navigate(`/sellers/${target.parentId}/${target.id}`);
+    } catch (error) {
+      console.error(error);
+      alert("合併失敗，請確認網路後再試一次。");
+    } finally {
+      setMerging(false);
+    }
+  };
+
   const onSaveOwner = async () => {
     await saveContact({ ...ownerForm, lastModifiedByUid: user.uid });
     alert("屋主資料已儲存");
@@ -272,12 +319,25 @@ export default function SellerDetail() {
             </>
           ) : (
             <>
+              {form.status === "tracking" && <button className="btn ghost" onClick={() => setShowMerge((current) => !current)}>⇢ 併入既有委託</button>}
               {form.status === "tracking" && <button className="btn seller-promote-button" onClick={promoteToListed} disabled={promoting}>{promoting ? "轉換中…" : "✓ 轉為已委託"}</button>}
               <button className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
             </>
           )}
         </div>
       </div>
+
+      {showMerge && !editMode && <div className="panel seller-merge-panel">
+        <div><span>MERGE ANALYSIS</span><h3>把分析併入哪一筆既有委託？</h3><p>適用於 LINE 暱稱與正式屋主姓名不同的情況。只移動分析，不會覆蓋既有委託價格與物件資料。</p></div>
+        <select value={mergeTargetKey} onChange={(event) => setMergeTargetKey(event.target.value)}>
+          <option value="">— 選擇已委託案件 —</option>
+          {allSellerListings.filter((item) => item.status === "listed" && !(item.parentId === contactId && item.id === listingId)).map((item) => {
+            const owner = allContacts.find((contactItem) => contactItem.id === item.parentId);
+            return <option key={`${item.parentId}/${item.id}`} value={`${item.parentId}/${item.id}`}>{item.title || "未命名案件"}｜屋主：{owner?.name || "未命名"}</option>;
+          })}
+        </select>
+        <div><button type="button" className="btn" disabled={!mergeTargetKey || merging} onClick={mergeIntoExistingListing}>{merging ? "合併中…" : "確認併入"}</button><button type="button" className="btn ghost" onClick={() => { setShowMerge(false); setMergeTargetKey(""); }}>取消</button></div>
+      </div>}
 
       {!editMode && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, alignItems: "start" }}>

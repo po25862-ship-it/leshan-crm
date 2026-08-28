@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, FileJson, FileText, LockKeyhole, Sparkles, Upload, WandSparkles, XCircle } from "lucide-react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../AuthContext";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
@@ -11,6 +11,7 @@ import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { analysisNotes, analyzeLineConversation, analyzeSellerConversation, analyzeTeamConversation, parseLineChat, sellerAnalysisNotes, teamAnalysisNotes } from "../lib/lineConversationAnalyzer";
 import { parseDeepAnalysisImport } from "../lib/deepAnalysisImport";
 import { buildConversationAnalysisRecord } from "../lib/conversationAnalysisRecord";
+import { useListingsForContacts } from "../hooks/useListingsForContacts";
 
 const SAMPLE_TEXT = `2026/8/27（四）
 10:15\t房仲\t想找哪一區與多少預算呢？
@@ -36,13 +37,14 @@ function ResultList({ items, empty, tone = "positive" }) {
 
 export default function ConversationAnalysis() {
   const { user } = useAuth();
-  const { add: addNeed } = useNeedsCollection(user.uid);
+  const { items: needs, add: addNeed } = useNeedsCollection(user.uid);
   const { items: contacts, add: addContact } = useSharedCollection("contacts", "name", user.uid);
   const { add: addTopic } = useSharedCollection("topics", "createdAt", user.uid);
   const { items: properties } = useCollection("properties", "createdAt");
   const { items: colleagues } = useCollection("colleagues", "name");
   const buyers = contacts.filter((contact) => (contact.tags || []).includes("買方"));
   const sellers = contacts.filter((contact) => (contact.tags || []).includes("賣方"));
+  const sellerListings = useListingsForContacts(sellers.map((seller) => seller.id));
   const fileInput = useRef(null);
   const aiFileInput = useRef(null);
   const [rawText, setRawText] = useState("");
@@ -53,6 +55,8 @@ export default function ConversationAnalysis() {
   const [participant, setParticipant] = useState("");
   const [contactId, setContactId] = useState("");
   const [customerAction, setCustomerAction] = useState("");
+  const [targetListingKey, setTargetListingKey] = useState("");
+  const [targetNeedId, setTargetNeedId] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -84,6 +88,8 @@ export default function ConversationAnalysis() {
     setParticipant("");
     setContactId("");
     setCustomerAction("");
+    setTargetListingKey("");
+    setTargetNeedId("");
     setResult(null);
     setSavedRecord(null);
     setError("");
@@ -105,6 +111,8 @@ export default function ConversationAnalysis() {
       setParticipant(imported.participant);
       setContactId("");
       setCustomerAction("");
+      setTargetListingKey("");
+      setTargetNeedId("");
       setRawText("");
       setFileName(imported.sourceFileName || file.name);
       setResult(imported);
@@ -175,6 +183,8 @@ export default function ConversationAnalysis() {
     setResult(nextResult);
     setContactId("");
     setCustomerAction("");
+    setTargetListingKey("");
+    setTargetNeedId("");
     setSavedRecord(null);
     setError("");
   };
@@ -204,6 +214,50 @@ export default function ConversationAnalysis() {
   const saveCustomerHistory = (customerId, customerStage, linkedRecord = null) => addDoc(collection(db, `contacts/${customerId}/conversationAnalyses`), {
     ...buildConversationAnalysisRecord(result, { mode: analysisMode, sourceFileName: fileName, ownerUid: user.uid, linkedRecord, customerStage }),
     createdAt: serverTimestamp(),
+  });
+
+  const sellerAnalysisPayload = () => ({
+    analysisSource: result.analysisSource || "local-rules",
+    deepAnalysis: result.deepAnalysis || null,
+    score: result.score,
+    intentLevel: result.intentLevel,
+    motivations: result.motivations,
+    timeline: result.timeline,
+    occupancy: result.occupancy,
+    signals: result.signals,
+    objections: result.objections,
+    nextStep: result.nextStep,
+    plainLanguageExplanation: result.plainLanguageExplanation,
+    evidence: result.evidence,
+    missingInformation: result.missingInformation,
+    recommendedQuestions: result.recommendedQuestions,
+    followUpMessage: result.followUpMessage,
+    notes: sellerAnalysisNotes(result),
+    participant: result.participant,
+    messageCount: result.messageCount,
+    sourceFileName: fileName || "貼上的對話",
+    analyzedAt: new Date().toISOString(),
+    parserVersion: 1,
+  });
+
+  const buyerAnalysisPayload = () => ({
+    analysisSource: result.analysisSource || "local-rules",
+    deepAnalysis: result.deepAnalysis || null,
+    score: result.score,
+    intentLevel: result.intentLevel,
+    signals: result.signals,
+    objections: result.objections,
+    nextStep: result.nextStep,
+    plainLanguageExplanation: result.plainLanguageExplanation,
+    evidence: result.evidence,
+    missingInformation: result.missingInformation,
+    recommendedQuestions: result.recommendedQuestions,
+    followUpMessage: result.followUpMessage,
+    participant: result.participant,
+    messageCount: result.messageCount,
+    sourceFileName: fileName || "貼上的對話",
+    analyzedAt: new Date().toISOString(),
+    parserVersion: 1,
   });
 
   const saveAnalysis = async () => {
@@ -254,6 +308,17 @@ export default function ConversationAnalysis() {
     if (analysisMode === "seller") {
       setSaving(true);
       try {
+        if (targetListingKey) {
+          const targetListing = sellerListings.find((listing) => `${listing.parentId}/${listing.id}` === targetListingKey);
+          if (!targetListing) throw new Error("找不到選擇的既有委託，請重新選擇。");
+          await updateDoc(doc(db, `contacts/${targetListing.parentId}/listings/${targetListing.id}`), {
+            sellerAnalysis: sellerAnalysisPayload(),
+            lastModifiedByUid: user.uid,
+          });
+          await saveCustomerHistory(targetListing.parentId, "正式", { type: "listing", id: targetListing.id });
+          setSavedRecord({ type: "seller", id: targetListing.id, contactId: targetListing.parentId, merged: true });
+          return;
+        }
         const { contact, customerStage } = await resolveCustomer();
         const listingReference = await addDoc(collection(db, `contacts/${contact.id}/listings`), {
           ...result.listing,
@@ -261,29 +326,7 @@ export default function ConversationAnalysis() {
           customerStage,
           ownerUid: user.uid,
           lastModifiedByUid: user.uid,
-          sellerAnalysis: {
-            analysisSource: result.analysisSource || "local-rules",
-            deepAnalysis: result.deepAnalysis || null,
-            score: result.score,
-            intentLevel: result.intentLevel,
-            motivations: result.motivations,
-            timeline: result.timeline,
-            occupancy: result.occupancy,
-            signals: result.signals,
-            objections: result.objections,
-            nextStep: result.nextStep,
-            plainLanguageExplanation: result.plainLanguageExplanation,
-            evidence: result.evidence,
-            missingInformation: result.missingInformation,
-            recommendedQuestions: result.recommendedQuestions,
-            followUpMessage: result.followUpMessage,
-            notes: sellerAnalysisNotes(result),
-            participant: result.participant,
-            messageCount: result.messageCount,
-            sourceFileName: fileName || "貼上的對話",
-            analyzedAt: new Date().toISOString(),
-            parserVersion: 1,
-          },
+          sellerAnalysis: sellerAnalysisPayload(),
           createdAt: serverTimestamp(),
         });
         await saveCustomerHistory(contact.id, customerStage, { type: "listing", id: listingReference.id });
@@ -298,6 +341,17 @@ export default function ConversationAnalysis() {
     }
     setSaving(true);
     try {
+      if (targetNeedId) {
+        const targetNeed = needs.find((need) => need.id === targetNeedId);
+        if (!targetNeed?.contactId) throw new Error("這筆客需沒有連結買方，請先在客需管理補上買方。");
+        await updateDoc(doc(db, `needs/${targetNeed.id}`), {
+          conversationAnalysis: buyerAnalysisPayload(),
+          lastModifiedByUid: user.uid,
+        });
+        await saveCustomerHistory(targetNeed.contactId, "正式", { type: "need", id: targetNeed.id });
+        setSavedRecord({ type: "buyer", id: targetNeed.id, contactId: targetNeed.contactId, merged: true });
+        return;
+      }
       const { contact, customerStage } = await resolveCustomer();
       if (customerStage === "觀察中") {
         await saveCustomerHistory(contact.id, customerStage);
@@ -313,14 +367,7 @@ export default function ConversationAnalysis() {
         notes,
         ownerUid: user.uid,
         lastModifiedByUid: user.uid,
-        conversationAnalysis: {
-          analysisSource: result.analysisSource || "local-rules", deepAnalysis: result.deepAnalysis || null,
-          score: result.score, intentLevel: result.intentLevel, signals: result.signals, objections: result.objections,
-          nextStep: result.nextStep, plainLanguageExplanation: result.plainLanguageExplanation, evidence: result.evidence,
-          missingInformation: result.missingInformation, recommendedQuestions: result.recommendedQuestions,
-          followUpMessage: result.followUpMessage, participant: result.participant, messageCount: result.messageCount,
-          sourceFileName: fileName || "貼上的對話", analyzedAt: new Date().toISOString(), parserVersion: 1,
-        },
+        conversationAnalysis: buyerAnalysisPayload(),
       };
       const reference = await addNeed(payload);
       await saveCustomerHistory(contact.id, customerStage, { type: "need", id: reference.id });
@@ -364,7 +411,7 @@ export default function ConversationAnalysis() {
 
       <section className="panel conversation-setup-card">
         <div className="conversation-card-head"><span><Sparkles size={18} /></span><div><h3>2. 指定發言者並分析</h3><p>指定對象可避免把其他人的回覆誤判為訴求</p></div></div>
-        <label>分析對象<div className="conversation-mode-tabs"><button type="button" className={analysisMode === "buyer" ? "active" : ""} onClick={() => { setAnalysisMode("buyer"); setContactId(""); setCustomerAction(""); setResult(null); setSavedRecord(null); }}>買方客需</button><button type="button" className={analysisMode === "seller" ? "active" : ""} onClick={() => { setAnalysisMode("seller"); setContactId(""); setCustomerAction(""); setResult(null); setSavedRecord(null); }}>屋主委售</button><button type="button" className={analysisMode === "team" ? "active" : ""} onClick={() => { setAnalysisMode("team"); setContactId(""); setCustomerAction(""); setResult(null); setSavedRecord(null); }}>同事訴求</button></div></label>
+        <label>分析對象<div className="conversation-mode-tabs"><button type="button" className={analysisMode === "buyer" ? "active" : ""} onClick={() => { setAnalysisMode("buyer"); setContactId(""); setCustomerAction(""); setTargetListingKey(""); setTargetNeedId(""); setResult(null); setSavedRecord(null); }}>買方客需</button><button type="button" className={analysisMode === "seller" ? "active" : ""} onClick={() => { setAnalysisMode("seller"); setContactId(""); setCustomerAction(""); setTargetListingKey(""); setTargetNeedId(""); setResult(null); setSavedRecord(null); }}>屋主委售</button><button type="button" className={analysisMode === "team" ? "active" : ""} onClick={() => { setAnalysisMode("team"); setContactId(""); setCustomerAction(""); setTargetListingKey(""); setTargetNeedId(""); setResult(null); setSavedRecord(null); }}>同事訴求</button></div></label>
         <label>{analysisMode === "buyer" ? "買方" : analysisMode === "seller" ? "屋主" : "提出訴求的同事"}在 LINE 的名稱<select value={participant} onChange={(event) => { setParticipant(event.target.value); setResult(null); }}><option value="">分析全部發言者</option>{parsed.participants.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
         <div className="conversation-privacy-note"><LockKeyhole size={16} /><div><strong>本機規則分析</strong><p>不呼叫外部 AI API。只有確認建立後，結構化結果才會存進既有 Firebase。</p></div></div>
         {error && <div className="conversation-error">{error}</div>}
@@ -455,21 +502,43 @@ export default function ConversationAnalysis() {
       <section className="panel conversation-save-card">
         <div className="conversation-save-copy"><span className="conversation-label">WRITE TO CRM</span><h3>{analysisMode === "team" ? "選擇同事並建立商談事項" : "這份分析要放在哪位客戶下面？"}</h3><p>{analysisMode === "team" ? "選擇同事後寫入商談管理；未選擇時會使用 LINE 名稱。" : "先找現有客戶。真的找不到時，再新增正式客戶或先列為觀察中。每次分析都會保留在客戶的分析歷史。"}</p></div>
         {!savedRecord && <div className="conversation-customer-picker">
-          <label>{analysisMode === "team" ? "連結現有同事（可不選）" : `選擇現有${analysisMode === "seller" ? "屋主" : "買方"}`}
+          {analysisMode === "buyer" && <label className="conversation-listing-picker">優先選擇既有買方客需
+            <select value={targetNeedId} onChange={(event) => { setTargetNeedId(event.target.value); if (event.target.value) { setContactId(""); setCustomerAction(""); } }}>
+              <option value="">— 找不到既有客需，再往下選買方或新增 —</option>
+              {needs.filter((need) => need.contactId).map((need) => {
+                const buyer = contacts.find((contact) => contact.id === need.contactId);
+                return <option key={need.id} value={need.id}>{need.statusTag || "正在找"}｜{buyer?.name || need.contactName || "未命名買方"}｜{need.title || "未命名客需"}</option>;
+              })}
+            </select>
+            <small>如果 LINE 使用暱稱，請以真正買方姓名與原有客需內容判斷。</small>
+          </label>}
+          {analysisMode === "seller" && <label className="conversation-listing-picker">優先選擇既有委託案件
+            <select value={targetListingKey} onChange={(event) => { setTargetListingKey(event.target.value); if (event.target.value) { setContactId(""); setCustomerAction(""); } }}>
+              <option value="">— 找不到既有委託，再往下選屋主或新增 —</option>
+              {[...sellerListings].sort((a, b) => (a.status === "listed" ? -1 : 0) - (b.status === "listed" ? -1 : 0)).map((listing) => {
+                const owner = contacts.find((contact) => contact.id === listing.parentId);
+                return <option key={`${listing.parentId}/${listing.id}`} value={`${listing.parentId}/${listing.id}`}>{listing.status === "listed" ? "已委託" : "追蹤中"}｜{listing.title || "未命名案件"}｜屋主：{owner?.name || "未命名"}</option>;
+              })}
+            </select>
+            <small>LINE 名稱可能是暱稱，請以「案名＋真正屋主」判斷，例如：新潤翡麗｜黃予熏。</small>
+          </label>}
+          {!targetListingKey && !targetNeedId && <label>{analysisMode === "team" ? "連結現有同事（可不選）" : `選擇現有${analysisMode === "seller" ? "屋主" : "買方"}`}
             <select value={contactId} onChange={(event) => { setContactId(event.target.value); if (event.target.value) setCustomerAction(""); }}>
               <option value="">— {analysisMode === "team" ? "使用 LINE 名稱" : "找不到／尚未選擇"} —</option>
               {orderedContacts.map((contact) => <option key={contact.id} value={contact.id}>{participant && contact.name?.includes(participant) ? "可能相同｜" : ""}{contact.name}{contact.phone ? `・${contact.phone}` : ""}{(contact.tags || []).includes("觀察中") ? "・觀察中" : ""}</option>)}
             </select>
-          </label>
-          {analysisMode !== "team" && !contactId && <div className="conversation-new-customer-actions">
+          </label>}
+          {analysisMode !== "team" && !targetListingKey && !targetNeedId && !contactId && <div className="conversation-new-customer-actions">
             <span>名單裡沒有這個人：</span>
             <button type="button" className={customerAction === "create" ? "active" : ""} onClick={() => setCustomerAction("create")}><b>＋ 新增正式客戶</b><small>建立客戶，並同步建立{analysisMode === "seller" ? "屋主追蹤" : "客需"}</small></button>
             <button type="button" className={customerAction === "watch" ? "active watch" : ""} onClick={() => setCustomerAction("watch")}><b>◉ 先列為觀察中</b><small>保留完整分析，之後再決定是否正式推進</small></button>
           </div>}
           {customerAction && !contactId && <div className="conversation-selection-note">將以「{result.participant || (analysisMode === "seller" ? "LINE 屋主" : "LINE 買方")}」{customerAction === "watch" ? "建立觀察中資料" : "新增正式客戶"}。</div>}
-          <button type="button" className="btn conversation-confirm-save" onClick={saveAnalysis} disabled={saving || (analysisMode !== "team" && !contactId && !customerAction)}>{saving ? "儲存中…" : analysisMode === "team" ? "建立商談事項" : customerAction === "watch" && !contactId ? "存為觀察中" : `存到${analysisMode === "seller" ? "屋主" : "買方"}客戶`}</button>
+          {targetListingKey && <div className="conversation-selection-note">只會把這份分析併入選定的既有委託，不會新增屋主或第二筆物件。</div>}
+          {targetNeedId && <div className="conversation-selection-note">只會把這份分析併入選定的既有買方客需，不會新增買方或第二筆客需。</div>}
+          <button type="button" className="btn conversation-confirm-save" onClick={saveAnalysis} disabled={saving || (analysisMode !== "team" && !targetListingKey && !targetNeedId && !contactId && !customerAction)}>{saving ? "儲存中…" : analysisMode === "team" ? "建立商談事項" : targetListingKey ? "併入既有委託" : targetNeedId ? "併入既有買方客需" : customerAction === "watch" && !contactId ? "存為觀察中" : `存到${analysisMode === "seller" ? "屋主" : "買方"}客戶`}</button>
         </div>}
-        {savedRecord && <div className="conversation-saved"><CheckCircle2 size={17} />{savedRecord.type.startsWith("observation") ? "已列入觀察中" : analysisMode === "seller" ? "屋主追蹤已建立" : analysisMode === "team" ? "商談事項已建立" : "客需與分析已建立"} <Link to={savedRecord.type.includes("seller") ? `/sellers/${savedRecord.contactId}/${savedRecord.id}` : savedRecord.type === "team" ? `/topics?open=${savedRecord.id}` : `/buyers?open=${savedRecord.contactId}`}>開啟資料</Link></div>}
+        {savedRecord && <div className="conversation-saved"><CheckCircle2 size={17} />{savedRecord.merged ? analysisMode === "seller" ? "分析已併入既有委託" : "分析已併入既有買方客需" : savedRecord.type.startsWith("observation") ? "已列入觀察中" : analysisMode === "seller" ? "屋主追蹤已建立" : analysisMode === "team" ? "商談事項已建立" : "客需與分析已建立"} <Link to={savedRecord.type.includes("seller") ? `/sellers/${savedRecord.contactId}/${savedRecord.id}` : savedRecord.type === "team" ? `/topics?open=${savedRecord.id}` : `/buyers?open=${savedRecord.contactId}`}>開啟資料</Link></div>}
       </section>
     </>}
   </main>;
