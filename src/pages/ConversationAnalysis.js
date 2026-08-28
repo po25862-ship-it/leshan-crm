@@ -45,6 +45,7 @@ export default function ConversationAnalysis() {
   const [rawText, setRawText] = useState("");
   const [analysisMode, setAnalysisMode] = useState("buyer");
   const [fileName, setFileName] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
   const [participant, setParticipant] = useState("");
   const [contactId, setContactId] = useState("");
   const [result, setResult] = useState(null);
@@ -56,8 +57,7 @@ export default function ConversationAnalysis() {
   const matches = useMemo(() => result?.need ? matchPropertiesForNeed(result.need, properties).slice(0, 5) : [], [result, properties]);
   const selectableContacts = analysisMode === "buyer" ? buyers : analysisMode === "seller" ? sellers : colleagues;
 
-  const loadFile = async (event) => {
-    const file = event.target.files?.[0];
+  const readFile = async (file) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".txt")) {
       setError("請選擇 LINE 匯出的 .txt 檔案。");
@@ -74,6 +74,22 @@ export default function ConversationAnalysis() {
     setResult(null);
     setSavedRecord(null);
     setError("");
+  };
+
+  const loadFile = async (event) => {
+    await readFile(event.target.files?.[0]);
+    event.target.value = "";
+  };
+
+  const dropFile = async (event) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length !== 1) {
+      setError("請一次拖入一個 LINE .txt 檔案。");
+      return;
+    }
+    await readFile(files[0]);
   };
 
   const runAnalysis = () => {
@@ -228,8 +244,16 @@ export default function ConversationAnalysis() {
       <section className="panel conversation-input-card">
         <div className="conversation-card-head"><span><Upload size={18} /></span><div><h3>1. 匯入對話</h3><p>支援 LINE「傳送聊天記錄」產生的 .txt</p></div></div>
         <input ref={fileInput} type="file" accept=".txt,text/plain" onChange={loadFile} hidden />
-        <button type="button" className="conversation-dropzone" onClick={() => fileInput.current?.click()}>
-          <FileText size={28} /><strong>{fileName || "選擇 LINE .txt 檔案"}</strong><small>{fileName ? `${parsed.messages.length} 則訊息・${parsed.participants.length} 位發言者` : "檔案不會上傳到外部分析服務"}</small>
+        <button
+          type="button"
+          className={`conversation-dropzone${isDragging ? " is-dragging" : ""}`}
+          onClick={() => fileInput.current?.click()}
+          onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
+          onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsDragging(true); }}
+          onDragLeave={(event) => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget)) setIsDragging(false); }}
+          onDrop={dropFile}
+        >
+          <FileText size={28} /><strong>{isDragging ? "放開即可匯入 LINE 對話" : fileName || "拖拉 LINE .txt 到這裡"}</strong><small>{fileName ? `${parsed.messages.length} 則訊息・${parsed.participants.length} 位發言者` : "也可以點一下選擇檔案・內容只在本機解析"}</small>
         </button>
         <div className="conversation-divider"><span>或直接貼上</span></div>
         <textarea value={rawText} onChange={(event) => { setRawText(event.target.value); setFileName(""); setResult(null); }} rows={9} placeholder="貼上 LINE 聊天記錄…" />
