@@ -18,6 +18,7 @@ function SellerCard({ l, navigate }) {
       style={{ cursor: "pointer" }}
     >
       <div className="name">{l.title || "（尚未命名）"}</div>
+      {l.customerStage === "觀察中" && <span className="tag" style={{ marginTop: 6 }}>觀察中</span>}
       <div className="meta">
         {l.owner && <>{l.owner.name}{l.owner.phone ? `・${l.owner.phone}` : ""}</>}
         {l.propertyAddress && <>　｜　{l.propertyAddress}</>}

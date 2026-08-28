@@ -15,6 +15,7 @@ import { useGoogleAuth } from "../GoogleAuthContext";
 import RocDateHint from "./RocDateHint";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
+import ContactConversationAnalyses from "./ContactConversationAnalyses";
 
 const STATUS_LABELS = { tracking: "追蹤中", listed: "已委託", expired: "已過期", sold: "已出售" };
 const STATUS_ORDER = ["tracking", "listed", "expired", "sold"];
@@ -291,6 +292,9 @@ export default function SellerDetail() {
                 </div>
               </div>
             </div>}
+            <div className="panel">
+              <ContactConversationAnalyses contactId={contactId} />
+            </div>
             <div className="panel">
               <SellerActivityLog
                 contactId={contactId}

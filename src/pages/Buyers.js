@@ -11,6 +11,7 @@ import { useAuth } from "../AuthContext";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { timestampToMillis } from "../lib/propertyPresentation";
+import ContactConversationAnalyses from "./ContactConversationAnalyses";
 
 const emptyForm = {
   name: "",
@@ -368,6 +369,9 @@ export default function Buyers() {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    <div className="panel">
+                      <ContactConversationAnalyses contactId={editingId} />
+                    </div>
                     <div className="panel">
                       <BuyerNeeds contactId={editingId} contactName={form.name} />
                     </div>
