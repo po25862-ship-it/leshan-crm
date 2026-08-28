@@ -274,6 +274,23 @@ export default function SellerDetail() {
                 {(form.documents || []).map((file, idx) => <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>📄 {file.name || `委託文件 ${idx + 1}`}</a>)}
               </div>
             </div>
+            {form.sellerAnalysis && <div className="panel">
+              <div className="section-title" style={{ fontSize: 14 }}>LINE 屋主分析</div>
+              <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, alignItems: "start" }}>
+                <div style={{ padding: 14, borderRadius: 10, background: "#EAF6EF", color: "#176B4B", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, fontWeight: 800 }}>委售意願</div>
+                  <strong style={{ display: "block", fontSize: 28, marginTop: 4 }}>{form.sellerAnalysis.score}</strong>
+                  <span style={{ fontSize: 10 }}>{form.sellerAnalysis.intentLevel}意願</span>
+                </div>
+                <div style={{ fontSize: 11, lineHeight: 1.7 }}>
+                  {form.sellerAnalysis.motivations?.length > 0 && <div><b>售屋動機：</b>{form.sellerAnalysis.motivations.join("、")}</div>}
+                  {form.sellerAnalysis.timeline && <div><b>出售時程：</b>{form.sellerAnalysis.timeline}</div>}
+                  {form.sellerAnalysis.signals?.length > 0 && <div><b>委託訊號：</b>{form.sellerAnalysis.signals.join("、")}</div>}
+                  {form.sellerAnalysis.objections?.length > 0 && <div><b>異議風險：</b>{form.sellerAnalysis.objections.join("、")}</div>}
+                  <div style={{ marginTop: 6, color: "var(--accent)", fontWeight: 700 }}><b>下一步：</b>{form.sellerAnalysis.nextStep}</div>
+                </div>
+              </div>
+            </div>}
             <div className="panel">
               <SellerActivityLog
                 contactId={contactId}
