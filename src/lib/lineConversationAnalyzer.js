@@ -76,6 +76,23 @@ function unique(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function evidenceForRules(rules, messages) {
+  const evidence = [];
+  rules.forEach((rule) => {
+    const label = Array.isArray(rule) ? rule[0] : rule.label;
+    const pattern = Array.isArray(rule) ? rule[1] : rule.pattern;
+    const message = messages.find((item) => pattern.test(item.text));
+    if (message) evidence.push({ label, text: message.text.replace(/\s+/g, " ").trim().slice(0, 140) });
+  });
+  return evidence.slice(0, 8);
+}
+
+function levelExplanation(score, subject, highAction, mediumAction, lowAction) {
+  if (score >= 75) return `${subject}已出現多個具體行動訊號，現在不是只提供資料，而是要主動收斂條件並推進下一個承諾。${highAction}`;
+  if (score >= 50) return `${subject}有真實需求，但部分重要資訊或決策條件仍未確認。${mediumAction}`;
+  return `${subject}目前比較接近初步詢問或尚未準備好行動。${lowAction}`;
+}
+
 function numberValue(raw) {
   if (!raw) return null;
   const value = Number(String(raw).replace(/,/g, ""));
@@ -231,6 +248,23 @@ export function analyzeLineConversation(messages, participant = "") {
     rooms.min !== null || rooms.max !== null ? `房數：${rooms.min ?? ""}${rooms.min !== null && rooms.max !== null ? "–" : ""}${rooms.max ?? ""} 房` : "",
   ].filter(Boolean);
 
+  const missingInformation = [
+    !areas.length ? "想買的縣市、行政區或社區" : "",
+    budget.min === null && budget.max === null ? "可接受的總價範圍與自備款" : "",
+    !types.length ? "希望的房屋類型" : "",
+    rooms.min === null && rooms.max === null ? "需要的房數與家庭人數" : "",
+    !signals.includes("有明確購買時程") ? "希望何時買到或入住" : "",
+    !/貸款|房貸|成數|自備款/.test(text) ? "貸款需求與可負擔月付" : "",
+    !/先生|太太|老婆|老公|爸媽|家人|自己決定/.test(text) ? "還有哪些人會參與決定" : "",
+  ].filter(Boolean);
+  const recommendedQuestions = missingInformation.slice(0, 4).map((item) => `想再確認「${item}」，這會直接影響我幫您挑選的物件。`);
+  if (objections.includes("價格／預算疑慮")) recommendedQuestions.unshift("如果物件很符合，最高總價大約可以調整到多少？");
+  if (objections.includes("仍需與家人討論")) recommendedQuestions.unshift("下次看屋是否方便讓主要決策家人一起參加？");
+  const plainLanguageExplanation = levelExplanation(score, "這位買方", "建議今天就提出明確看屋時段或出價準備。", "先補齊最關鍵的 2–3 個條件，再提供少量精準物件。", "先以理解需求為主，不宜大量推案或頻繁催促。");
+  const followUpMessage = score >= 75
+    ? `您好，我已依照您提到的條件整理幾間較符合的物件。為了幫您安排得更精準，想確認一下：${recommendedQuestions[0] || "這週哪個時段方便安排看屋？"}`
+    : `您好，謝謝您提供找房方向。為了不要傳太多不適合的物件給您，想先確認一下：${recommendedQuestions[0] || "目前最優先的條件是區域、預算還是房數呢？"}`;
+
   return {
     participant,
     messageCount: selected.length,
@@ -242,6 +276,12 @@ export function analyzeLineConversation(messages, participant = "") {
     nextStep,
     need,
     summary: summaryParts.join("｜") || "尚未抽取到明確客需，建議先補問關鍵條件。",
+    plainLanguageExplanation,
+    evidence: evidenceForRules([...SIGNAL_RULES, ...OBJECTION_RULES], selected),
+    missingInformation,
+    recommendedQuestions,
+    followUpMessage,
+    scoreReasons: [`抽取到 ${[areas.length, types.length, budget.min !== null || budget.max !== null, rooms.min !== null || rooms.max !== null, parkingRequired].filter(Boolean).length} 類客需條件`, `偵測到 ${signals.length} 個成交訊號`, `偵測到 ${objections.length} 個異議或風險`],
     sourcePreview: allText.slice(-600),
   };
 }
@@ -253,7 +293,9 @@ export function analysisNotes(result) {
     result.signals.length ? `成交訊號：${result.signals.join("、")}` : "成交訊號：尚未偵測到明確訊號",
     result.objections.length ? `主要異議：${result.objections.join("、")}` : "主要異議：尚未偵測到明確異議",
     `建議下一步：${result.nextStep}`,
-  ].join("\n");
+    result.missingInformation?.length ? `尚待確認：${result.missingInformation.join("、")}` : "",
+    result.recommendedQuestions?.length ? `建議追問：${result.recommendedQuestions.join("；")}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function priceAfterLabel(text, labels) {
@@ -304,6 +346,23 @@ export function analyzeSellerConversation(messages, participant = "") {
     agreementPreference !== "未確認" ? `委託：${agreementPreference}` : "",
     occupancy !== "未確認" ? `使用：${occupancy}` : "",
   ].filter(Boolean);
+  const missingInformation = [
+    !propertyAddress ? "完整物件地址與可安排現勘的時間" : "",
+    !motivations.length ? "真正的售屋原因" : "",
+    !askingPrice ? "屋主期待的開價" : "",
+    !floorPrice ? "可接受的價格底線與議價空間" : "",
+    timeline === "未確認" ? "希望多久內完成出售" : "",
+    !/權狀|所有權|共有人|繼承人/.test(text) ? "產權人、共有人及決策者是否都同意" : "",
+    !/貸款餘額|貸款還有|抵押/.test(text) ? "目前貸款餘額或抵押設定" : "",
+    agreementPreference === "未確認" ? "對一般或專任委託的想法" : "",
+  ].filter(Boolean);
+  const recommendedQuestions = missingInformation.slice(0, 4).map((item) => `想再請教「${item}」，我才能把估價與銷售方案準備完整。`);
+  if (objections.includes("價格期待可能高於市場")) recommendedQuestions.unshift("如果市場成交資料與期待有落差，您願意先用多久觀察詢問反應？");
+  if (objections.includes("不願簽專任委託")) recommendedQuestions.unshift("您對專任最擔心的是綁約、曝光量，還是服務成果？");
+  const plainLanguageExplanation = levelExplanation(score, "這位屋主", "應盡快安排現勘、行情說明與委託條件確認。", "屋主有出售想法，但價格或決策條件尚未成熟，應先建立行情共識。", "目前不宜急著談簽委託，先了解真正動機與未出售也能接受的原因。");
+  const followUpMessage = score >= 75
+    ? `您好，我已把您提到的售屋條件整理好了。下一步建議先到現場確認屋況並準備成交行情，想請問這週哪個時段方便？${recommendedQuestions[0] ? `另外，${recommendedQuestions[0]}` : ""}`
+    : `您好，謝謝您分享售屋想法。為了讓估價更貼近您的情況，${recommendedQuestions[0] || "想先了解您最在意的是成交價格、出售速度，還是委託方式？"}`;
 
   return {
     analysisType: "seller",
@@ -320,6 +379,12 @@ export function analyzeSellerConversation(messages, participant = "") {
     agreementPreference,
     occupancy,
     summary: summaryParts.join("｜") || "尚未抽取到明確售屋狀況，建議先補問動機、價格與時程。",
+    plainLanguageExplanation,
+    evidence: evidenceForRules([...SELLER_SIGNAL_RULES, ...SELLER_OBJECTION_RULES], selected),
+    missingInformation,
+    recommendedQuestions,
+    followUpMessage,
+    scoreReasons: [`抽取到 ${[askingPrice, floorPrice, propertyAddress, categoryEntry, motivations.length, timeline !== "未確認"].filter(Boolean).length} 類委售資訊`, `偵測到 ${signals.length} 個委託訊號`, `偵測到 ${objections.length} 個異議或風險`],
     listing: {
       title: propertyAddress || `${participant || "LINE 屋主"}・售屋追蹤`,
       propertyId: null,
@@ -352,7 +417,9 @@ export function sellerAnalysisNotes(result) {
     result.signals.length ? `委託訊號：${result.signals.join("、")}` : "委託訊號：尚未偵測到明確訊號",
     result.objections.length ? `主要異議：${result.objections.join("、")}` : "主要異議：尚未偵測到明確異議",
     `建議下一步：${result.nextStep}`,
-  ].join("\n");
+    result.missingInformation?.length ? `尚待確認：${result.missingInformation.join("、")}` : "",
+    result.recommendedQuestions?.length ? `建議追問：${result.recommendedQuestions.join("；")}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 export function analyzeTeamConversation(messages, participant = "") {
@@ -389,6 +456,19 @@ export function analyzeTeamConversation(messages, participant = "") {
     blockers.length ? `阻礙：${blockers.join("、")}` : "",
     deadlineMatches.length ? `時限：${deadlineMatches.join("、")}` : "",
   ].filter(Boolean);
+  const hasOutcome = /完成|結果|做到|解決|可以.*(?:使用|看到|上傳|登入)|目標/.test(text);
+  const hasImpact = /影響|導致|所以.*不能|客戶等|屋主等|成交|損失/.test(text);
+  const hasOwner = /請[^，。\n]{0,8}(?:處理|負責)|由[^，。\n]{0,8}負責|我來處理/.test(text);
+  const missingInformation = [
+    !requestSentences.length ? "同事希望具體完成什麼" : "",
+    !hasOutcome ? "完成後的驗收標準" : "",
+    !hasImpact ? "問題影響哪些客戶、案件或工作" : "",
+    !deadlineMatches.length ? "希望完成或回覆的期限" : "",
+    !hasOwner ? "由誰負責處理與回報" : "",
+  ].filter(Boolean);
+  const recommendedQuestions = missingInformation.slice(0, 4).map((item) => `需要再確認「${item}」。`);
+  const plainLanguageExplanation = levelExplanation(priorityScore, "這項同事訴求", "建議立即指定負責人、期限與最小可交付結果。", "訴求有必要處理，但要先確認影響與完成標準，避免來回修改。", "目前資訊不足，先不要直接排工作，應先問清楚想解決的問題。");
+  const followUpMessage = `收到，我先把你的訴求記錄下來。${recommendedQuestions[0] || "我會確認負責人與處理時間後回覆你。"}${deadlineMatches.length ? `我有看到你提到的時限：${deadlineMatches.join("、")}。` : ""}`;
 
   return {
     analysisType: "team",
@@ -405,6 +485,12 @@ export function analyzeTeamConversation(messages, participant = "") {
     blockers,
     deadlines: deadlineMatches,
     summary: summaryParts.join("｜") || "尚未抽取到明確訴求，建議指定發言者或補充對話內容。",
+    plainLanguageExplanation,
+    evidence: evidenceForRules([...TEAM_REQUEST_RULES, ...TEAM_BLOCKER_RULES], selected),
+    missingInformation,
+    recommendedQuestions,
+    followUpMessage,
+    scoreReasons: [`辨識出 ${requestTypes.length} 類訴求`, `抽取到 ${requestSentences.length} 個明確請求`, `偵測到 ${blockers.length} 個阻礙`, deadlineMatches.length ? `提到 ${deadlineMatches.length} 個時間要求` : "沒有明確時限"],
     topic: {
       title: headline.slice(0, 80),
       counterpart: participant || "內部同事",
@@ -420,5 +506,7 @@ export function teamAnalysisNotes(result) {
     result.requests.length ? `明確訴求：${result.requests.join("；")}` : "明確訴求：待確認",
     result.blockers.length ? `目前阻礙：${result.blockers.join("、")}` : "目前阻礙：尚未偵測到",
     `建議下一步：${result.nextStep}`,
-  ].join("\n");
+    result.missingInformation?.length ? `尚待確認：${result.missingInformation.join("、")}` : "",
+    result.recommendedQuestions?.length ? `建議追問：${result.recommendedQuestions.join("；")}` : "",
+  ].filter(Boolean).join("\n");
 }

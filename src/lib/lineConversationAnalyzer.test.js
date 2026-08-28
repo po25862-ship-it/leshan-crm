@@ -32,6 +32,9 @@ test("extracts CRM need fields and purchase signals", () => {
   expect(result.need.parkingRequired).toBe(true);
   expect(result.signals).toContain("主動詢問看屋／約時間");
   expect(result.score).toBeGreaterThanOrEqual(75);
+  expect(result.plainLanguageExplanation).toContain("這位買方");
+  expect(result.evidence.length).toBeGreaterThan(0);
+  expect(result.followUpMessage).toContain("您好");
   expect(analysisNotes(result)).toContain("建議下一步");
 });
 
@@ -58,6 +61,9 @@ test("analyzes seller motivation, pricing and listing signals", () => {
   expect(result.listing.agreementType).toBe("專任");
   expect(result.signals).toEqual(expect.arrayContaining(["願意安排到府估價／現勘", "提供地址、權狀或物件資料", "討論委託方式或期間"]));
   expect(result.score).toBeGreaterThanOrEqual(75);
+  expect(result.plainLanguageExplanation).toContain("這位屋主");
+  expect(result.evidence.length).toBeGreaterThan(0);
+  expect(result.followUpMessage).toContain("現場");
   expect(sellerAnalysisNotes(result)).toContain("建議下一步");
 });
 
@@ -76,5 +82,8 @@ test("extracts colleague requests, blockers, deadlines and priority", () => {
   expect(result.deadlines).toEqual(expect.arrayContaining(["今天", "明天"]));
   expect(result.requests[0]).toContain("麻煩");
   expect(result.score).toBeGreaterThanOrEqual(75);
+  expect(result.plainLanguageExplanation).toContain("這項同事訴求");
+  expect(result.evidence.length).toBeGreaterThan(0);
+  expect(result.followUpMessage).toContain("收到");
   expect(teamAnalysisNotes(result)).toContain("建議下一步");
 });

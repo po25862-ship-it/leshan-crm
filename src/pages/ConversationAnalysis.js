@@ -52,6 +52,7 @@ export default function ConversationAnalysis() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedRecord, setSavedRecord] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const parsed = useMemo(() => parseLineChat(rawText), [rawText]);
   const matches = useMemo(() => result?.need ? matchPropertiesForNeed(result.need, properties).slice(0, 5) : [], [result, properties]);
@@ -90,6 +91,17 @@ export default function ConversationAnalysis() {
       return;
     }
     await readFile(files[0]);
+  };
+
+  const copyFollowUp = async () => {
+    if (!result?.followUpMessage) return;
+    try {
+      await navigator.clipboard.writeText(result.followUpMessage);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError("無法自動複製，請手動選取下方文字。");
+    }
   };
 
   const runAnalysis = () => {
@@ -133,6 +145,11 @@ export default function ConversationAnalysis() {
             blockers: result.blockers,
             deadlines: result.deadlines,
             nextStep: result.nextStep,
+            plainLanguageExplanation: result.plainLanguageExplanation,
+            evidence: result.evidence,
+            missingInformation: result.missingInformation,
+            recommendedQuestions: result.recommendedQuestions,
+            followUpMessage: result.followUpMessage,
             participant: result.participant,
             messageCount: result.messageCount,
             sourceFileName: fileName || "貼上的對話",
@@ -181,6 +198,11 @@ export default function ConversationAnalysis() {
             signals: result.signals,
             objections: result.objections,
             nextStep: result.nextStep,
+            plainLanguageExplanation: result.plainLanguageExplanation,
+            evidence: result.evidence,
+            missingInformation: result.missingInformation,
+            recommendedQuestions: result.recommendedQuestions,
+            followUpMessage: result.followUpMessage,
             notes: sellerAnalysisNotes(result),
             participant: result.participant,
             messageCount: result.messageCount,
@@ -215,6 +237,11 @@ export default function ConversationAnalysis() {
         signals: result.signals,
         objections: result.objections,
         nextStep: result.nextStep,
+        plainLanguageExplanation: result.plainLanguageExplanation,
+        evidence: result.evidence,
+        missingInformation: result.missingInformation,
+        recommendedQuestions: result.recommendedQuestions,
+        followUpMessage: result.followUpMessage,
         participant: result.participant,
         messageCount: result.messageCount,
         sourceFileName: fileName || "貼上的對話",
@@ -282,6 +309,18 @@ export default function ConversationAnalysis() {
         </article>
         <article className="panel"><span className="conversation-label">{analysisMode === "seller" ? "屋主狀況摘要" : analysisMode === "team" ? "同事訴求摘要" : "客需摘要"}</span><h3>{result.summary}</h3><p className="conversation-muted">分析 {result.messageCount} 則指定對象訊息，共 {result.totalMessageCount} 則對話。</p></article>
         <article className="panel"><span className="conversation-label">建議下一步</span><h3>{result.nextStep}</h3></article>
+      </section>
+
+      <section className="panel conversation-explanation-card">
+        <div className="conversation-explanation-head"><div><span className="conversation-label">ANALYSIS EXPLAINED</span><h3>這份分析到底代表什麼？</h3></div><span className={`conversation-priority level-${result.intentLevel}`}>{result.intentLevel}優先</span></div>
+        <p className="conversation-plain-explanation">{result.plainLanguageExplanation}</p>
+        <div className="conversation-explanation-grid">
+          <div><h4>為什麼得到 {result.score} 分</h4><ul>{result.scoreReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
+          <div><h4>系統從哪些原話判斷</h4>{result.evidence.length ? <div className="conversation-evidence-list">{result.evidence.map((item, index) => <blockquote key={`${item.label}-${index}`}><span>{item.label}</span>「{item.text}」</blockquote>)}</div> : <p className="conversation-empty-copy">對話中還沒有足夠明確的判斷語句。</p>}</div>
+          <div><h4>目前還缺少什麼</h4>{result.missingInformation.length ? <ul>{result.missingInformation.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="conversation-complete-copy">主要資訊已相當完整，可以進入下一步。</p>}</div>
+          <div><h4>下一次建議怎麼問</h4>{result.recommendedQuestions.length ? <ol>{result.recommendedQuestions.map((item) => <li key={item}>{item}</li>)}</ol> : <p className="conversation-complete-copy">不必再補問基本資料，直接推進下一個行動。</p>}</div>
+        </div>
+        <div className="conversation-reply-box"><div><span>可直接傳送的 LINE 回覆</span><p>{result.followUpMessage}</p></div><button type="button" className="btn ghost" onClick={copyFollowUp}>{copied ? "已複製 ✓" : "複製文字"}</button></div>
       </section>
 
       <section className="conversation-detail-grid">
