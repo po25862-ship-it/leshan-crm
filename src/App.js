@@ -20,6 +20,7 @@ import LineBroadcast from "./pages/LineBroadcast";
 import SmartTools from "./pages/SmartTools";
 import MatchingRecommendations from "./pages/MatchingRecommendations";
 import MobileMore from "./pages/MobileMore";
+import ConversationAnalysis from "./pages/ConversationAnalysis";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { GoogleAuthProvider } from "./GoogleAuthContext";
@@ -49,6 +50,7 @@ import {
   X,
   ShieldCheck,
   Send,
+  ScanText,
 } from "lucide-react";
 import "./mobile.css";
 
@@ -61,6 +63,7 @@ const desktopNavItems = [
 ];
 
 const desktopSecondaryNavItems = [
+  { to: "/conversation-analysis", label: "對話分析", icon: ScanText },
   { to: "/activity", label: "互動紀錄", icon: MessageCircle },
   { to: "/calendar", label: "行事曆", icon: CalendarDays },
   { to: "/line", label: "LINE 分享", icon: Send },
@@ -150,6 +153,7 @@ function AppRoutes() {
       <Route path="/properties" element={<Properties />} />
       <Route path="/needs" element={<Needs />} />
       <Route path="/matching" element={<MatchingRecommendations />} />
+      <Route path="/conversation-analysis" element={<ConversationAnalysis />} />
       <Route path="/topics" element={<Topics />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/calendar" element={<CalendarPage />} />

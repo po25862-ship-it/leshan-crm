@@ -20,6 +20,9 @@ export default function MobileMore() {
       <Link to="/calendar" className="mobile-more-row">
         行事曆 <span className="arrow">›</span>
       </Link>
+      <Link to="/conversation-analysis" className="mobile-more-row">
+        LINE 對話分析 <span className="arrow">›</span>
+      </Link>
       <Link to="/tools" className="mobile-more-row">
         地圖・Drive・AI 工具 <span className="arrow">›</span>
       </Link>
