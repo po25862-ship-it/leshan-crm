@@ -38,7 +38,7 @@ jobs:
       - name: Install crawler
         run: |
           pip install -r crawler-worker/requirements.txt
-          python -m playwright install --with-deps chromium
+          python -m patchright install --with-deps chromium
 
       - name: Crawl, upload to private Drive, and sync Firestore
         env:
