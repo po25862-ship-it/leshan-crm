@@ -181,7 +181,11 @@ def main() -> None:
             outcome = "updated"
         else:
             outcome = f"skipped: {result.error}"
-        print(f"cover backfill progress={completed}/{total} {result.candidate.property_id} {outcome}", flush=True)
+        print(
+            f"cover backfill progress={completed}/{total} "
+            f"{result.candidate.crm_property_id} {outcome}",
+            flush=True,
+        )
 
     results = asyncio.run(fetch_all(
         candidates,
