@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   crawl:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, leshan-market]
     timeout-minutes: 30
     env:
       CRAWLER_WORK_ROOT: /tmp/leshan-market
@@ -38,7 +38,7 @@ jobs:
       - name: Install crawler
         run: |
           pip install -r crawler-worker/requirements.txt
-          python -m patchright install --with-deps chromium
+          python -m patchright install chromium
 
       - name: Crawl, upload to private Drive, and sync Firestore
         env:
