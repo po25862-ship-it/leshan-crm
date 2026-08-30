@@ -123,12 +123,24 @@ async def fetch_cover(
         return CoverResult(candidate=candidate, error="rate limited after four attempts")
 
 
-async def fetch_all(candidates: list[CoverCandidate], concurrency: int = 1, delay: float = 2.0) -> list[CoverResult]:
+async def fetch_all(
+    candidates: list[CoverCandidate],
+    concurrency: int = 1,
+    delay: float = 2.0,
+    on_result=None,
+) -> list[CoverResult]:
     semaphore = asyncio.Semaphore(max(1, concurrency))
     limits = httpx.Limits(max_connections=max(2, concurrency), max_keepalive_connections=max(2, concurrency))
     headers = {"User-Agent": USER_AGENT, "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.5"}
     async with httpx.AsyncClient(timeout=35, follow_redirects=True, headers=headers, limits=limits) as client:
-        return await asyncio.gather(*(fetch_cover(client, semaphore, candidate, delay) for candidate in candidates))
+        pending = [fetch_cover(client, semaphore, candidate, delay) for candidate in candidates]
+        results = []
+        for completed in asyncio.as_completed(pending):
+            result = await completed
+            results.append(result)
+            if on_result:
+                on_result(result, len(results), len(candidates))
+        return results
 
 
 def write_results(database, results: list[CoverResult]) -> int:
@@ -160,12 +172,23 @@ def main() -> None:
     if not candidates:
         return
 
+    updated = 0
+
+    def persist_result(result: CoverResult, completed: int, total: int) -> None:
+        nonlocal updated
+        if result.cover_url:
+            updated += write_results(database, [result])
+            outcome = "updated"
+        else:
+            outcome = f"skipped: {result.error}"
+        print(f"cover backfill progress={completed}/{total} {result.candidate.property_id} {outcome}", flush=True)
+
     results = asyncio.run(fetch_all(
         candidates,
         concurrency=max(1, min(args.concurrency, 3)),
         delay=max(0.5, min(args.delay, 10.0)),
+        on_result=persist_result,
     ))
-    updated = write_results(database, results)
     failures = [result for result in results if result.error]
     print(f"cover backfill updated={updated} failed={len(failures)}")
     for result in failures[:20]:
