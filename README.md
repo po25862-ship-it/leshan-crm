@@ -104,12 +104,12 @@ GitHub repo 的 Settings → Secrets and variables → Actions 需設定：
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 GOOGLE_REFRESH_TOKEN
-GOOGLE_DRIVE_ROOT_FOLDER_ID
+GOOGLE_DRIVE_ROOT_FOLDER_ID（選填；未設定時第一次執行會自動建立私人資料夾）
 FIREBASE_SERVICE_ACCOUNT_JSON
 MARKET_JOB_ENCRYPTION_KEY
 ```
 
-OAuth scope 使用 `drive.file`；程式不會建立公開 permission，也不使用 Drive 公開分享網址。因 repo 是公開的，CRM 會以 AES-256-GCM 加密網址、Firestore 物件 ID 與 UID，Actions 介面和公開 log 只會看到密文。GitHub Actions secrets 與 Vercel Environment Variables 都不能提交到 repo。
+OAuth scope 使用 `drive.file`；若沒有設定 `GOOGLE_DRIVE_ROOT_FOLDER_ID`，第一個 crawl job 會由同一個 OAuth 應用程式在「我的雲端硬碟」自動建立 `Leshan Market Crawler` 私人資料夾。程式不會建立公開 permission，也不使用 Drive 公開分享網址。因 repo 是公開的，CRM 會以 AES-256-GCM 加密網址、Firestore 物件 ID 與 UID，Actions 介面和公開 log 只會看到密文。GitHub Actions secrets 與 Vercel Environment Variables 都不能提交到 repo。
 
 部署 Firestore 規則：
 

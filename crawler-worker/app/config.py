@@ -23,7 +23,6 @@ class Settings(BaseSettings):
                 self.google_client_id,
                 self.google_client_secret,
                 self.google_refresh_token,
-                self.google_drive_root_folder_id,
             )
         )
 

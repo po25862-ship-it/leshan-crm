@@ -95,7 +95,10 @@ class DriveClient:
 
 async def upload_property_images(source_property_id: str, source: str, images: list[ImageRecord]) -> list[ImageRecord]:
     client = DriveClient()
-    properties = await client.ensure_folder(settings.google_drive_root_folder_id, "Properties")
+    root_folder_id = settings.google_drive_root_folder_id.strip()
+    if not root_folder_id:
+        root_folder_id = await client.ensure_folder("root", "Leshan Market Crawler")
+    properties = await client.ensure_folder(root_folder_id, "Properties")
     property_folder = await client.ensure_folder(properties, source_property_id, prefix=True)
     source_folder = await client.ensure_folder(property_folder, "source")
     source_target = await client.ensure_folder(source_folder, source)
