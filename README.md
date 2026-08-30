@@ -74,7 +74,7 @@ npm start
 ```text
 CRM（Firebase 登入）
 → Vercel /api/market/crawl
-→ 免費 GitHub Actions 臨時 runner
+→ 這台 Mac 的按需 GitHub Actions runner
 → Crawl4AI / Chromium
 → 下載、規則過濾、SHA256＋pHash 去重
 → 私有 Google Drive（drive.file scope）
@@ -84,7 +84,9 @@ CRM（Firebase 登入）
 
 ### 部署邊界
 
-CRM 繼續部署於 Vercel。Chromium 只在 `.github/workflows/market-crawl.yml` 的 GitHub Actions 工作內按需啟動，完成後 runner 自動銷毀，不需要 Railway、Render 或 VPS 常駐主機。CRM 先寫入 queued 狀態，GitHub job 再更新 running／completed／failed，因此 Vercel 不需要等待爬蟲完成。
+CRM 繼續部署於 Vercel。台灣房屋會封鎖 GitHub 雲端機房 IP，因此 `.github/workflows/market-crawl.yml` 限定使用這台 Mac 上標記為 `leshan-market` 的 self-hosted runner。Runner 不安裝成常駐服務；需要抓資料時才執行 `/Users/po25862/Documents/Codex/leshan-actions-runner/run-once.command`，完成一個工作後自動停止。不需要 Railway、Render 或 VPS。CRM 先寫入 queued 狀態，GitHub job 再更新 running／completed／failed，因此 Vercel 不需要等待爬蟲完成。
+
+因 repo 是公開的，Runner 開啟時不要核准或執行陌生 PR 的 workflow。市場爬蟲只允許 `workflow_dispatch` 手動工作，並要求 `self-hosted`、`macOS`、`ARM64`、`leshan-market` 四個標籤。
 
 Vercel 需設定：
 
@@ -119,12 +121,13 @@ firebase deploy --only firestore:rules
 
 ### DE02505039 測試
 
-1. 登入已部署的 CRM。
-2. 在「物件管理」新增或開啟對應 CRM 物件。
-3. 在右側「市場競品／市場照片」貼入：
+1. 雙擊 `/Users/po25862/Documents/Codex/leshan-actions-runner/run-once.command`，保持開啟的終端機視窗不動。
+2. 登入已部署的 CRM。
+3. 在「物件管理」新增或開啟對應 CRM 物件。
+4. 在右側「市場競品／市場照片」貼入：
    `https://www.twhg.com.tw/buy/DE02505039?agid=06459`
-4. 按「從網址匯入」。畫面會依序顯示排隊、掃描中與完成，通常需要數分鐘。
-5. 完成後確認來源編號為 `DE02505039`、市場照片可顯示，且 Firestore 的 `marketPhotos` 只有 `drive_file_id`，沒有 OAuth secret 或公開 Drive URL。
+5. 按「從網址匯入」。畫面會依序顯示排隊、掃描中與完成，通常需要數分鐘。Runner 完成這一個工作後會自動停止。
+6. 完成後確認來源編號為 `DE02505039`、市場照片可顯示，且 Firestore 的 `marketPhotos` 只有 `drive_file_id`，沒有 OAuth secret 或公開 Drive URL。
 
 執行狀態可在 GitHub repo 的 Actions → Leshan Market Crawl 查看；工作輸入只會顯示加密密文。正常使用不需要手動按 Run workflow，CRM 會自動 dispatch。
 

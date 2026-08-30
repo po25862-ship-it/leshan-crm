@@ -1,10 +1,10 @@
 # Leshan Market Crawler Worker
 
-這是 CRM 之外的 Crawl4AI 工作程式。正式免費方案由 `.github/workflows/market-crawl.yml` 在需要時啟動 GitHub Actions runner，工作完成後自動關閉，不需要常駐主機。
+這是 CRM 之外的 Crawl4AI 工作程式。正式免費方案由 `.github/workflows/market-crawl.yml` 派送到這台 Mac 的 `leshan-market` self-hosted runner。台灣房屋會封鎖 GitHub 雲端機房 IP，因此 runner 只在需要時以 `run.sh --once` 啟動，完成一個工作後自動停止，不需要常駐主機。
 
 ## GitHub Actions
 
-`app.job` 會執行完整流程：抓取台灣房屋、下載與去重、上傳私人 Drive、將 `drive_file_id` 寫回 Firestore。所需值全部來自 GitHub Actions secrets，不寫入 repo 或 log。
+`app.job` 會執行完整流程：抓取台灣房屋、下載與去重、上傳私人 Drive、將 `drive_file_id` 寫回 Firestore。所需值全部來自 GitHub Actions secrets，不寫入 repo 或 log。Runner 使用 `self-hosted`、`macOS`、`ARM64`、`leshan-market` 標籤，且不應在啟動期間執行不受信任的 PR workflow。
 
 ## 本機除錯（選用）
 
