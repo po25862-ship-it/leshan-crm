@@ -19,6 +19,7 @@ import { X } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import ReverseMatchesPanel from "./ReverseMatchesPanel";
+import MarketIntelligence from "./MarketIntelligence";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -1368,6 +1369,7 @@ export default function Properties() {
 
           {editingId && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <MarketIntelligence propertyId={editingId} defaultUrl={form.websiteUrl} />
               <ReverseMatchesPanel property={{ ...form, id: editingId }} needs={needs} updateNeed={updateNeed} />
               {(() => {
                 const usedIn = linkedCases.filter((c) => c.propertyId === editingId);

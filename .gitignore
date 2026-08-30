@@ -4,3 +4,10 @@ build/
 property-sync/output/
 property-sync/*.log
 .vercel
+.env
+.env.local
+.env.*.local
+__pycache__/
+*.py[cod]
+crawler-worker/.env
+crawler-worker/.venv/

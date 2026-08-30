@@ -66,3 +66,58 @@
 npm install
 npm start
 ```
+
+## Leshan Market Crawler（Sprint 1–4）
+
+物件詳細頁已新增「市場競品／市場照片」。目前串接台灣房屋單一物件網址，流程為：
+
+```text
+CRM（Firebase 登入）
+→ Vercel /api/market/crawl
+→ 私有 FastAPI / Crawl4AI worker
+→ 下載、規則過濾、SHA256＋pHash 去重
+→ 私有 Google Drive（drive.file scope）
+→ drive_file_id 寫入 Firestore 物件子集合
+→ /api/market/image 驗證登入後串流圖片
+```
+
+### 部署邊界
+
+CRM 繼續部署於 Vercel。`crawler-worker/` 必須另行部署到 Railway、Render 或 VPS，因為 Vercel Serverless 不適合執行 Chromium。不要將 worker 直接公開給瀏覽器；即使有反向代理，也必須保留內部 token 驗證。
+
+`api/market/crawl.js` 的函式最長執行時間設為 300 秒；部署方案必須支援此上限。若目前 Vercel 方案的函式上限較短，正式環境需把此同步 MVP 改為 queue/job polling，或將 CRM API 一併放到可執行長任務的服務。
+
+Vercel 需設定：
+
+```text
+CRAWLER_WORKER_URL=https://你的-worker
+CRAWLER_INTERNAL_TOKEN=與-worker相同的長隨機字串
+FIREBASE_SERVICE_ACCOUNT_JSON=Firebase服務帳號JSON（單行Secret）
+```
+
+Worker 需設定 `crawler-worker/.env.example` 中的值。`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GOOGLE_REFRESH_TOKEN` 只能放部署平台 Secret。Google OAuth scope 使用 `drive.file`；程式不會建立公開 permission，也不使用 Drive 公開分享網址。
+
+部署 Firestore 規則：
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+### DE02505039 測試
+
+1. 啟動 CRM 與 worker，登入 CRM。
+2. 在「物件管理」新增或開啟對應 CRM 物件。
+3. 在右側「市場競品／市場照片」貼入：
+   `https://www.twhg.com.tw/buy/DE02505039?agid=06459`
+4. 按「從網址匯入」。完成後確認來源編號為 `DE02505039`、市場照片可顯示，且 Firestore 的 `marketPhotos` 只有 `drive_file_id`，沒有 OAuth secret 或公開 Drive URL。
+
+也可直接測 worker（需替換 token）：
+
+```bash
+curl -X POST http://127.0.0.1:8080/pipeline/property \
+  -H 'Content-Type: application/json' \
+  -H 'X-Leshan-Internal-Token: YOUR_TOKEN' \
+  -d '{"url":"https://www.twhg.com.tw/buy/DE02505039?agid=06459","crm_property_id":"YOUR_FIRESTORE_PROPERTY_ID"}'
+```
+
+目前尚未完成 591、永慶、樂屋 Adapter，以及跨來源同戶辨識／競品分級；資料模型已保留 `source`、`sourcePropertyId`、`listingId` 與圖片雜湊，後續可在不改 UI 儲存邊界的情況下加入。
