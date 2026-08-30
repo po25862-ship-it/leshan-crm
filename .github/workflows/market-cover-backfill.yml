@@ -8,26 +8,26 @@ permissions:
 
 jobs:
   backfill:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, leshan-market]
     timeout-minutes: 60
     env:
+      SYSTEM_PYTHON: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
 
     steps:
       - name: Check out CRM
         uses: actions/checkout@v5
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
+      - name: Set up isolated Python environment
+        run: |
+          "$SYSTEM_PYTHON" -m venv "$RUNNER_TEMP/leshan-cover-venv"
 
       - name: Install cover backfill dependencies
         run: |
-          pip install -r crawler-worker/requirements-cover.txt
+          "$RUNNER_TEMP/leshan-cover-venv/bin/pip" install -r crawler-worker/requirements-cover.txt
 
       - name: Backfill official property covers
         env:
           PYTHONPATH: crawler-worker
         run: |
-          python -m app.backfill_covers --concurrency 1 --delay 2
+          "$RUNNER_TEMP/leshan-cover-venv/bin/python" -m app.backfill_covers --concurrency 1 --delay 4
