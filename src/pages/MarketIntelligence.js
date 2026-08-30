@@ -84,9 +84,12 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
 
   useEffect(() => {
     const requestedAt = job?.requestedAt?.toMillis?.() || 0;
-    const stale = ["queued", "running"].includes(job?.status) && now - requestedAt >= 45 * 60 * 1000;
+    const timeout = job?.status === "queued" ? 5 * 60 * 1000 : 45 * 60 * 1000;
+    const stale = ["queued", "running"].includes(job?.status) && now - requestedAt >= timeout;
     if (stale) {
-      setMessage("掃描等待超過 45 分鐘，可能未成功啟動；現在可以重新送出。");
+      setMessage(job?.status === "queued"
+        ? "掃描等待超過 5 分鐘，可能未成功啟動；現在可以重新送出。"
+        : "掃描執行超過 45 分鐘，可能已中斷；現在可以重新送出。");
       return;
     }
     if (job?.status === "queued") setMessage("已排入免費掃描，正在等待 GitHub 臨時工作電腦啟動…");
@@ -123,7 +126,8 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
   };
 
   const requestedAt = job?.requestedAt?.toMillis?.() || 0;
-  const jobIsFresh = now - requestedAt < 45 * 60 * 1000;
+  const jobTimeout = job?.status === "queued" ? 5 * 60 * 1000 : 45 * 60 * 1000;
+  const jobIsFresh = now - requestedAt < jobTimeout;
   const busy = scanning || (["queued", "running"].includes(job?.status) && jobIsFresh);
 
   return (

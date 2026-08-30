@@ -68,7 +68,8 @@ module.exports = async function handler(req, res) {
     }
     const currentJob = propertySnapshot.data()?.marketCrawl;
     const requestedAt = currentJob?.requestedAt?.toMillis?.() || 0;
-    const currentJobIsFresh = Date.now() - requestedAt < 45 * 60 * 1000;
+    const currentJobTimeout = currentJob?.status === "queued" ? 5 * 60 * 1000 : 45 * 60 * 1000;
+    const currentJobIsFresh = Date.now() - requestedAt < currentJobTimeout;
     if (["queued", "running"].includes(currentJob?.status) && currentJobIsFresh) {
       return res.status(409).json({
         success: false,
