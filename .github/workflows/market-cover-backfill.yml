@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Check out CRM
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up isolated Python environment
         run: |
@@ -30,4 +30,4 @@ jobs:
         env:
           PYTHONPATH: crawler-worker
         run: |
-          "$RUNNER_TEMP/leshan-cover-venv/bin/python" -m app.backfill_covers --concurrency 6
+          "$RUNNER_TEMP/leshan-cover-venv/bin/python" -m app.backfill_covers --concurrency 1 --delay 2
