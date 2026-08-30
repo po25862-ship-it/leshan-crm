@@ -1,5 +1,5 @@
 const { requireFirebaseUser } = require("../_lib/market-auth");
-const { callWorker } = require("../_lib/market-worker");
+const { downloadDriveFile } = require("../_lib/google-drive");
 
 const DRIVE_FILE_ID = /^[A-Za-z0-9_-]{10,200}$/;
 
@@ -12,11 +12,7 @@ module.exports = async function handler(req, res) {
     await requireFirebaseUser(req);
     const fileId = String(req.query.file_id || "");
     if (!DRIVE_FILE_ID.test(fileId)) return res.status(400).json({ error: "invalid_file_id" });
-    const response = await callWorker(`/drive/files/${encodeURIComponent(fileId)}`, {
-      method: "GET",
-      timeoutMs: 30000,
-      headers: { Accept: "image/*" },
-    });
+    const response = await downloadDriveFile(fileId);
     if (!response.ok) return res.status(response.status === 404 ? 404 : 502).json({ error: "image_unavailable" });
     const bytes = Buffer.from(await response.arrayBuffer());
     res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");

@@ -1,11 +1,47 @@
+const crypto = require("crypto");
 const { FieldValue } = require("firebase-admin/firestore");
 const { ensureFirebaseAdmin, requireFirebaseUser } = require("../_lib/market-auth");
-const { callWorker } = require("../_lib/market-worker");
 
 const PROPERTY_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const ALLOWED_HOSTS = new Set(["twhg.com.tw", "www.twhg.com.tw"]);
 
-function safeDocId(value) {
-  return String(value || "unknown").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 180);
+function validateSourceUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && ALLOWED_HOSTS.has(url.hostname.toLowerCase()) && url.pathname.startsWith("/buy/");
+  } catch {
+    return false;
+  }
+}
+
+async function dispatchGithubAction(inputs) {
+  const token = process.env.GITHUB_ACTIONS_TOKEN;
+  const repository = process.env.GITHUB_ACTIONS_REPOSITORY || "po25862-ship-it/leshan-crm";
+  if (!token) throw new Error("GITHUB_ACTIONS_TOKEN is not configured");
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error("Invalid GitHub repository setting");
+  const response = await fetch(`https://api.github.com/repos/${repository}/actions/workflows/market-crawl.yml/dispatches`, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "leshan-crm-market-crawler",
+    },
+    body: JSON.stringify({ ref: "main", inputs }),
+  });
+  if (response.status !== 204) {
+    const detail = await response.text();
+    throw new Error(`GitHub Actions dispatch failed (${response.status}): ${detail.slice(0, 200)}`);
+  }
+}
+
+function encryptJobPayload(value) {
+  const key = Buffer.from(process.env.MARKET_JOB_ENCRYPTION_KEY || "", "base64");
+  if (key.length !== 32) throw new Error("MARKET_JOB_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString("base64url");
 }
 
 module.exports = async function handler(req, res) {
@@ -14,88 +50,65 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ success: false, error: { code: "METHOD_NOT_ALLOWED" } });
   }
 
+  let propertyRef;
+  let requestId;
   try {
     const user = await requireFirebaseUser(req);
     const crmPropertyId = String(req.body?.crm_property_id || "");
     const url = String(req.body?.url || "");
-    if (!PROPERTY_ID.test(crmPropertyId) || url.length > 2048) {
+    if (!PROPERTY_ID.test(crmPropertyId) || url.length > 2048 || !validateSourceUrl(url)) {
       return res.status(400).json({ success: false, error: { code: "INVALID_REQUEST" } });
     }
 
-    const workerResponse = await callWorker("/pipeline/property", {
-      method: "POST",
-      body: JSON.stringify({ url, crm_property_id: crmPropertyId }),
-    });
-    const payload = await workerResponse.json().catch(() => null);
-    if (!workerResponse.ok || !payload?.success) {
-      return res.status(workerResponse.status >= 400 && workerResponse.status < 500 ? 400 : 502).json(
-        payload || { success: false, error: { code: "CRAWLER_UNAVAILABLE" } }
-      );
-    }
-
     const { firestore } = ensureFirebaseAdmin();
-    const propertyRef = firestore.collection("properties").doc(crmPropertyId);
+    propertyRef = firestore.collection("properties").doc(crmPropertyId);
     const propertySnapshot = await propertyRef.get();
     if (!propertySnapshot.exists) {
       return res.status(404).json({ success: false, error: { code: "CRM_PROPERTY_NOT_FOUND" } });
     }
-
-    const source = safeDocId(payload.source);
-    const sourcePropertyId = safeDocId(payload.source_property_id);
-    const listingId = `${source}_${sourcePropertyId}`;
-    const listingRef = propertyRef.collection("marketListings").doc(listingId);
-    const existingPhotos = await propertyRef.collection("marketPhotos")
-      .where("listingId", "==", listingId).get();
-    const photos = Array.isArray(payload.images) ? payload.images.slice(0, 100) : [];
-
-    const batch = firestore.batch();
-    existingPhotos.docs.forEach((photo) => batch.delete(photo.ref));
-    batch.set(listingRef, {
-      ...payload.property,
-      listingId,
-      source: payload.source,
-      sourcePropertyId: payload.source_property_id,
-      sourceUrl: payload.property?.source_url || url,
-      warnings: payload.warnings || [],
-      imageCount: photos.length,
-      lastCrawledAt: payload.property?.crawl_time || new Date().toISOString(),
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedByUid: user.uid,
-    }, { merge: true });
-
-    photos.forEach((photo, index) => {
-      const photoId = safeDocId(photo.drive_file_id || photo.sha256 || `${listingId}_${index + 1}`);
-      batch.set(propertyRef.collection("marketPhotos").doc(photoId), {
-        ...photo,
-        listingId,
-        source: payload.source,
-        sourcePropertyId: payload.source_property_id,
-        publicAdAllowed: false,
-        updatedAt: FieldValue.serverTimestamp(),
+    const currentJob = propertySnapshot.data()?.marketCrawl;
+    const requestedAt = currentJob?.requestedAt?.toMillis?.() || 0;
+    const currentJobIsFresh = Date.now() - requestedAt < 45 * 60 * 1000;
+    if (["queued", "running"].includes(currentJob?.status) && currentJobIsFresh) {
+      return res.status(409).json({
+        success: false,
+        error: { code: "CRAWL_ALREADY_RUNNING", message: "這個物件已有掃描工作執行中。" },
       });
-    });
-    batch.update(propertyRef, {
-      marketLastCrawledAt: FieldValue.serverTimestamp(),
-      marketLastSource: payload.source,
-      marketLastSourcePropertyId: payload.source_property_id,
-    });
-    await batch.commit();
+    }
 
-    return res.status(200).json({
-      success: true,
-      source: payload.source,
-      source_property_id: payload.source_property_id,
-      saved: { listing: listingId, photos: photos.length },
-      warnings: payload.warnings || [],
+    requestId = crypto.randomUUID();
+    await propertyRef.update({
+      marketCrawl: {
+        requestId,
+        status: "queued",
+        sourceUrl: url,
+        requestedByUid: user.uid,
+        requestedAt: FieldValue.serverTimestamp(),
+      },
     });
+
+    const payload = encryptJobPayload({
+      url,
+      crm_property_id: crmPropertyId,
+      requested_by_uid: user.uid,
+      request_id: requestId,
+    });
+    await dispatchGithubAction({ payload });
+
+    return res.status(202).json({ success: true, queued: true, request_id: requestId });
   } catch (error) {
-    console.error("market crawl failed", error);
-    const status = error.statusCode || (error.name === "AbortError" ? 504 : 500);
+    console.error("market crawl dispatch failed", error);
+    if (propertyRef && requestId) {
+      await propertyRef.update({
+        "marketCrawl.status": "failed",
+        "marketCrawl.error": "無法啟動免費掃描工作，請檢查 GitHub Actions 設定。",
+        "marketCrawl.finishedAt": FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
+    const status = error.statusCode || 500;
     return res.status(status).json({
       success: false,
-      error: { code: status === 401 ? "UNAUTHORIZED" : "MARKET_CRAWL_FAILED", message: error.message },
+      error: { code: status === 401 ? "UNAUTHORIZED" : "ACTION_DISPATCH_FAILED", message: error.message },
     });
   }
 };
-
-module.exports.config = { maxDuration: 300 };

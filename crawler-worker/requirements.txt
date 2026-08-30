@@ -7,3 +7,5 @@ Pillow==11.3.0
 ImageHash==4.3.2
 pydantic-settings==2.10.1
 python-multipart==0.0.20
+firebase-admin>=6.5.0,<8.0.0
+cryptography>=42.0.0,<47.0.0

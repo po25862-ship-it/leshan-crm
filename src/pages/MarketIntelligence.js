@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { getIdToken } from "firebase/auth";
 import { db } from "../firebase";
 import { useAuth } from "../AuthContext";
@@ -44,6 +44,8 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
   const [url, setUrl] = useState(defaultUrl || "");
   const [listings, setListings] = useState([]);
   const [photos, setPhotos] = useState([]);
+  const [job, setJob] = useState(null);
+  const [now, setNow] = useState(Date.now());
   const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -53,6 +55,11 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
 
   useEffect(() => {
     if (!propertyId) return undefined;
+    const propertyUnsubscribe = onSnapshot(
+      doc(db, "properties", propertyId),
+      (snapshot) => setJob(snapshot.data()?.marketCrawl || null),
+      (error) => console.error("讀取市場掃描狀態失敗", error)
+    );
     const listingUnsubscribe = onSnapshot(
       collection(db, `properties/${propertyId}/marketListings`),
       (snapshot) => setListings(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
@@ -64,10 +71,29 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
       (error) => console.error("讀取市場照片失敗", error)
     );
     return () => {
+      propertyUnsubscribe();
       listingUnsubscribe();
       photoUnsubscribe();
     };
   }, [propertyId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const requestedAt = job?.requestedAt?.toMillis?.() || 0;
+    const stale = ["queued", "running"].includes(job?.status) && now - requestedAt >= 45 * 60 * 1000;
+    if (stale) {
+      setMessage("掃描等待超過 45 分鐘，可能未成功啟動；現在可以重新送出。");
+      return;
+    }
+    if (job?.status === "queued") setMessage("已排入免費掃描，正在等待 GitHub 臨時工作電腦啟動…");
+    if (job?.status === "running") setMessage("掃描中：正在讀取物件、整理照片並上傳私人 Drive…");
+    if (job?.status === "completed") setMessage(`掃描完成：${job.sourcePropertyId || "物件"}，已寫入 ${job.photoCount || 0} 張市場照片。`);
+    if (job?.status === "failed") setMessage(`掃描失敗：${job.error || "請檢查 GitHub Actions 執行紀錄。"}`);
+  }, [job, now]);
 
   const photosByListing = useMemo(() => photos.reduce((groups, photo) => {
     const key = photo.listingId || "unknown";
@@ -78,7 +104,7 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
   const scan = async () => {
     if (!url.trim() || !user) return;
     setScanning(true);
-    setMessage("正在讀取物件資料、處理照片並安全上傳 Drive…");
+    setMessage("正在送出免費掃描工作…");
     try {
       const token = await getIdToken(user, true);
       const response = await fetch("/api/market/crawl", {
@@ -88,13 +114,17 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error?.message || result.error?.code || "市場掃描失敗");
-      setMessage(`完成：${result.source_property_id}，已寫入 ${result.saved.photos} 張市場照片。`);
+      setMessage("已排入免費掃描，通常需要數分鐘，完成後本頁會自動更新。");
     } catch (error) {
       setMessage(`無法完成：${error.message}`);
     } finally {
       setScanning(false);
     }
   };
+
+  const requestedAt = job?.requestedAt?.toMillis?.() || 0;
+  const jobIsFresh = now - requestedAt < 45 * 60 * 1000;
+  const busy = scanning || (["queued", "running"].includes(job?.status) && jobIsFresh);
 
   return (
     <div className="panel">
@@ -110,13 +140,13 @@ export default function MarketIntelligence({ propertyId, defaultUrl = "" }) {
           aria-label="市場物件網址"
           style={{ flex: "1 1 260px" }}
         />
-        <button type="button" className="btn" onClick={scan} disabled={scanning || !url.trim()}>
-          {scanning ? "掃描中…" : "從網址匯入"}
+        <button type="button" className="btn" onClick={scan} disabled={busy || !url.trim()}>
+          {busy ? "掃描中…" : "從網址匯入"}
         </button>
       </div>
       {message && <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 8, background: "var(--accent-soft)", fontSize: 12, lineHeight: 1.5 }}>{message}</div>}
 
-      {listings.length === 0 && !scanning ? (
+      {listings.length === 0 && !busy ? (
         <div style={{ marginTop: 14, color: "var(--muted)", fontSize: 12 }}>尚無市場資料。可貼入 DE02505039 測試網址開始。</div>
       ) : listings.map((listing) => {
         const listingPhotos = photosByListing[listing.listingId] || [];

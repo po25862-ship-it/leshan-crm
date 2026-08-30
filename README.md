@@ -74,7 +74,8 @@ npm start
 ```text
 CRM（Firebase 登入）
 → Vercel /api/market/crawl
-→ 私有 FastAPI / Crawl4AI worker
+→ 免費 GitHub Actions 臨時 runner
+→ Crawl4AI / Chromium
 → 下載、規則過濾、SHA256＋pHash 去重
 → 私有 Google Drive（drive.file scope）
 → drive_file_id 寫入 Firestore 物件子集合
@@ -83,19 +84,32 @@ CRM（Firebase 登入）
 
 ### 部署邊界
 
-CRM 繼續部署於 Vercel。`crawler-worker/` 必須另行部署到 Railway、Render 或 VPS，因為 Vercel Serverless 不適合執行 Chromium。不要將 worker 直接公開給瀏覽器；即使有反向代理，也必須保留內部 token 驗證。
-
-`api/market/crawl.js` 的函式最長執行時間設為 300 秒；部署方案必須支援此上限。若目前 Vercel 方案的函式上限較短，正式環境需把此同步 MVP 改為 queue/job polling，或將 CRM API 一併放到可執行長任務的服務。
+CRM 繼續部署於 Vercel。Chromium 只在 `.github/workflows/market-crawl.yml` 的 GitHub Actions 工作內按需啟動，完成後 runner 自動銷毀，不需要 Railway、Render 或 VPS 常駐主機。CRM 先寫入 queued 狀態，GitHub job 再更新 running／completed／failed，因此 Vercel 不需要等待爬蟲完成。
 
 Vercel 需設定：
 
 ```text
-CRAWLER_WORKER_URL=https://你的-worker
-CRAWLER_INTERNAL_TOKEN=與-worker相同的長隨機字串
+GITHUB_ACTIONS_TOKEN=只授權此repo Actions:write的fine-grained token
+GITHUB_ACTIONS_REPOSITORY=po25862-ship-it/leshan-crm
+MARKET_JOB_ENCRYPTION_KEY=32位元組隨機值的base64（GitHub需填相同值）
 FIREBASE_SERVICE_ACCOUNT_JSON=Firebase服務帳號JSON（單行Secret）
+GOOGLE_CLIENT_ID=Google OAuth client id
+GOOGLE_CLIENT_SECRET=Google OAuth client secret
+GOOGLE_REFRESH_TOKEN=Google OAuth refresh token
 ```
 
-Worker 需設定 `crawler-worker/.env.example` 中的值。`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GOOGLE_REFRESH_TOKEN` 只能放部署平台 Secret。Google OAuth scope 使用 `drive.file`；程式不會建立公開 permission，也不使用 Drive 公開分享網址。
+GitHub repo 的 Settings → Secrets and variables → Actions 需設定：
+
+```text
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+GOOGLE_REFRESH_TOKEN
+GOOGLE_DRIVE_ROOT_FOLDER_ID
+FIREBASE_SERVICE_ACCOUNT_JSON
+MARKET_JOB_ENCRYPTION_KEY
+```
+
+OAuth scope 使用 `drive.file`；程式不會建立公開 permission，也不使用 Drive 公開分享網址。因 repo 是公開的，CRM 會以 AES-256-GCM 加密網址、Firestore 物件 ID 與 UID，Actions 介面和公開 log 只會看到密文。GitHub Actions secrets 與 Vercel Environment Variables 都不能提交到 repo。
 
 部署 Firestore 規則：
 
@@ -105,19 +119,13 @@ firebase deploy --only firestore:rules
 
 ### DE02505039 測試
 
-1. 啟動 CRM 與 worker，登入 CRM。
+1. 登入已部署的 CRM。
 2. 在「物件管理」新增或開啟對應 CRM 物件。
 3. 在右側「市場競品／市場照片」貼入：
    `https://www.twhg.com.tw/buy/DE02505039?agid=06459`
-4. 按「從網址匯入」。完成後確認來源編號為 `DE02505039`、市場照片可顯示，且 Firestore 的 `marketPhotos` 只有 `drive_file_id`，沒有 OAuth secret 或公開 Drive URL。
+4. 按「從網址匯入」。畫面會依序顯示排隊、掃描中與完成，通常需要數分鐘。
+5. 完成後確認來源編號為 `DE02505039`、市場照片可顯示，且 Firestore 的 `marketPhotos` 只有 `drive_file_id`，沒有 OAuth secret 或公開 Drive URL。
 
-也可直接測 worker（需替換 token）：
-
-```bash
-curl -X POST http://127.0.0.1:8080/pipeline/property \
-  -H 'Content-Type: application/json' \
-  -H 'X-Leshan-Internal-Token: YOUR_TOKEN' \
-  -d '{"url":"https://www.twhg.com.tw/buy/DE02505039?agid=06459","crm_property_id":"YOUR_FIRESTORE_PROPERTY_ID"}'
-```
+執行狀態可在 GitHub repo 的 Actions → Leshan Market Crawl 查看；工作輸入只會顯示加密密文。正常使用不需要手動按 Run workflow，CRM 會自動 dispatch。
 
 目前尚未完成 591、永慶、樂屋 Adapter，以及跨來源同戶辨識／競品分級；資料模型已保留 `source`、`sourcePropertyId`、`listingId` 與圖片雜湊，後續可在不改 UI 儲存邊界的情況下加入。
