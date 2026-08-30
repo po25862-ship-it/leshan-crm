@@ -67,6 +67,8 @@ def collect_candidates(database, force: bool = False, limit: int = 0) -> tuple[l
     skipped_existing = 0
     for snapshot in database.collection("properties").stream():
         data = snapshot.to_dict() or {}
+        if str(data.get("status") or "active") != "active":
+            continue
         url = str(data.get("websiteUrl") or "").strip()
         if not url:
             continue
@@ -89,26 +91,44 @@ def collect_candidates(database, force: bool = False, limit: int = 0) -> tuple[l
     return candidates, skipped_existing
 
 
-async def fetch_cover(client: httpx.AsyncClient, semaphore: asyncio.Semaphore, candidate: CoverCandidate) -> CoverResult:
+async def fetch_cover(
+    client: httpx.AsyncClient,
+    semaphore: asyncio.Semaphore,
+    candidate: CoverCandidate,
+    delay: float,
+) -> CoverResult:
     async with semaphore:
-        try:
-            response = await client.get(candidate.url)
-            response.raise_for_status()
-            _, images = parse(response.text, candidate.url)
-            cover_url = choose_cover_image(images, candidate.listing_no)
-            if not cover_url:
-                raise RuntimeError("official listing image not found")
-            return CoverResult(candidate=candidate, cover_url=cover_url)
-        except Exception as error:
-            return CoverResult(candidate=candidate, error=f"{type(error).__name__}: {error}"[:240])
+        for attempt in range(4):
+            try:
+                response = await client.get(candidate.url)
+                if response.status_code == 429:
+                    retry_after = response.headers.get("retry-after", "")
+                    wait = float(retry_after) if retry_after.isdigit() else 20.0 * (attempt + 1)
+                    await asyncio.sleep(min(max(wait, 15.0), 120.0))
+                    continue
+                response.raise_for_status()
+                _, images = parse(response.text, candidate.url)
+                cover_url = choose_cover_image(images, candidate.listing_no)
+                if not cover_url:
+                    raise RuntimeError("official listing image not found")
+                return CoverResult(candidate=candidate, cover_url=cover_url)
+            except httpx.HTTPStatusError as error:
+                return CoverResult(candidate=candidate, error=f"{type(error).__name__}: {error}"[:240])
+            except Exception as error:
+                if attempt == 3:
+                    return CoverResult(candidate=candidate, error=f"{type(error).__name__}: {error}"[:240])
+                await asyncio.sleep(3.0 * (attempt + 1))
+            finally:
+                await asyncio.sleep(max(0.0, delay))
+        return CoverResult(candidate=candidate, error="rate limited after four attempts")
 
 
-async def fetch_all(candidates: list[CoverCandidate], concurrency: int = 6) -> list[CoverResult]:
+async def fetch_all(candidates: list[CoverCandidate], concurrency: int = 1, delay: float = 2.0) -> list[CoverResult]:
     semaphore = asyncio.Semaphore(max(1, concurrency))
     limits = httpx.Limits(max_connections=max(2, concurrency), max_keepalive_connections=max(2, concurrency))
     headers = {"User-Agent": USER_AGENT, "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.5"}
     async with httpx.AsyncClient(timeout=35, follow_redirects=True, headers=headers, limits=limits) as client:
-        return await asyncio.gather(*(fetch_cover(client, semaphore, candidate) for candidate in candidates))
+        return await asyncio.gather(*(fetch_cover(client, semaphore, candidate, delay) for candidate in candidates))
 
 
 def write_results(database, results: list[CoverResult]) -> int:
@@ -128,7 +148,8 @@ def write_results(database, results: list[CoverResult]) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill official first-image covers for CRM properties")
-    parser.add_argument("--concurrency", type=int, default=6)
+    parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--delay", type=float, default=2.0)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
@@ -139,7 +160,11 @@ def main() -> None:
     if not candidates:
         return
 
-    results = asyncio.run(fetch_all(candidates, concurrency=max(1, min(args.concurrency, 12))))
+    results = asyncio.run(fetch_all(
+        candidates,
+        concurrency=max(1, min(args.concurrency, 3)),
+        delay=max(0.5, min(args.delay, 10.0)),
+    ))
     updated = write_results(database, results)
     failures = [result for result in results if result.error]
     print(f"cover backfill updated={updated} failed={len(failures)}")
