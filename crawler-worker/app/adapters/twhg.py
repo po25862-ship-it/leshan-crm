@@ -18,6 +18,25 @@ def source_property_id(url: str) -> str:
     return match.group(1)
 
 
+def choose_cover_image(images: list[str], property_id: str) -> str | None:
+    """Pick the first official listing image, preferring a filename keyed by listing number."""
+    normalized_id = str(property_id or "").strip().upper()
+    official: list[str] = []
+    for image in images:
+        parsed = urlparse(str(image or ""))
+        host = (parsed.hostname or "").lower()
+        path = parsed.path or ""
+        if parsed.scheme != "https" or not (host == "twhg.com.tw" or host.endswith(".twhg.com.tw")):
+            continue
+        if not re.search(r"\.(?:jpe?g|png|webp)$", path, re.I):
+            continue
+        official.append(image)
+        filename = path.rsplit("/", 1)[-1].upper()
+        if normalized_id and filename.startswith(normalized_id):
+            return image
+    return official[0] if official and not normalized_id else None
+
+
 def _number(text: str) -> float | None:
     match = re.search(r"([\d,.]+)", text.replace("，", ","))
     return float(match.group(1).replace(",", "")) if match else None

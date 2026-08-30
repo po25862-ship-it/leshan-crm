@@ -132,3 +132,9 @@ firebase deploy --only firestore:rules
 執行狀態可在 GitHub repo 的 Actions → Leshan Market Crawl 查看；工作輸入只會顯示加密密文。正常使用不需要手動按 Run workflow，CRM 會自動 dispatch。
 
 目前尚未完成 591、永慶、樂屋 Adapter，以及跨來源同戶辨識／競品分級；資料模型已保留 `source`、`sourcePropertyId`、`listingId` 與圖片雜湊，後續可在不改 UI 儲存邊界的情況下加入。
+
+### 官網主圖補齊
+
+`.github/workflows/market-cover-backfill.yml` 會在這台 Mac 的按需 Runner 上讀取 Firestore 物件，針對有台灣房屋 `websiteUrl`、但尚無 `imageUrl`／`photoUrl`／`coverImageUrl` 的物件，擷取官網第一張以委託編號命名的主圖並寫入 `coverImageUrl`。既有人工照片不覆蓋，也不下載照片到 CRM 或 Mac；畫面直接使用台灣房屋公開圖片網址。
+
+執行方式：先啟動 `run-once.command`，再到 GitHub Actions 手動執行 `Leshan Property Cover Backfill`。工作完成後 Runner 自動停止。
