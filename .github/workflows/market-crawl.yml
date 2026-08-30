@@ -17,7 +17,6 @@ jobs:
     timeout-minutes: 30
     env:
       CRAWLER_WORK_ROOT: /tmp/leshan-market
-      CRAWLER_VENV: ${{ runner.temp }}/leshan-crawler-venv
       SYSTEM_PYTHON: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
@@ -32,17 +31,17 @@ jobs:
 
       - name: Set up isolated Python environment
         run: |
-          "$SYSTEM_PYTHON" -m venv "$CRAWLER_VENV"
+          "$SYSTEM_PYTHON" -m venv "$RUNNER_TEMP/leshan-crawler-venv"
 
       - name: Install crawler
         run: |
-          "$CRAWLER_VENV/bin/pip" install -r crawler-worker/requirements.txt
-          "$CRAWLER_VENV/bin/python" -m patchright install chromium
+          "$RUNNER_TEMP/leshan-crawler-venv/bin/pip" install -r crawler-worker/requirements.txt
+          "$RUNNER_TEMP/leshan-crawler-venv/bin/python" -m patchright install chromium
 
       - name: Crawl, upload to private Drive, and sync Firestore
         env:
           PYTHONPATH: crawler-worker
           MARKET_JOB_PAYLOAD: ${{ inputs.payload }}
         run: |
-          "$CRAWLER_VENV/bin/python" -m app.job \
+          "$RUNNER_TEMP/leshan-crawler-venv/bin/python" -m app.job \
             --payload "$MARKET_JOB_PAYLOAD"
