@@ -16,12 +16,12 @@ import { useCollection } from "../hooks/useCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 
 const AGENTS = [
-  { id: "market", name: "市場分析師", job: "實價、價格區間與 CMA", icon: BarChart3, tone: "emerald", art: "/crew/market-analyst.png" },
-  { id: "intel", name: "情報員", job: "同社區競品與價格變化", icon: Radar, tone: "blue", art: "/crew/intel-scout.png" },
-  { id: "photo", name: "攝影師", job: "首圖、排序與素材建議", icon: Camera, tone: "purple", art: "/crew/photographer.png" },
-  { id: "copy", name: "文案師", job: "FB、Threads 與 591 文案", icon: FileText, tone: "orange", art: "/crew/copywriter.png" },
-  { id: "developer", name: "開發助理", job: "屋主名單與追蹤開發", icon: SearchCheck, tone: "red", art: "/crew/developer-assistant.png" },
-  { id: "buyer", name: "買方顧問", job: "從客需找高機會買方", icon: Users, tone: "rose", art: "/crew/buyer-adviser.png" },
+  { id: "market", name: "市場分析師", job: "實價、價格區間與 CMA", icon: BarChart3, tone: "emerald", art: "/crew/market-analyst.png", workingArt: "/crew/market-analyst-working.png" },
+  { id: "intel", name: "情報員", job: "同社區競品與價格變化", icon: Radar, tone: "blue", art: "/crew/intel-scout.png", workingArt: "/crew/intel-scout-working.png" },
+  { id: "photo", name: "攝影師", job: "首圖、排序與素材建議", icon: Camera, tone: "purple", art: "/crew/photographer.png", workingArt: "/crew/photographer-working.png" },
+  { id: "copy", name: "文案師", job: "FB、Threads 與 591 文案", icon: FileText, tone: "orange", art: "/crew/copywriter.png", workingArt: "/crew/copywriter-working.png" },
+  { id: "developer", name: "開發助理", job: "屋主名單與追蹤開發", icon: SearchCheck, tone: "red", art: "/crew/developer-assistant.png", workingArt: "/crew/developer-assistant-working.png" },
+  { id: "buyer", name: "買方顧問", job: "從客需找高機會買方", icon: Users, tone: "rose", art: "/crew/buyer-adviser.png", workingArt: "/crew/buyer-adviser-working.png" },
   { id: "full", name: "全隊出動", job: "分析、競品、文案、配對一次完成", icon: Sparkles, tone: "gold" },
 ];
 
@@ -48,7 +48,8 @@ function AgentCharacter({ agent, state, onSelect }) {
       <span className="crew-speech">{STATE_COPY[state]}</span>
       <span className={`crew-avatar role-${agent.id}`} aria-hidden="true">
         <span className="crew-signal"><i /><i /><i /></span>
-        <img className="crew-art" src={agent.art} alt="" />
+        <img className="crew-art crew-art-idle" src={agent.art} alt="" />
+        <img className="crew-art crew-art-work" src={agent.workingArt} alt="" />
         <span className="crew-art-effects"><i /><i /><i /></span>
         <span className="crew-shadow" />
       </span>
