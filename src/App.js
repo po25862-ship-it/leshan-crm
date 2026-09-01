@@ -21,6 +21,7 @@ import SmartTools from "./pages/SmartTools";
 import MatchingRecommendations from "./pages/MatchingRecommendations";
 import MobileMore from "./pages/MobileMore";
 import ConversationAnalysis from "./pages/ConversationAnalysis";
+import AgentCenter from "./pages/AgentCenter";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { GoogleAuthProvider } from "./GoogleAuthContext";
@@ -51,14 +52,17 @@ import {
   ShieldCheck,
   Send,
   ScanText,
+  Bot,
 } from "lucide-react";
 import "./mobile.css";
 
 const desktopNavItems = [
   { to: "/", label: "首頁", icon: LayoutDashboard, end: true },
+  { to: "/tasks", label: "今日任務", icon: ListTodo },
+  { to: "/properties", label: "物件中心", icon: Building2 },
+  { to: "/agents", label: "AI 派工", icon: Bot },
   { to: "/buyers", label: "買方管理", icon: Users },
   { to: "/needs", label: "客需管理", icon: SearchCheck },
-  { to: "/properties", label: "物件管理", icon: Building2 },
   { to: "/matching", label: "推薦配對", icon: WandSparkles },
 ];
 
@@ -84,8 +88,8 @@ function DesktopSidebar() {
       <div className="brand">
         <div className="brand-mark" aria-hidden="true">⌂</div>
         <div className="brand-copy">
-          <h1>樂善房仲 CRM</h1>
-          <span>成交導向・智慧配對</span>
+          <h1>Leshan OS</h1>
+          <span>房仲 AI 任務中心</span>
         </div>
       </div>
       <nav className="sidebar-nav" aria-label="主要導覽">
@@ -149,6 +153,7 @@ function AppRoutes() {
       <Route path="/rentals" element={<Rentals />} />
       <Route path="/rentals/:rentalId" element={<RentalDetail />} />
       <Route path="/quicknotes" element={<QuickNotes />} />
+      <Route path="/tasks" element={<QuickNotes />} />
       <Route path="/cases" element={<Cases />} />
       <Route path="/properties" element={<Properties />} />
       <Route path="/needs" element={<Needs />} />
@@ -159,6 +164,7 @@ function AppRoutes() {
       <Route path="/calendar" element={<CalendarPage />} />
       <Route path="/line" element={<LineBroadcast />} />
       <Route path="/tools" element={<SmartTools />} />
+      <Route path="/agents" element={<AgentCenter />} />
       <Route path="/more" element={<MobileMore />} />
     </Routes>
   );

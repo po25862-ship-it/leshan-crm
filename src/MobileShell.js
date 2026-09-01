@@ -1,13 +1,13 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, SearchCheck, Users, Building2, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, ListTodo, Bot, Building2, MoreHorizontal } from "lucide-react";
 import { useAuth } from "./AuthContext";
 
 export function MobileTopBar() {
   const { logout } = useAuth();
   return (
     <div className="m-topbar">
-      <h1>案件控台</h1>
+      <h1>Leshan OS</h1>
       <button className="m-logout" onClick={logout}>
         登出
       </button>
@@ -21,14 +21,14 @@ export function MobileBottomNav() {
       <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
         <LayoutDashboard size={20} strokeWidth={2.2} />首頁
       </NavLink>
-      <NavLink to="/buyers" className={({ isActive }) => (isActive ? "active" : "")}>
-        <Users size={20} strokeWidth={2.2} />買方
-      </NavLink>
-      <NavLink to="/needs" className={({ isActive }) => (isActive ? "active" : "")}>
-        <SearchCheck size={20} strokeWidth={2.2} />客需
+      <NavLink to="/tasks" className={({ isActive }) => (isActive ? "active" : "")}>
+        <ListTodo size={20} strokeWidth={2.2} />任務
       </NavLink>
       <NavLink to="/properties" className={({ isActive }) => (isActive ? "active" : "")}>
         <Building2 size={20} strokeWidth={2.2} />物件
+      </NavLink>
+      <NavLink to="/agents" className={({ isActive }) => (isActive ? "active" : "")}>
+        <Bot size={20} strokeWidth={2.2} />AI
       </NavLink>
       <NavLink to="/more" className={({ isActive }) => (isActive ? "active" : "")}>
         <MoreHorizontal size={20} strokeWidth={2.2} />更多

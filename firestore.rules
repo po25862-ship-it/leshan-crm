@@ -114,6 +114,23 @@ service cloud.firestore {
       }
     }
 
+    // Leshan OS AI 派工：任務擁有者、被分享的同事或主要負責人可讀取；
+    // 只有擁有者與主要負責人能推進狀態，避免同事誤動別人的任務。
+    match /aiTasks/{taskId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
+        resource.data.ownerUid == request.auth.uid ||
+        (request.auth.uid in resource.data.sharedWith)
+      );
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+        request.resource.data.ownerUid == resource.data.ownerUid &&
+        request.resource.data.sharedWith == resource.data.sharedWith &&
+        (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+      allow delete: if request.auth != null &&
+        (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+    }
+
     // 客需：擁有者、勾選「分享」之後任何登入帳號都能看，或你都能讀取
     // 編輯：擁有者（或你）能改全部欄位；被分享到的同事只能動「推薦物件」那塊，其他欄位（需求/預算等）不能碰
     match /needs/{needId} {
