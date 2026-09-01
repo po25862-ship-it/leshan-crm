@@ -16,12 +16,12 @@ import { useCollection } from "../hooks/useCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 
 const AGENTS = [
-  { id: "market", name: "市場分析師", job: "實價、價格區間與 CMA", icon: BarChart3, tone: "emerald" },
-  { id: "intel", name: "情報員", job: "同社區競品與價格變化", icon: Radar, tone: "blue" },
-  { id: "photo", name: "攝影師", job: "首圖、排序與素材建議", icon: Camera, tone: "purple" },
-  { id: "copy", name: "文案師", job: "FB、Threads 與 591 文案", icon: FileText, tone: "orange" },
-  { id: "developer", name: "開發助理", job: "屋主名單與追蹤開發", icon: SearchCheck, tone: "red" },
-  { id: "buyer", name: "買方顧問", job: "從客需找高機會買方", icon: Users, tone: "rose" },
+  { id: "market", name: "市場分析師", job: "實價、價格區間與 CMA", icon: BarChart3, tone: "emerald", art: "/crew/market-analyst.png" },
+  { id: "intel", name: "情報員", job: "同社區競品與價格變化", icon: Radar, tone: "blue", art: "/crew/intel-scout.png" },
+  { id: "photo", name: "攝影師", job: "首圖、排序與素材建議", icon: Camera, tone: "purple", art: "/crew/photographer.png" },
+  { id: "copy", name: "文案師", job: "FB、Threads 與 591 文案", icon: FileText, tone: "orange", art: "/crew/copywriter.png" },
+  { id: "developer", name: "開發助理", job: "屋主名單與追蹤開發", icon: SearchCheck, tone: "red", art: "/crew/developer-assistant.png" },
+  { id: "buyer", name: "買方顧問", job: "從客需找高機會買方", icon: Users, tone: "rose", art: "/crew/buyer-adviser.png" },
   { id: "full", name: "全隊出動", job: "分析、競品、文案、配對一次完成", icon: Sparkles, tone: "gold" },
 ];
 
@@ -43,21 +43,13 @@ const STATE_COPY = {
 };
 
 function AgentCharacter({ agent, state, onSelect }) {
-  const Icon = agent.icon;
   return (
     <button type="button" className={`crew-member ${agent.tone} role-${agent.id} state-${state}`} onClick={onSelect} aria-label={`選擇${agent.name}，目前${STATE_COPY[state]}`}>
       <span className="crew-speech">{STATE_COPY[state]}</span>
       <span className={`crew-avatar role-${agent.id}`} aria-hidden="true">
         <span className="crew-signal"><i /><i /><i /></span>
-        <span className="crew-character">
-          <i className="crew-role-hat"><b /><b /></i>
-          <i className="crew-role-head"><b className="eye left" /><b className="eye right" /><b className="role-detail" /></i>
-          <i className="crew-role-body"><Icon size={17} /></i>
-          <i className="crew-role-arm left" /><i className="crew-role-arm right" />
-          <i className="crew-role-leg left" /><i className="crew-role-leg right" />
-          <i className="crew-role-prop"><Icon size={20} /></i>
-          <i className="crew-role-effect"><b /><b /><b /></i>
-        </span>
+        <img className="crew-art" src={agent.art} alt="" />
+        <span className="crew-art-effects"><i /><i /><i /></span>
         <span className="crew-shadow" />
       </span>
       <strong>{agent.name}</strong>
