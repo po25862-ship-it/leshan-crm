@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../AuthContext";
 import { useCollection } from "../hooks/useCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
+import { buildCmaAnalysis } from "../lib/cmaAnalysis";
 
 const AGENTS = [
   { id: "market", name: "市場分析師", job: "實價、價格區間與 CMA", icon: BarChart3, tone: "emerald", art: "/crew/market-analyst.png", workingArt: "/crew/market-analyst-working.png" },
@@ -32,7 +33,7 @@ const STATUS = {
   completed: { label: "已完成", icon: CheckCircle2 },
 };
 
-const propertyLabel = (property) => property?.title || property?.community || property?.address || "未命名物件";
+const propertyLabel = (property) => property?.title || property?.communityName || property?.community || property?.address || "未命名物件";
 
 const STATE_COPY = {
   idle: "待命中・整理桌面",
@@ -56,6 +57,30 @@ function AgentCharacter({ agent, state, onSelect }) {
       <strong>{agent.name}</strong>
       <small>{agent.job}</small>
     </button>
+  );
+}
+
+const money = (value) => value ? Number(value).toLocaleString("zh-TW", { maximumFractionDigits: 1 }) : "—";
+
+function CmaResult({ result }) {
+  if (result.error) return <div className="agent-cma-error">分析未完成：{result.error}</div>;
+  return (
+    <details className="agent-cma-result" open>
+      <summary><span>CMA 報告</span><b>{result.recommendedLow ? `${money(result.recommendedLow)}～${money(result.recommendedHigh)} 萬` : "資料待補"}</b></summary>
+      <div className="agent-cma-summary">
+        <p>{result.summary}</p>
+        <div className="agent-cma-kpis">
+          <span><small>建議總價</small><strong>{money(result.recommendedLow)}～{money(result.recommendedHigh)} 萬</strong></span>
+          <span><small>單價中位數</small><strong>{money(result.medianUnitPrice)} 萬／坪</strong></span>
+          <span><small>比較樣本</small><strong>{result.comparableCount} 筆・{result.confidence}信心</strong></span>
+        </div>
+        <ul>{(result.factors || []).map((factor) => <li key={factor}>{factor}</li>)}</ul>
+        {result.comparables?.length > 0 && <div className="agent-cma-comps">
+          {result.comparables.slice(0, 4).map((item) => <span key={item.id || item.name}><b>{item.name}</b><small>{money(item.price)} 萬・{money(item.area)} 坪・{money(item.unitPrice)} 萬／坪</small></span>)}
+        </div>}
+        <em>{result.disclaimer}</em>
+      </div>
+    </details>
   );
 }
 
@@ -88,7 +113,7 @@ export default function AgentCenter() {
     if (!propertyId) return;
     setSaving(true);
     try {
-      await add({
+      const jobRef = await add({
         ownerUid: user.uid,
         sharedWith: [],
         agentId,
@@ -98,6 +123,16 @@ export default function AgentCenter() {
         instruction: instruction.trim(),
         status: "queued",
       });
+      if (agentId === "market") {
+        await update(jobRef.id, { status: "working", startedAt: new Date() });
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        try {
+          const result = buildCmaAnalysis(propertyMap[propertyId], properties);
+          await update(jobRef.id, { status: "review", result, finishedAt: new Date() });
+        } catch (error) {
+          await update(jobRef.id, { status: "review", result: { type: "cma", error: error.message || "資料分析失敗" } });
+        }
+      }
       setInstruction("");
     } finally {
       setSaving(false);
@@ -165,7 +200,7 @@ export default function AgentCenter() {
             </label>
           </div>
           <button className="agent-dispatch-button" disabled={saving || !propertyId} type="submit"><Sparkles size={17} />{saving ? "派工中…" : `派給${selectedAgent.name}`}</button>
-          <p className="agent-dispatch-note">第一版先完成派工、狀態與確認流程；各隊員的自動產出會依序接上現有實價、競品、配對與文案工具。</p>
+          <p className="agent-dispatch-note">{agentId === "market" ? "市場分析師會自動比較 CRM 現有物件，完成後產生 CMA 價格區間供你確認。" : "市場分析師已可自動產出 CMA；其他隊員的自動產出會依序接上現有競品、配對與文案工具。"}</p>
         </form>
 
         <section className="agent-queue-card">
@@ -179,6 +214,7 @@ export default function AgentCenter() {
                 <span className="agent-job-icon"><StatusIcon size={16} /></span>
                 <div><small>{job.agentName || "AI 隊員"}</small><strong>{job.propertyName || propertyLabel(propertyMap[job.propertyId])}</strong><p>{job.instruction || "依標準流程處理"}</p></div>
                 <button type="button" disabled={job.status === "completed"} onClick={() => advance(job)}>{status.label}</button>
+                {job.result?.type === "cma" && <CmaResult result={job.result} />}
               </article>;
             })}
           </div>
