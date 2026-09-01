@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Bot, Building2, CalendarDays, CheckCircle2, ChevronRight, Circle, Image as ImageIcon, ListTodo, Phone, Sparkles, Target, TrendingDown } from "lucide-react";
+import { Award, BarChart3, Bell, Bot, Building2, CalendarDays, Camera, CheckCircle2, Circle, Coins, FileText, Home, Map, Megaphone, Menu, Plus, Radar, SearchCheck, Settings, Sparkles, Target, Trophy, UserPlus, Users } from "lucide-react";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { useCollection } from "../hooks/useCollection";
@@ -8,17 +8,32 @@ import { useAppointmentsForContacts } from "../hooks/useAppointmentsForContacts"
 import { useAuth } from "../AuthContext";
 import { daysSince, todayStr } from "../lib/dates";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
-import { getPropertyImage, getRecentPriceDrop, timestampToMillis } from "../lib/propertyPresentation";
+import { timestampToMillis } from "../lib/propertyPresentation";
 
 const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
-const isRecent = (value, days = 7) => timestampToMillis(value) >= Date.now() - days * 86400000;
+const recent = (value, days = 7) => timestampToMillis(value) >= Date.now() - days * 86400000;
+const CREW = [
+  { id: "market", name: "市場分析師", skill: "CMA 行情分析", icon: BarChart3, tone: "gold" },
+  { id: "intel", name: "情報員", skill: "實價登錄搜尋", icon: Radar, tone: "green" },
+  { id: "photo", name: "攝影師", skill: "照片整理優化", icon: Camera, tone: "blue" },
+  { id: "copy", name: "文案師", skill: "FB／社群文案", icon: FileText, tone: "orange" },
+  { id: "developer", name: "開發助理", skill: "屋主追蹤開發", icon: UserPlus, tone: "red" },
+  { id: "buyer", name: "買方顧問", skill: "客需配對", icon: Users, tone: "purple" },
+];
 
-function KpiCard({ icon: Icon, label, value, hint, tone, to }) {
-  return <Link to={to} className={`os-kpi ${tone}`}><span className="os-kpi-icon"><Icon size={18} /></span><div><small>{label}</small><strong>{value}</strong><p>{hint}</p></div><ChevronRight size={15} /></Link>;
+function PixelAvatar({ icon: Icon, tone, state = "idle" }) {
+  return <span className={`pixel-avatar ${tone} state-${state}`} aria-hidden="true"><i className="pixel-hair" /><i className="pixel-face"><b /><b /></i><i className="pixel-body"><Icon size={17} /></i><i className="pixel-tool" /><i className="pixel-shadow" /></span>;
 }
 
-function AgentTile({ icon: Icon, name, job, status, tone }) {
-  return <Link to="/agents" className={`os-agent-tile ${tone}`}><span><Icon size={18} /></span><div><strong>{name}</strong><small>{job}</small></div><b>{status}</b></Link>;
+function StatCard({ icon: Icon, label, value, goal, tone = "green" }) {
+  const percent = Math.min(100, Math.round((Number(value) / Math.max(Number(goal), 1)) * 100));
+  return <article className={`pixel-stat ${tone}`}><span><Icon size={16} /></span><strong>{value}</strong><small>{label}</small><div><i style={{ width: `${percent}%` }} /></div><em>目標 {goal}</em></article>;
+}
+
+function CrewCard({ agent, job, onOpen }) {
+  const status = job?.status || "idle";
+  const copy = { idle: "待命中", queued: "準備中", working: "執行中", review: "需處理", completed: "已完成" }[status] || "待命中";
+  return <button type="button" className={`pixel-crew-card ${agent.tone}`} onClick={onOpen}><strong>{agent.name}</strong><small>{agent.skill}</small><PixelAvatar icon={agent.icon} tone={agent.tone} state={status} /><b className={`pixel-status ${status}`}>{copy}</b><p>{job?.propertyName || (status === "idle" ? "點我開始任務" : "任務處理中")}</p><div><i style={{ width: status === "working" ? "68%" : status === "review" || status === "completed" ? "100%" : status === "queued" ? "25%" : "0%" }} /></div></button>;
 }
 
 export default function Dashboard() {
@@ -27,79 +42,81 @@ export default function Dashboard() {
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const { items: needs } = useNeedsCollection(user.uid);
   const { items: properties } = useCollection("properties", "createdAt");
-  const isMainOwner = user.uid === MAIN_OWNER_UID;
-  const { items: notes, update: updateNote } = useCollection("quickNotes", "createdAt", isMainOwner);
+  const { items: notes, update: updateNote } = useCollection("quickNotes", "createdAt", user.uid === MAIN_OWNER_UID);
   const { items: aiTasks } = useSharedCollection("aiTasks", "createdAt", user.uid);
   const buyers = useMemo(() => contacts.filter((contact) => (contact.tags || []).includes("買方")), [contacts]);
-  const buyerIds = useMemo(() => buyers.map((buyer) => buyer.id), [buyers]);
-  const appointments = useAppointmentsForContacts(buyerIds);
+  const appointments = useAppointmentsForContacts(useMemo(() => buyers.map((buyer) => buyer.id), [buyers]));
   const activeNeeds = useMemo(() => needs.filter((need) => (need.statusTag || "正在找") === "正在找"), [needs]);
   const activeProperties = useMemo(() => properties.filter((property) => (property.status || "active") === "active"), [properties]);
   const matches = useMemo(() => activeNeeds.flatMap((need) => matchPropertiesForNeed(need, activeProperties).map((match) => ({ ...match, need }))).sort((a, b) => b.percent - a.percent), [activeNeeds, activeProperties]);
-  const recentPropertyIds = useMemo(() => new Set(activeProperties.filter((property) => isRecent(property.createdAt)).map((property) => property.id)), [activeProperties]);
-  const newMatches = matches.filter((match) => recentPropertyIds.has(match.property.id) && match.percent >= 80);
-  const priceDrops = activeProperties.filter((property) => getRecentPriceDrop(property));
   const highMatches = matches.filter((match) => match.percent >= 90);
-  const highOpportunity = useMemo(() => buyers.map((buyer) => {
-    const buyerMatches = matches.filter((match) => match.need.contactId === buyer.id);
-    return { ...buyer, days: daysSince(buyer.lastContactDate), maxPercent: buyerMatches[0]?.percent || 0 };
-  }).filter((buyer) => buyer.maxPercent >= 80 && (buyer.days === null || buyer.days >= 3)), [buyers, matches]);
+  const newProperties = activeProperties.filter((property) => recent(property.createdAt));
   const todayAppointments = appointments.filter((appointment) => appointment.date === todayStr());
+  const opportunities = useMemo(() => buyers.map((buyer) => {
+    const best = matches.find((match) => match.need.contactId === buyer.id)?.percent || 0;
+    return { ...buyer, best, days: daysSince(buyer.lastContactDate) };
+  }).filter((buyer) => buyer.best >= 80 && (buyer.days === null || buyer.days >= 3)), [buyers, matches]);
   const pendingNotes = notes.filter((note) => !note.done);
-  const activeAiTasks = aiTasks.filter((task) => task.status !== "completed");
-  const todayTasks = [
-    ...pendingNotes.slice(0, 3).map((note) => ({ id: `note-${note.id}`, title: note.text, meta: "個人待辦", note })),
-    ...highOpportunity.slice(0, 2).map((buyer) => ({ id: `buyer-${buyer.id}`, title: `聯絡 ${buyer.name || "高機會買方"}`, meta: `${buyer.maxPercent}% 配對・${buyer.days === null ? "尚未聯絡" : `${buyer.days} 天未聯絡`}`, to: `/buyers?open=${buyer.id}` })),
-    ...todayAppointments.slice(0, 2).map((appointment) => ({ id: `appointment-${appointment.id}`, title: appointment.propertyLabel || appointment.notes || "今日約訪", meta: `${appointment.time || "全天"} 行程`, to: "/calendar" })),
+  const activeAiTasks = aiTasks.filter((job) => job.status !== "completed");
+  const crewJobs = Object.fromEntries(CREW.map((agent) => [agent.id, activeAiTasks.find((job) => job.agentId === agent.id || job.agentId === "full")]));
+  const tasks = [
+    ...pendingNotes.slice(0, 2).map((note) => ({ id: `n-${note.id}`, label: note.text, progress: "待完成", note, icon: Circle })),
+    ...opportunities.slice(0, 2).map((buyer) => ({ id: `b-${buyer.id}`, label: `聯繫 ${buyer.name || "高機會買方"}`, progress: `${buyer.best}% 配對`, to: `/buyers?open=${buyer.id}`, icon: Users })),
+    ...todayAppointments.slice(0, 2).map((item) => ({ id: `a-${item.id}`, label: item.propertyLabel || item.notes || "今日帶看", progress: item.time || "全天", to: "/calendar", icon: Home })),
+    { id: "social", label: "發布今日社群內容", progress: "0 / 2", to: "/line", icon: Megaphone },
   ].slice(0, 6);
-  const completeTask = (task) => task.note ? updateNote(task.note.id, { done: true }) : task.to && navigate(task.to);
-  const date = new Date();
+  const levelProgress = Math.min(100, 35 + tasks.length * 6 + Math.min(highMatches.length, 10));
 
-  return (
-    <main className="leshan-os-dashboard">
-      <section className="os-hero">
-        <div><span className="os-eyebrow">LESHAN OS・每日作戰首頁</span><h2>今天最重要的事，已經幫你排好了。</h2><p>先完成高機會追蹤，再把物件交給 AI 隊伍處理。</p></div>
-        <div className="os-date"><small>{new Intl.DateTimeFormat("zh-TW", { weekday: "long" }).format(date)}</small><strong>{new Intl.DateTimeFormat("zh-TW", { month: "2-digit", day: "2-digit" }).format(date)}</strong></div>
-      </section>
+  useEffect(() => {
+    document.body.classList.add("leshan-pixel-theme");
+    return () => document.body.classList.remove("leshan-pixel-theme");
+  }, []);
 
-      <section className="os-kpi-grid">
-        <KpiCard icon={ListTodo} label="今日待完成" value={todayTasks.length} hint="工作與行程集中處理" tone="orange" to="/tasks" />
-        <KpiCard icon={Phone} label="屋主／買方待追蹤" value={highOpportunity.length} hint="80%+ 配對且需要聯絡" tone="blue" to="/buyers" />
-        <KpiCard icon={Sparkles} label="新物件可配對" value={newMatches.length} hint="近 7 天新增、配對 80%+" tone="green" to="/needs" />
-        <KpiCard icon={Bot} label="AI 任務進行中" value={activeAiTasks.length} hint="查看待命與需要確認" tone="purple" to="/agents" />
-      </section>
+  const runTask = (task) => task.note ? updateNote(task.note.id, { done: true }) : task.to && navigate(task.to);
 
-      <section className="os-main-grid">
-        <div className="os-panel os-today-panel">
-          <div className="os-panel-head"><div><span>TODAY'S MISSIONS</span><h3>今日任務</h3></div><Link to="/tasks">查看全部 <ArrowRight size={13} /></Link></div>
-          <div className="os-task-list">
-            {todayTasks.length === 0 && <div className="os-empty"><CheckCircle2 size={24} /><strong>今天的任務已清空</strong><span>可以主動開發新物件或安排買方追蹤。</span></div>}
-            {todayTasks.map((task, index) => <button key={task.id} type="button" className="os-task-row" onClick={() => completeTask(task)}><span className="os-task-check">{task.note ? <Circle size={17} /> : <Target size={17} />}</span><span className="os-task-copy"><strong>{task.title}</strong><small>{task.meta}</small></span><span className="os-task-rank">{String(index + 1).padStart(2, "0")}</span></button>)}
-          </div>
-          <div className="os-quick-actions"><Link to="/properties"><Building2 size={15} />新增／管理物件</Link><Link to="/agents"><Sparkles size={15} />交給 AI 分析</Link><Link to="/calendar"><CalendarDays size={15} />安排今日行程</Link></div>
-        </div>
+  return <main className="pixel-os">
+    <section className="pixel-profile-bar">
+      <PixelAvatar icon={Home} tone="gold" />
+      <div className="pixel-profile-copy"><h2>Leshan OS</h2><strong>房仲公會任務中心</strong><div><span>Lv.35</span><i><b style={{ width: `${levelProgress}%` }} /></i><em>{levelProgress}%</em></div></div>
+      <div className="pixel-office"><Award size={34} /><span><strong>台灣房屋 捷運樂善直營店</strong><small>經紀人：劉昭佑｜桃市經字第 001240 號</small></span></div>
+      <div className="pixel-top-actions"><button><Bell size={18} /><b>{activeAiTasks.length}</b></button><button><Trophy size={18} /></button><Link to="/tools"><Settings size={18} /></Link></div>
+    </section>
 
-        <div className="os-panel os-agents-panel">
-          <div className="os-panel-head"><div><span>AI CREW</span><h3>AI 任務隊伍</h3></div><Link to="/agents">派新任務 <ArrowRight size={13} /></Link></div>
-          <div className="os-agent-list">
-            <AgentTile icon={TrendingDown} name="市場分析師" job="實價、競品、CMA" status="待命" tone="emerald" />
-            <AgentTile icon={Target} name="情報員" job="競品與價格變化" status={priceDrops.length ? `${priceDrops.length} 筆` : "待命"} tone="blue" />
-            <AgentTile icon={Sparkles} name="文案師" job="FB、Threads、591" status="待命" tone="orange" />
-            <AgentTile icon={Phone} name="買方顧問" job="高機會客需配對" status={`${highMatches.length} 組`} tone="purple" />
-          </div>
-        </div>
-      </section>
+    <section className="pixel-panel pixel-performance">
+      <header><h3>⚔ 今日戰績</h3><span>資料即時同步</span></header>
+      <div className="pixel-stat-grid">
+        <StatCard icon={Users} label="開發名單" value={contacts.length} goal={Math.max(contacts.length, 30)} />
+        <StatCard icon={SearchCheck} label="待聯繫客戶" value={opportunities.length} goal={Math.max(opportunities.length, 10)} tone="teal" />
+        <StatCard icon={UserPlus} label="新物件" value={newProperties.length} goal={3} tone="blue" />
+        <StatCard icon={Building2} label="在售委託" value={activeProperties.length} goal={Math.max(activeProperties.length, 5)} tone="orange" />
+        <StatCard icon={CalendarDays} label="今日帶看" value={todayAppointments.length} goal={5} tone="purple" />
+        <StatCard icon={Target} label="90% 配對" value={highMatches.length} goal={Math.max(highMatches.length, 10)} tone="gold" />
+        <StatCard icon={Coins} label="AI 任務" value={activeAiTasks.length} goal={5} tone="cyan" />
+      </div>
+    </section>
 
-      <section className="os-panel os-properties-panel">
-        <div className="os-panel-head"><div><span>ACTIVE PROPERTIES</span><h3>最近物件與高配對機會</h3></div><Link to="/properties">物件中心 <ArrowRight size={13} /></Link></div>
-        <div className="os-property-grid">
-          {highMatches.slice(0, 3).map((match) => {
-            const image = getPropertyImage(match.property);
-            return <button type="button" key={`${match.need.id}-${match.property.id}`} onClick={() => navigate(`/properties?open=${match.property.id}`)}><span className="os-property-image">{image ? <img src={image} alt={match.property.title || "物件"} /> : <span><ImageIcon size={21} />尚無照片</span>}<b>{match.percent}%</b></span><span className="os-property-copy"><small>{match.need.contactName || "高配對買方"}</small><strong>{match.property.title || "未命名物件"}</strong><em>{match.property.totalPrice ? `${Number(match.property.totalPrice).toLocaleString()} 萬` : "價格未填"}・{match.property.layout || "格局未填"}</em></span></button>;
-          })}
-          {highMatches.length === 0 && <div className="os-empty"><Building2 size={24} /><strong>還沒有 90% 以上配對</strong><span>新增物件或補齊客需條件後，這裡會自動出現機會。</span></div>}
-        </div>
-      </section>
-    </main>
-  );
+    <section className="pixel-panel pixel-crew-section">
+      <header><h3>🧩 AI 任務隊伍</h3><span>角色狀態與任務佇列同步</span><Link to="/agents">查看全部任務 ›</Link></header>
+      <div className="pixel-crew-grid">{CREW.map((agent) => <CrewCard key={agent.id} agent={agent} job={crewJobs[agent.id]} onOpen={() => navigate(`/agents?crew=${agent.id}`)} />)}</div>
+    </section>
+
+    <section className="pixel-middle-grid">
+      <div className="pixel-panel pixel-missions">
+        <header><h3>📜 今日任務</h3><Link to="/tasks">全部任務 ›</Link></header>
+        <div>{tasks.map((task, index) => { const Icon = task.icon; return <button type="button" key={task.id} onClick={() => runTask(task)}><Icon size={16} /><span><strong>{task.label}</strong><small>{task.progress}</small></span><em className={index === 0 ? "working" : index === 1 ? "done" : "queued"}>{index === 1 ? "✓ 完成" : index === 0 ? "執行中" : "待開始"}</em></button>; })}<Link className="pixel-add-task" to="/tasks"><Plus size={14} />新增自訂任務</Link></div>
+      </div>
+
+      <div className="pixel-panel pixel-map-card">
+        <header><h3>🗺 案件地圖</h3><Link to="/properties">查看物件 ›</Link></header>
+        <div className="pixel-region-tabs"><b>A7</b><span>A8</span><span>A9</span><span>林口</span><span>龜山</span></div>
+        <div className="pixel-map"><i className="road r1" /><i className="road r2" /><i className="road r3" /><b className="map-point p1">🏠<small>樂善一路</small></b><b className="map-point p2">🏡<small>文青國小</small></b><b className="map-point p3">👤<small>客需配對</small></b><b className="map-point p4">🏢<small>A7 體大站</small></b><b className="map-point p5">📍<small>新委託</small></b><div className="map-legend"><span>在售案件 <b>{activeProperties.length}</b></span><span>客需需求 <b>{activeNeeds.length}</b></span><span>高配對 <b>{highMatches.length}</b></span></div></div>
+      </div>
+    </section>
+
+    <section className="pixel-bottom-grid">
+      <div className="pixel-panel pixel-guild"><header><h3>🛡 房仲公會</h3></header><div><Award size={46} /><span><strong>公會等級 Lv.12</strong><small>{1200 + highMatches.length * 40} / 2,400 EXP</small><i><b style={{ width: `${Math.min(100, 50 + highMatches.length)}%` }} /></i></span></div><ol><li><b>1.</b> 劉昭佑（你）<strong>{1680 + tasks.length * 20} EXP</strong></li><li><b>2.</b> 本月團隊<strong>1,240 EXP</strong></li><li><b>3.</b> AI 隊伍<strong>{980 + activeAiTasks.length * 30} EXP</strong></li></ol></div>
+      <div className="pixel-panel pixel-achievements"><header><h3>🏅 成就牆</h3></header><div><p><Award size={22} /><span><strong>CMA 大師</strong><small>完成高配對分析任務</small></span><b>進行中</b></p><p><Trophy size={22} /><span><strong>社群達人</strong><small>完成本週社群任務</small></span><b>挑戰中</b></p><p><Target size={22} /><span><strong>成交獵人</strong><small>持續累積帶看與配對</small></span><b>{todayAppointments.length} / 5</b></p></div></div>
+      <div className="pixel-panel pixel-shortcuts"><header><h3>✨ 快捷行動</h3></header><div><Link to="/properties"><Home size={20} />新增物件</Link><Link to="/needs"><UserPlus size={20} />新增客需</Link><Link to="/matching"><BarChart3 size={20} />CMA 分析</Link><Link to="/line"><Megaphone size={20} />社群發文</Link><Link to="/agents"><Bot size={20} />AI 任務中心</Link><Link to="/more"><Menu size={20} />更多工具</Link></div></div>
+    </section>
+  </main>;
 }

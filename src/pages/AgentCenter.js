@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Bot,
@@ -109,8 +109,13 @@ export default function AgentCenter() {
     return update(job.id, { status: next });
   };
 
+  useEffect(() => {
+    document.body.classList.add("leshan-pixel-theme");
+    return () => document.body.classList.remove("leshan-pixel-theme");
+  }, []);
+
   return (
-    <main className="agent-center">
+    <main className="agent-center pixel-agent-page">
       <section className="agent-hero">
         <div>
           <span>LESHAN AI CREW</span>
