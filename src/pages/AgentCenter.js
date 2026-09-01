@@ -33,6 +33,32 @@ const STATUS = {
 
 const propertyLabel = (property) => property?.title || property?.community || property?.address || "未命名物件";
 
+const STATE_COPY = {
+  idle: "待命中・整理桌面",
+  queued: "收到新任務！",
+  working: "正在全速處理…",
+  review: "報告完成，等你確認",
+  completed: "任務完成！",
+};
+
+function AgentCharacter({ agent, state, onSelect }) {
+  const Icon = agent.icon;
+  return (
+    <button type="button" className={`crew-member ${agent.tone} state-${state}`} onClick={onSelect} aria-label={`選擇${agent.name}，目前${STATE_COPY[state]}`}>
+      <span className="crew-speech">{STATE_COPY[state]}</span>
+      <span className="crew-avatar" aria-hidden="true">
+        <span className="crew-signal"><i /><i /><i /></span>
+        <span className="crew-head"><i className="crew-hair" /><i className="crew-eye left" /><i className="crew-eye right" /><i className="crew-smile" /></span>
+        <span className="crew-body"><Icon size={16} /></span>
+        <span className="crew-desk"><i className="crew-screen" /><i className="crew-keyboard" /></span>
+        <span className="crew-shadow" />
+      </span>
+      <strong>{agent.name}</strong>
+      <small>{agent.job}</small>
+    </button>
+  );
+}
+
 export default function AgentCenter() {
   const { user } = useAuth();
   const { items: properties } = useCollection("properties", "createdAt");
@@ -51,6 +77,11 @@ export default function AgentCenter() {
     [properties]
   );
   const selectedAgent = AGENTS.find((agent) => agent.id === agentId) || AGENTS[0];
+  const crewAgents = AGENTS.filter((agent) => agent.id !== "full");
+  const crewStates = useMemo(() => Object.fromEntries(crewAgents.map((agent) => {
+    const related = jobs.find((job) => job.status !== "completed" && (job.agentId === agent.id || job.agentId === "full"));
+    return [agent.id, related?.status || "idle"];
+  })), [jobs]);
 
   const dispatch = async (event) => {
     event.preventDefault();
@@ -87,6 +118,21 @@ export default function AgentCenter() {
           <p>選物件、選任務，再從工作佇列追蹤進度與確認結果。</p>
         </div>
         <div className="agent-hero-stat"><strong>{jobs.filter((job) => job.status !== "completed").length}</strong><span>進行中任務</span></div>
+      </section>
+
+      <section className="agent-hq">
+        <div className="agent-hq-head">
+          <div><span>LIVE OFFICE</span><h3>AI 公會辦公室</h3><p>角色動畫會跟著任務狀態變化；點角色即可直接派工。</p></div>
+          <b><i /> 即時運作中</b>
+        </div>
+        <div className="agent-world">
+          <div className="agent-world-sky" aria-hidden="true"><i /><i /><i /></div>
+          <div className="agent-world-board" aria-hidden="true"><span>今日作戰</span><strong>{jobs.filter((job) => job.status !== "completed").length}</strong><small>ACTIVE MISSIONS</small></div>
+          <div className="crew-grid">
+            {crewAgents.map((agent) => <AgentCharacter key={agent.id} agent={agent} state={crewStates[agent.id]} onSelect={() => setAgentId(agent.id)} />)}
+          </div>
+          <div className="agent-world-floor" aria-hidden="true" />
+        </div>
       </section>
 
       <section className="agent-layout">
