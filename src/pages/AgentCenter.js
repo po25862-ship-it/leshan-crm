@@ -88,7 +88,7 @@ export default function AgentCenter() {
   const crewStates = useMemo(() => Object.fromEntries(crewAgents.map((agent) => {
     const related = jobs.find((job) => job.status !== "completed" && (job.agentId === agent.id || job.agentId === "full"));
     return [agent.id, related?.status || "idle"];
-  })), [jobs]);
+  })), [jobs, crewAgents]);
 
   const dispatch = async (event) => {
     event.preventDefault();
