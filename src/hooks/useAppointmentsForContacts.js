@@ -1,28 +1,39 @@
-import { useEffect, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { loadReadCache, subscribeReadCache } from "./firestoreReadCache";
 
-// 逐一訂閱使用者實際看得到的買方，避免 collectionGroup 查詢因分享權限無法證明而被整批拒絕。
+// 仍逐一依權限讀取，但每位客戶只讀一次，不再永久維持 N 條即時監聽。
 export function useAppointmentsForContacts(contactIds) {
-  const [byContact, setByContact] = useState({});
-  const key = JSON.stringify(contactIds || []);
+  const idsKey = JSON.stringify([...new Set(contactIds || [])].sort());
+  const normalizedIds = useMemo(() => JSON.parse(idsKey), [idsKey]);
+  const key = useMemo(() => `appointmentsForContacts::${normalizedIds.join(",")}`, [normalizedIds]);
+  const [items, setItems] = useState([]);
+
+  const load = useCallback((force = false) => loadReadCache(
+    key,
+    async () => {
+      const snapshots = await Promise.all(normalizedIds.map((contactId) =>
+        getDocs(collection(db, `contacts/${contactId}/appointments`))
+          .then((snapshot) => snapshot.docs.map((item) => ({ id: item.id, parentId: contactId, ...item.data() })))
+          .catch(() => [])
+      ));
+      return snapshots.flat();
+    },
+    force
+  ), [key, normalizedIds]);
 
   useEffect(() => {
-    if (!contactIds?.length) {
-      setByContact({});
+    if (!normalizedIds.length) {
+      setItems([]);
       return undefined;
     }
-    const unsubscribers = contactIds.map((contactId) => onSnapshot(
-      collection(db, `contacts/${contactId}/appointments`),
-      (snapshot) => setByContact((current) => ({
-        ...current,
-        [contactId]: snapshot.docs.map((document) => ({ id: document.id, parentId: contactId, ...document.data() })),
-      })),
-      () => setByContact((current) => ({ ...current, [contactId]: [] }))
-    ));
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    const unsubscribe = subscribeReadCache(key, (state) => {
+      if (state.data !== undefined) setItems(state.data);
+    });
+    load(false);
+    return unsubscribe;
+  }, [key, load, normalizedIds.length]);
 
-  return Object.values(byContact).flat();
+  return items;
 }

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { collectionGroup, onSnapshot } from "firebase/firestore";
+import { collectionGroup, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { loadReadCache, subscribeReadCache } from "../hooks/firestoreReadCache";
 import { useCollection } from "../hooks/useCollection";
 import { useListingsForContacts } from "../hooks/useListingsForContacts";
 import { useSharedCollection } from "../hooks/useSharedCollection";
@@ -31,7 +32,7 @@ function startOfWeek(date) {
   return next;
 }
 
-// 監聽所有客戶底下的 appointments 子集合（收集群組查詢）
+// 讀取所有客戶底下的 appointments 子集合（收集群組查詢）
 // 注意：約看紀錄本身沒有記擁有者/分享名單，目前只有主要負責人能看到這部分彙整，
 // 同事帳號看行事曆時，買方/賣方的約看時間暫時不會出現在這裡（其他項目不受影響），這是已知限制，之後可以再補
 const MAIN_OWNER_UID_CAL = "KiYlsnWcChW5muRkG167r7Mi1132";
@@ -40,15 +41,17 @@ function useAllAppointments(currentUid) {
   useEffect(() => {
     if (currentUid !== MAIN_OWNER_UID_CAL) {
       setItems([]);
-      return;
+      return undefined;
     }
-    const q = collectionGroup(db, "appointments");
-    const unsub = onSnapshot(
-      q,
-      (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      () => setItems([])
-    );
-    return () => unsub();
+    const key = "calendar::allAppointments";
+    const unsubscribe = subscribeReadCache(key, (state) => {
+      if (state.data !== undefined) setItems(state.data);
+    });
+    loadReadCache(key, async () => {
+      const snapshot = await getDocs(collectionGroup(db, "appointments"));
+      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    }).catch(() => setItems([]));
+    return unsubscribe;
   }, [currentUid]);
   return items;
 }
