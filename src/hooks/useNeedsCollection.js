@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   collection,
-  onSnapshot,
+  getDocs,
   query,
   where,
   orderBy,
@@ -12,55 +12,81 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { loadReadCache, subscribeReadCache, updateReadCache } from "./firestoreReadCache";
 
 const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
 
-// 客需的分享機制比較簡單：不是分享給特定同事，是「打開分享開關後，任何登入帳號都看得到」
-// 所以抓資料要分成「自己的」+「別人設成分享的」兩條線合併
+function sortNeeds(items) {
+  return [...items].sort((a, b) => {
+    const av = a.createdAt?.toMillis?.() || a.createdAt?.getTime?.() || 0;
+    const bv = b.createdAt?.toMillis?.() || b.createdAt?.getTime?.() || 0;
+    return bv - av;
+  });
+}
+
+function mergeSnapshots(snapshots) {
+  const merged = new Map();
+  snapshots.forEach((snapshot) => snapshot.docs.forEach((item) => {
+    merged.set(item.id, { id: item.id, ...item.data() });
+  }));
+  return sortNeeds([...merged.values()]);
+}
+
 export function useNeedsCollection(currentUid) {
-  const [items, setItems] = useState([]);
   const isMainOwner = currentUid === MAIN_OWNER_UID;
+  const key = useMemo(() => `needs::${currentUid || "signed-out"}`, [currentUid]);
+  const [items, setItems] = useState([]);
+
+  const load = useCallback((force = false) => {
+    if (!currentUid) return Promise.resolve([]);
+    return loadReadCache(
+      key,
+      async () => {
+        if (isMainOwner) {
+          return mergeSnapshots([await getDocs(query(collection(db, "needs"), orderBy("createdAt", "desc")))]);
+        }
+        const [own, shared] = await Promise.all([
+          getDocs(query(collection(db, "needs"), where("ownerUid", "==", currentUid))),
+          getDocs(query(collection(db, "needs"), where("shared", "==", true))),
+        ]);
+        return mergeSnapshots([own, shared]);
+      },
+      force
+    ).catch((error) => {
+      console.error("讀取 needs 失敗", error);
+      return [];
+    });
+  }, [currentUid, isMainOwner, key]);
 
   useEffect(() => {
-    if (!currentUid) return;
-
-    if (isMainOwner) {
-      const q = query(collection(db, "needs"), orderBy("createdAt", "desc"));
-      const unsub = onSnapshot(q, (snap) => {
-        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      }, (err) => console.error("讀取 needs 失敗", err));
-      return () => unsub();
+    if (!currentUid) {
+      setItems([]);
+      return undefined;
     }
+    const unsubscribe = subscribeReadCache(key, (state) => {
+      if (state.data !== undefined) setItems(state.data);
+    });
+    load(false);
+    return unsubscribe;
+  }, [currentUid, key, load]);
 
-    let ownItems = [];
-    let sharedItems = [];
-    const merge = () => {
-      const map = {};
-      [...ownItems, ...sharedItems].forEach((it) => (map[it.id] = it));
-      setItems(Object.values(map));
-    };
+  const syncLocal = useCallback((updater) => {
+    updateReadCache(key, (current) => sortNeeds(updater(current)));
+  }, [key]);
 
-    const qOwn = query(collection(db, "needs"), where("ownerUid", "==", currentUid));
-    const unsub1 = onSnapshot(qOwn, (snap) => {
-      ownItems = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      merge();
-    }, (err) => console.error("讀取 needs（自己的）失敗", err));
+  const add = async (data) => {
+    const ref = await addDoc(collection(db, "needs"), { ...data, createdAt: serverTimestamp() });
+    syncLocal((current) => [{ id: ref.id, ...data, createdAt: new Date() }, ...current]);
+    return ref;
+  };
+  const update = async (id, data) => {
+    await updateDoc(doc(db, "needs", id), data);
+    syncLocal((current) => current.map((item) => (item.id === id ? { ...item, ...data } : item)));
+  };
+  const remove = async (id) => {
+    await deleteDoc(doc(db, "needs", id));
+    syncLocal((current) => current.filter((item) => item.id !== id));
+  };
 
-    const qShared = query(collection(db, "needs"), where("shared", "==", true));
-    const unsub2 = onSnapshot(qShared, (snap) => {
-      sharedItems = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      merge();
-    }, (err) => console.error("讀取 needs（已分享的）失敗", err));
-
-    return () => {
-      unsub1();
-      unsub2();
-    };
-  }, [currentUid, isMainOwner]);
-
-  const add = (data) => addDoc(collection(db, "needs"), { ...data, createdAt: serverTimestamp() });
-  const update = (id, data) => updateDoc(doc(db, "needs", id), data);
-  const remove = (id) => deleteDoc(doc(db, "needs", id));
-
-  return { items, add, update, remove };
+  return { items, add, update, remove, refresh: () => load(true), realtime: false };
 }
