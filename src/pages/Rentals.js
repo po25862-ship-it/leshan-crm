@@ -43,15 +43,32 @@ export default function Rentals() {
   const [statusFilter, setStatusFilter] = useState("全部");
   const [creating, setCreating] = useState(false);
 
+  // 「＋新增出租」會先建立一筆空白文件再進編輯頁。
+  // 若使用者尚未填任何資料就返回，該空白草稿不應出現在出租列表。
+  const isBlankDraft = (r) =>
+    !String(r.title || "").trim() &&
+    !String(r.propertyAddress || "").trim() &&
+    !String(r.landlordName || "").trim() &&
+    !String(r.landlordPhone || "").trim() &&
+    !String(r.tenantName || "").trim() &&
+    !String(r.tenantPhone || "").trim() &&
+    !String(r.rent || "").trim() &&
+    !String(r.deposit || "").trim() &&
+    !(r.documents || []).length &&
+    !(r.adPlatforms || []).length &&
+    !String(r.notes || "").trim();
+
+  const visibleItems = items.filter((r) => !isBlankDraft(r));
+
   const counts = {
-    全部: items.length,
-    seeking: items.filter((r) => (r.status || "seeking") === "seeking").length,
-    leased: items.filter((r) => r.status === "leased").length,
-    idle: items.filter((r) => r.status === "idle").length,
-    selfLeased: items.filter((r) => r.status === "selfLeased").length,
+    全部: visibleItems.length,
+    seeking: visibleItems.filter((r) => (r.status || "seeking") === "seeking").length,
+    leased: visibleItems.filter((r) => r.status === "leased").length,
+    idle: visibleItems.filter((r) => r.status === "idle").length,
+    selfLeased: visibleItems.filter((r) => r.status === "selfLeased").length,
   };
 
-  const filtered = items.filter((r) => {
+  const filtered = visibleItems.filter((r) => {
     if (statusFilter !== "全部" && (r.status || "seeking") !== statusFilter) return false;
     if (!keyword.trim()) return true;
     const k = keyword.trim();
@@ -113,7 +130,7 @@ export default function Rentals() {
   return (
     <main>
       <div className="top-actions">
-        <div className="section-title">出租管理（{items.length}）</div>
+        <div className="section-title">出租管理（{visibleItems.length}）</div>
         <button className="btn" onClick={startCreate} disabled={creating}>
           {creating ? "建立中…" : "＋ 新增出租"}
         </button>
