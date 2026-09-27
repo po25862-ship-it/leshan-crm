@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -334,17 +334,8 @@ export default function Properties() {
   const soldItems = byStatus("sold");
   const pool = viewMode === "active" ? activeItems : viewMode === "onHold" ? onHoldItems : soldItems;
 
-  const categoryCounts = useMemo(() => {
-    const map = {};
-    pool.forEach((p) => {
-      const c = p.category || "未分類";
-      map[c] = (map[c] || 0) + 1;
-    });
-    return map;
-  }, [pool]);
-
-  const filtered = pool.filter((p) => {
-    if (activeCategory !== "全部" && (p.category || "未分類") !== activeCategory) return false;
+  const matchesPropertyFilters = (p, ignoreCategory = false) => {
+    if (!ignoreCategory && activeCategory !== "全部" && (p.category || "未分類") !== activeCategory) return false;
     if (minPrice && Number(p.totalPrice || 0) < Number(minPrice)) return false;
     if (maxPrice && Number(p.totalPrice || 0) > Number(maxPrice)) return false;
     if (!matchRange(p.mainBuildingPing, minMainBuildingPing, maxMainBuildingPing)) return false;
@@ -372,7 +363,21 @@ export default function Properties() {
       (p.listingNo || "").includes(k) ||
       (p.store || "").includes(k)
     );
+  };
+
+  const filtered = pool.filter((p) => matchesPropertyFilters(p));
+  const hasKeyword = Boolean(keyword.trim());
+  const categoryPool = hasKeyword ? pool.filter((p) => matchesPropertyFilters(p, true)) : pool;
+  const categoryCounts = {};
+  categoryPool.forEach((p) => {
+    const category = p.category || "未分類";
+    categoryCounts[category] = (categoryCounts[category] || 0) + 1;
   });
+  const statusCounts = hasKeyword ? {
+    active: activeItems.filter((p) => matchesPropertyFilters(p)).length,
+    onHold: onHoldItems.filter((p) => matchesPropertyFilters(p)).length,
+    sold: soldItems.filter((p) => matchesPropertyFilters(p)).length,
+  } : null;
 
   const advancedFilterCount = [
     minMainBuildingPing, maxMainBuildingPing, minTitlePing, maxTitlePing,
@@ -780,7 +785,7 @@ export default function Properties() {
     <main>
       <div className="top-actions properties-top-actions">
         <div className="section-title">
-          物件（{pool.length}）
+          物件（{hasKeyword ? filtered.length : pool.length}）
         </div>
         <div className="properties-toolbar" style={{ display: "flex", gap: 10 }}>
           <button
@@ -910,13 +915,13 @@ export default function Properties() {
       {/* 狀態切換 */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => { setViewMode("active"); setShowForm(false); }}>
-          在售（{activeItems.length}）
+          在售（{statusCounts ? statusCounts.active : activeItems.length}）
         </button>
         <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("onHold"); setShowForm(false); }}>
-          暫時不賣（{onHoldItems.length}）
+          暫時不賣（{statusCounts ? statusCounts.onHold : onHoldItems.length}）
         </button>
         <button className={viewMode === "sold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("sold"); setShowForm(false); }}>
-          已售出（{soldItems.length}）
+          已售出（{statusCounts ? statusCounts.sold : soldItems.length}）
         </button>
       </div>
 
@@ -930,7 +935,7 @@ export default function Properties() {
           }}
           onClick={() => { setActiveCategory("全部"); setShowForm(false); }}
         >
-          全部（{pool.length}）
+          全部（{categoryPool.length}）
         </button>
         {CATEGORIES.map((c) => (
           <button
@@ -999,6 +1004,11 @@ export default function Properties() {
         </button>
         <button type="button" className="btn ghost" onClick={clearAllFilters}>清除條件</button>
       </div>
+      {hasKeyword && (
+        <div className="property-search-summary" role="status">
+          符合條件的物件：{filtered.length} 個
+        </div>
+      )}
 
       {showAdvancedFilters && (
         <div className="panel" style={{ padding: 14, marginBottom: 14, background: "var(--panel-soft, #FAFAF8)" }}>
@@ -1432,9 +1442,13 @@ export default function Properties() {
                 {Boolean(p.floor) && <>{p.floor}　</>}
                 {Boolean(p.layout) && <>{p.layout}　</>}
                 {Boolean(p.titlePing) && <>{p.titlePing} 坪　</>}
-                {Boolean(p.totalPrice) && <>總價 {p.totalPrice} 萬　</>}
                 {Boolean(p.occupancy) && <>{p.occupancy}</>}
               </div>
+              {Boolean(p.totalPrice) && (
+                <div className="property-list-price">
+                  <span>總價</span><strong>{p.totalPrice}</strong><span>萬</span>
+                </div>
+              )}
               {(p.mainBuildingPing != null || p.auxiliaryBuildingPing != null || p.commonAreaPing != null || p.parkingPing != null) && (
                 <div className="meta">
                   {p.mainBuildingPing != null && <>主建 {p.mainBuildingPing} 坪　</>}
