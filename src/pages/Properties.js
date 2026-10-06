@@ -21,6 +21,7 @@ import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import ReverseMatchesPanel from "./ReverseMatchesPanel";
 import MarketIntelligence from "./MarketIntelligence";
 import a7Communities from "../lib/a7-communities.json";
+import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -355,16 +356,7 @@ export default function Properties() {
     if (!matchNum(rooms, roomFilter, roomMode)) return false;
     if (!matchNum(living, livingFilter, livingMode)) return false;
     if (!matchNum(bath, bathFilter, bathMode)) return false;
-    if (!keyword.trim()) return true;
-    const k = keyword.trim();
-    return (
-      (p.title || "").includes(k) ||
-      (p.communityName || "").includes(k) ||
-      (p.area || "").includes(k) ||
-      (p.address || "").includes(k) ||
-      (p.listingNo || "").includes(k) ||
-      (p.store || "").includes(k)
-    );
+    return matchesPropertyKeyword(p, keyword);
   };
 
   const filtered = pool.filter((p) => matchesPropertyFilters(p));
@@ -959,7 +951,7 @@ export default function Properties() {
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder="搜尋案名、社區、商圈、地址、委託書編號、店名…"
+          placeholder="輸入關鍵字，例如 a7；搜尋案名、商圈、社區、地址…"
           style={{ flex: 1, minWidth: 220, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
         />
         <select
