@@ -18,6 +18,14 @@ export function todayStr() {
   return d.toISOString().slice(0, 10);
 }
 
+export function todayTaipeiStr() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 export function formatDate(dateStr) {
   if (!dateStr) return "—";
   const [y, m, d] = dateStr.split("-");

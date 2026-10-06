@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate, todayStr } from "../lib/dates";
+import ManualTimeInput from "./ManualTimeInput";
+import { normalizeTimeInput } from "../lib/timeInput";
 
 export default function ContactAppointments({ contactId, contactName }) {
   const { items: appointments, add, update, remove } = useCollection(
@@ -23,12 +25,17 @@ export default function ContactAppointments({ contactId, contactName }) {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!date) return;
+    const normalizedTime = normalizeTimeInput(time);
+    if (!normalizedTime) {
+      alert("請輸入有效的帶看時間，例如 09:30 或 1430");
+      return;
+    }
     setSaving(true);
     try {
       const match = properties.find((p) => p.title === propertyLabel.trim());
       const docData = {
         date,
-        time,
+        time: normalizedTime,
         propertyLabel: propertyLabel.trim(),
         propertyId: match ? match.id : null,
         notes,
@@ -40,7 +47,7 @@ export default function ContactAppointments({ contactId, contactName }) {
         const created = await createEvent({
           title: `帶看・${contactName}${propertyLabel ? `・${propertyLabel}` : ""}`,
           date,
-          time,
+          time: normalizedTime,
           notes,
         });
         await update(ref.id, { googleEventId: created.id, googleEventLink: created.htmlLink });
@@ -80,19 +87,14 @@ export default function ContactAppointments({ contactId, contactName }) {
       </datalist>
 
       <form onSubmit={onSubmit} style={{ marginBottom: 18 }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            style={{ flex: 1, padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
+            style={{ flex: "1 1 145px", minWidth: 0, padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
           />
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            style={{ width: 120, padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
-          />
+          <ManualTimeInput value={time} onChange={setTime} style={{ padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }} />
         </div>
         <input
           list="property-options-appt"

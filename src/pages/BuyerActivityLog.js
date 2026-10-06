@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
-import { formatDate, todayStr } from "../lib/dates";
+import { formatDate, todayStr, todayTaipeiStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 import PropertyPicker from "./PropertyPicker";
+import ManualTimeInput from "./ManualTimeInput";
+import { normalizeTimeInput } from "../lib/timeInput";
 
 function linkify(text) {
   if (!text) return null;
@@ -94,10 +96,15 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
     e.preventDefault();
     const validRows = apptRows.filter((r) => r.date);
     if (validRows.length === 0) return;
+    const normalizedRows = validRows.map((row) => ({ ...row, time: normalizeTimeInput(row.time) }));
+    if (normalizedRows.some((row) => !row.time)) {
+      alert("請輸入有效的帶看時間，例如 09:30 或 1430");
+      return;
+    }
     setASaving(true);
 
     const failed = [];
-    for (const row of validRows) {
+    for (const row of normalizedRows) {
       try {
         const propertyLabel = row.propertyLabel.trim();
         const match = properties.find((p) => p.title === propertyLabel);
@@ -119,7 +126,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
           });
           await updateAppt(ref.id, { googleEventId: created.id, googleEventLink: created.htmlLink });
         }
-        if (onLogged) onLogged({ date: row.date, summary: propertyLabel ? `約帶看：${propertyLabel}` : "約帶看" });
+        if (onLogged) onLogged({ date: todayTaipeiStr(), summary: propertyLabel ? `約帶看：${propertyLabel}` : "約帶看" });
       } catch (err) {
         console.error(err);
         failed.push(row.propertyLabel || row.date);
@@ -163,13 +170,18 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
 
   const saveEditAppt = async (item) => {
     if (!editRow || !editRow.date) return;
+    const normalizedTime = normalizeTimeInput(editRow.time);
+    if (!normalizedTime) {
+      alert("請輸入有效的帶看時間，例如 09:30 或 1430");
+      return;
+    }
     setEditSaving(true);
     try {
       const propertyLabel = editRow.propertyLabel.trim();
       const match = properties.find((p) => p.title === propertyLabel);
       const docData = {
         date: editRow.date,
-        time: editRow.time,
+        time: normalizedTime,
         propertyLabel,
         propertyId: match ? match.id : null,
         notes: editRow.notes,
@@ -180,7 +192,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
           await updateEvent(item.googleEventId, {
             title: `帶看・${contactName}${propertyLabel ? `・${propertyLabel}` : ""}`,
             date: editRow.date,
-            time: editRow.time,
+            time: normalizedTime,
             notes: editRow.notes,
           });
         } catch (err) {
@@ -303,9 +315,9 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
                   </button>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <input type="date" value={row.date} onChange={(e) => updateApptRow(row.key, "date", e.target.value)} style={{ ...inputStyle, flex: 1 }} />
-                <input type="time" value={row.time} onChange={(e) => updateApptRow(row.key, "time", e.target.value)} style={{ ...inputStyle, width: 120 }} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                <input type="date" value={row.date} onChange={(e) => updateApptRow(row.key, "date", e.target.value)} style={{ ...inputStyle, flex: "1 1 145px", minWidth: 0 }} />
+                <ManualTimeInput value={row.time} onChange={(value) => updateApptRow(row.key, "time", value)} style={inputStyle} />
               </div>
               <div style={{ marginBottom: 8 }}>
                 <PropertyPicker
@@ -398,9 +410,9 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
           <div key={`${item._type}-${item.id}`} style={{ padding: "12px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
             {isEditingThis ? (
               <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <input type="date" value={editRow.date} onChange={(e) => setEditRow({ ...editRow, date: e.target.value })} style={{ ...inputStyle, flex: 1 }} />
-                  <input type="time" value={editRow.time} onChange={(e) => setEditRow({ ...editRow, time: e.target.value })} style={{ ...inputStyle, width: 120 }} />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                  <input type="date" value={editRow.date} onChange={(e) => setEditRow({ ...editRow, date: e.target.value })} style={{ ...inputStyle, flex: "1 1 145px", minWidth: 0 }} />
+                  <ManualTimeInput value={editRow.time} onChange={(value) => setEditRow((current) => ({ ...current, time: value }))} style={inputStyle} />
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <PropertyPicker

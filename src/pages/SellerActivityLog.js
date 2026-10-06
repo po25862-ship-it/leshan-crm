@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
-import { formatDate, todayStr } from "../lib/dates";
+import { formatDate, todayStr, todayTaipeiStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
+import ManualTimeInput from "./ManualTimeInput";
+import { normalizeTimeInput } from "../lib/timeInput";
 
 function linkify(text) {
   if (!text) return null;
@@ -82,10 +84,15 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
   const submitAppt = async (e) => {
     e.preventDefault();
     if (!aContent.trim()) return;
-    const docData = { date: aDate, time: aTime, content: aContent, notes: aNotes, googleEventId: null, googleEventLink: null, byUid: user.uid };
+    const normalizedTime = normalizeTimeInput(aTime);
+    if (!normalizedTime) {
+      alert("請輸入有效的預約時間，例如 09:30 或 1430");
+      return;
+    }
+    const docData = { date: aDate, time: normalizedTime, content: aContent, notes: aNotes, googleEventId: null, googleEventLink: null, byUid: user.uid };
     if (aSync && isConnected) {
       try {
-        const created = await createEvent({ title: `${listingTitle ? listingTitle + "・" : ""}${aContent}`, date: aDate, time: aTime, notes: aNotes });
+        const created = await createEvent({ title: `${listingTitle ? listingTitle + "・" : ""}${aContent}`, date: aDate, time: normalizedTime, notes: aNotes });
         docData.googleEventId = created.id;
         docData.googleEventLink = created.htmlLink;
       } catch (err) {
@@ -93,7 +100,7 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
       }
     }
     await addAppt(docData);
-    if (onLogged) onLogged({ date: aDate, summary: aContent });
+    if (onLogged) onLogged({ date: todayTaipeiStr(), summary: aContent });
     setAContent("");
     setANotes("");
     setASync(false);
@@ -160,9 +167,9 @@ export default function SellerActivityLog({ contactId, listingId, listingTitle, 
 
       {activeType === "appointment" && (
         <form onSubmit={submitAppt} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
-            <input type="time" value={aTime} onChange={(e) => setATime(e.target.value)} style={{ ...inputStyle, width: 120 }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            <input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} style={{ ...inputStyle, flex: "1 1 145px", minWidth: 0 }} />
+            <ManualTimeInput value={aTime} onChange={setATime} style={inputStyle} />
           </div>
           <input value={aContent} onChange={(e) => setAContent(e.target.value)} placeholder="要做什麼，例如：回報進度、確認簽約、估價拜訪…" style={{ ...inputStyle, marginBottom: 8 }} />
           <input value={aNotes} onChange={(e) => setANotes(e.target.value)} placeholder="備註（選填）" style={{ ...inputStyle, marginBottom: 8 }} />
