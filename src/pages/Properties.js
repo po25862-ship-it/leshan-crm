@@ -20,9 +20,11 @@ import { useAuth } from "../AuthContext";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import ReverseMatchesPanel from "./ReverseMatchesPanel";
 import MarketIntelligence from "./MarketIntelligence";
+import a7Communities from "../lib/a7-communities.json";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
+const A7_COMMUNITY_NAMES = a7Communities.map((community) => community.name);
 // 解析「房/廳/衛」格式的格局字串，例如 "4+1/2/4" 會取每段開頭的數字
 function parseLayout(layout) {
   if (!layout) return { rooms: null, living: null, bath: null };
@@ -1206,7 +1208,10 @@ export default function Properties() {
             <div style={fieldStyle2}>
               <div className="form-field">
                 <label>社區名稱</label>
-                <input value={form.communityName} onChange={(e) => setForm({ ...form, communityName: e.target.value })} placeholder="例如：富宇悅峰" />
+                <input list="a7-community-options" value={form.communityName} onChange={(e) => setForm({ ...form, communityName: e.target.value })} placeholder="輸入或選擇社區名稱" />
+                <datalist id="a7-community-options">
+                  {A7_COMMUNITY_NAMES.map((name) => <option key={name} value={name} />)}
+                </datalist>
               </div>
               <div className="form-field">
                 <label>商圈／區域</label>

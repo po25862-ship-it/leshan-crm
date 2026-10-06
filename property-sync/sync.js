@@ -10,6 +10,7 @@ const ExcelJS = require("exceljs");
 const { decode } = require("html-entities");
 const { execFileSync } = require("child_process");
 const { inferPropertyLocation } = require("./location-inference");
+const { inferCommunity } = require("./community-matcher");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -91,6 +92,10 @@ function crmRecord(existing, incoming) {
       ? incoming[field]
       : preserve(existing, incoming, field);
   }
+  record.communityName = preserve(existing, incoming, "communityName");
+  if (!String(record.communityName || "").trim()) {
+    record.communityName = inferCommunity({ ...existing, ...record })?.name || "";
+  }
   record.notes = preserve(existing, incoming, "notes");
   return { ...record, ...inferPropertyLocation({ ...existing, ...record }) };
 }
@@ -122,8 +127,11 @@ async function applyToCrm(incomingRecords) {
       if (!old) {
         const ref = doc(collection(db, "properties"));
         const inferredLocation = inferPropertyLocation(incoming);
+        const inferredCommunity = inferCommunity(incoming);
         const data = {
-          ...incoming, ...inferredLocation, status: "active", statusChangedAt: today, missingSyncCount: 0,
+          ...incoming, ...inferredLocation,
+          communityName: incoming.communityName || inferredCommunity?.name || "",
+          status: "active", statusChangedAt: today, missingSyncCount: 0,
           autoMissingOnHold: false, lastSeenAt: nowIso, updatedAt: today,
           lastPriceChange: null, customFields: [], createdAt: serverTimestamp(),
         };
