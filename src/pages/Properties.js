@@ -90,6 +90,7 @@ const emptyForm = {
   statusChangedAt: todayStr(),
   lastPriceChange: null,
   sheetFiles: [],
+  floorplanFiles: [],
   customFields: [],
 };
 
@@ -191,6 +192,13 @@ export default function Properties() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   };
+
+  // Keep the read-only detail view current when an attachment is added through LINE.
+  useEffect(() => {
+    if (!showForm || !editingId || editMode) return;
+    const current = items.find((item) => item.id === editingId);
+    if (current) setForm({ ...emptyForm, ...current, customFields: current.customFields || [] });
+  }, [items, showForm, editingId, editMode]);
 
   // 支援用網址直接開啟指定物件（?open=ID），讓其他頁面（例如客需的推薦物件）可以連結過來直接看到該筆物件
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1142,6 +1150,21 @@ export default function Properties() {
                   </div>
                 )}
               </div>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>格局圖（{(form.floorplanFiles || []).length}）</div>
+                {(form.floorplanFiles || []).length === 0 ? (
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未上傳格局圖</div>
+                ) : (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {(form.floorplanFiles || []).map((file, idx) => (
+                      <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", gap: 6, maxWidth: 180 }}>
+                        <img src={file.url} alt={file.name || `格局圖 ${idx + 1}`} style={{ width: 150, maxHeight: 150, objectFit: "contain", borderRadius: 6 }} />
+                        <span style={{ overflowWrap: "anywhere" }}>{file.name || `格局圖 ${idx + 1}`}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <form className="form-grid" onSubmit={onSubmit} style={{ display: !editingId || editMode ? "grid" : "none" }}>
@@ -1347,6 +1370,20 @@ export default function Properties() {
                 </>
               )}
             </div>
+
+            {editingId && (form.floorplanFiles || []).length > 0 && (
+              <div className="form-field">
+                <label>格局圖（由樂善小幫手上傳）</label>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {form.floorplanFiles.map((file, idx) => (
+                    <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", gap: 6, maxWidth: 180 }}>
+                      <img src={file.url} alt={file.name || `格局圖 ${idx + 1}`} style={{ width: 150, maxHeight: 150, objectFit: "contain", borderRadius: 6 }} />
+                      <span style={{ overflowWrap: "anywhere" }}>{file.name || `格局圖 ${idx + 1}`}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="form-field">
               <label>自訂欄位</label>
