@@ -104,6 +104,16 @@ function DetailValue({ label, value, accent = false }) {
   );
 }
 
+function formatScanTime(value) {
+  if (!value) return "—";
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(date);
+}
+
 export default function Properties() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -1131,6 +1141,20 @@ export default function Properties() {
                   form.commonAreaPing && `公設 ${form.commonAreaPing} 坪`,
                   form.parkingPing && `車位 ${form.parkingPing} 坪`,
                 ].filter(Boolean).join("・")} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>案件掃描紀錄</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                  <DetailValue label="首次掃描出現" value={formatScanTime(form.firstSeenAt)} />
+                  <DetailValue label="最近掃描出現" value={formatScanTime(form.lastSeenAt)} />
+                  <DetailValue label="首次掃描未見" value={formatScanTime(form.firstMissingAt)} />
+                  <DetailValue label="首次自動暫時關閉" value={formatScanTime(form.firstOnHoldAt)} />
+                </div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 7, lineHeight: 1.5 }}>
+                  {form.firstSeenAtSource === "tracking-start" || form.firstMissingAtSource === "tracking-start"
+                    ? "舊案件的首次歷史無法精確回溯；顯示的是新功能開始追蹤後，第一次確認的時間。"
+                    : "第一次未見只作紀錄；連續兩次完整同步都未見，才會自動改為暫時不賣。空白代表尚無可靠紀錄。"}
+                </div>
               </div>
               {(form.notes || form.agentInfo) && (
                 <div style={{ background: "var(--accent-soft)", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, lineHeight: 1.65 }}>

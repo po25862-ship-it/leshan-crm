@@ -11,6 +11,7 @@ const { decode } = require("html-entities");
 const { execFileSync } = require("child_process");
 const { inferPropertyLocation } = require("./location-inference");
 const { inferCommunity } = require("./community-matcher");
+const { firstSeenFields, firstMissingFields, firstOnHoldFields } = require("./scan-timeline");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -132,7 +133,7 @@ async function applyToCrm(incomingRecords) {
           ...incoming, ...inferredLocation,
           communityName: incoming.communityName || inferredCommunity?.name || "",
           status: "active", statusChangedAt: today, missingSyncCount: 0,
-          autoMissingOnHold: false, lastSeenAt: nowIso, updatedAt: today,
+          autoMissingOnHold: false, lastSeenAt: nowIso, ...firstSeenFields(null, nowIso), updatedAt: today,
           lastPriceChange: null, customFields: [], createdAt: serverTimestamp(),
         };
         operations.push({ ref, data, merge: false });
@@ -146,7 +147,7 @@ async function applyToCrm(incomingRecords) {
       }
 
       const merged = crmRecord(old, incoming);
-      const updates = { ...merged, missingSyncCount: 0, lastSeenAt: nowIso, updatedAt: today };
+      const updates = { ...merged, missingSyncCount: 0, lastSeenAt: nowIso, ...firstSeenFields(old, nowIso), updatedAt: today };
       const oldPrice = old.totalPrice;
       const priceChanged = incoming.totalPrice !== null && incoming.totalPrice !== "" && String(oldPrice ?? "") !== String(incoming.totalPrice);
       if (priceChanged) {
@@ -175,11 +176,12 @@ async function applyToCrm(incomingRecords) {
     for (const old of existing) {
       if (!old.listingNo || incomingByNo.has(String(old.listingNo).trim()) || (old.status || "active") !== "active") continue;
       const missingSyncCount = Number(old.missingSyncCount || 0) + 1;
-      const updates = { missingSyncCount, lastMissingAt: nowIso, updatedAt: today };
+      const updates = { missingSyncCount, lastMissingAt: nowIso, ...firstMissingFields(old, nowIso), updatedAt: today };
       if (missingSyncCount >= 2) {
         updates.status = "onHold";
         updates.statusChangedAt = today;
         updates.autoMissingOnHold = true;
+        Object.assign(updates, firstOnHoldFields(old, nowIso));
         operations.push({
           ref: doc(collection(db, `properties/${old.id}/statusLogs`)),
           data: { status: "onHold", date: today, note: "連續兩次完整同步未出現，系統自動標記", createdAt: serverTimestamp() }, merge: false,
