@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -22,6 +23,7 @@ import ReverseMatchesPanel from "./ReverseMatchesPanel";
 import MarketIntelligence from "./MarketIntelligence";
 import a7Communities from "../lib/a7-communities.json";
 import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
+import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -153,6 +155,7 @@ export default function Properties() {
   const [bathMode, setBathMode] = useState("eq");
   const [activeCategory, setActiveCategory] = useState("全部");
   const [viewMode, setViewMode] = useState("active"); // active | onHold | sold
+  const [sortBy, setSortBy] = useState("newest");
   const [importing, setImporting] = useState(false);
   const [importAnalysis, setImportAnalysis] = useState(null);
   const [importDecisions, setImportDecisions] = useState({});
@@ -198,9 +201,11 @@ export default function Properties() {
     setOriginalTotalPrice(item.totalPrice);
     setEditMode(false);
     setShowForm(true);
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
+  };
+
+  const togglePropertyDetail = (item) => {
+    if (showForm && editingId === item.id && !editMode) setShowForm(false);
+    else openEdit(item);
   };
 
   // Keep the read-only detail view current when an attachment is added through LINE.
@@ -377,7 +382,7 @@ export default function Properties() {
     return matchesPropertyKeyword(p, keyword);
   };
 
-  const filtered = pool.filter((p) => matchesPropertyFilters(p));
+  const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy);
   const hasKeyword = Boolean(keyword.trim());
   const categoryPool = hasKeyword ? pool.filter((p) => matchesPropertyFilters(p, true)) : pool;
   const categoryCounts = {};
@@ -790,8 +795,8 @@ export default function Properties() {
     XLSX.writeFile(wb, `物件總表_匯出_${todayStr()}.xlsx`);
   };
 
-  const fieldStyle2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
-  const fieldStyle3 = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 };
+  const fieldStyle2 = { display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "1fr 1fr", gap: 14 };
+  const fieldStyle3 = { display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "1fr 1fr 1fr", gap: 14 };
 
   return (
     <main>
@@ -1094,11 +1099,21 @@ export default function Properties() {
         />
       </div>}
 
-      {showForm && (
+      <div className="property-sort-bar">
+        <label htmlFor="property-sort">排序方式</label>
+        <select id="property-sort" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+          {PROPERTY_SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {showForm && (() => {
+        const detail = (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: editingId ? "minmax(320px, 720px) 1fr" : "minmax(320px, 720px)",
+            gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : editingId ? "minmax(320px, 720px) minmax(0, 1fr)" : "minmax(320px, 720px)",
             gap: 24,
             marginBottom: 24,
             alignItems: "start",
@@ -1465,7 +1480,11 @@ export default function Properties() {
             </div>
           )}
         </div>
-      )}
+        );
+        const target = editingId && filtered.some((item) => item.id === editingId) &&
+          typeof document !== "undefined" ? document.getElementById(`property-detail-${editingId}`) : null;
+        return target ? createPortal(detail, target) : detail;
+      })()}
 
       <div className="panel properties-list">
         {filtered.length === 0 && (
@@ -1475,7 +1494,8 @@ export default function Properties() {
           </div>
         )}
         {filtered.map((p) => (
-          <div className="list-row" key={p.id} onClick={() => selectionMode ? toggleSelect(p.id) : openEdit(p)} style={{ cursor: "pointer", background: selectedIds.has(p.id) ? "var(--accent-soft)" : undefined }}>
+          <React.Fragment key={p.id}>
+          <div className="list-row" onClick={() => selectionMode ? toggleSelect(p.id) : togglePropertyDetail(p)} style={{ cursor: "pointer", background: selectedIds.has(p.id) ? "var(--accent-soft)" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
               {selectionMode && (
                 <input
@@ -1566,9 +1586,11 @@ export default function Properties() {
                   <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                 ))}
               </select>
-              <button className="btn ghost" onClick={() => openEdit(p)}>查看資料</button>
+              <button className="btn ghost" onClick={() => selectionMode ? toggleSelect(p.id) : togglePropertyDetail(p)}>{selectionMode ? selectedIds.has(p.id) ? "取消勾選" : "勾選" : showForm && editingId === p.id ? "收起資料" : "查看資料"}</button>
             </div>
           </div>
+          <div id={`property-detail-${p.id}`} className="property-inline-detail-host" />
+          </React.Fragment>
         ))}
       </div>
     </main>

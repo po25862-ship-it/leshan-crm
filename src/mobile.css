@@ -145,6 +145,9 @@
 .mobile-shell .property-structured-filters>div select,
 .mobile-shell .property-structured-filters>input{width:100%!important;min-width:0!important;}
 .mobile-shell .properties-list{padding:0;background:transparent;border:0;box-shadow:none;}
+.mobile-shell .property-sort-bar{justify-content:space-between;}
+.mobile-shell .property-sort-bar select{flex:1;min-width:0;max-width:220px;}
+.mobile-shell .property-inline-detail-host:not(:empty){padding:10px 0 0;margin:0 0 14px;border-left:0;background:transparent;}
 .mobile-shell .properties-list .list-row{padding:14px;gap:12px;}
 .mobile-shell .properties-list .list-row>div:first-child{width:100%;min-width:0;}
 .mobile-shell .properties-list .list-row .actions{
