@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>樂善 CRM 物件同步</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #243329; background: #f6f4ef; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .wrap { max-width: 760px; margin: 36px auto; padding: 0 16px 36px; }
+    .card { background: #fff; border: 1px solid #e2e4dc; border-radius: 18px; padding: 24px; box-shadow: 0 12px 28px #1c35220d; }
+    h1 { font-size: 25px; margin: 0 0 7px; }
+    h2 { font-size: 18px; margin: 0 0 8px; }
+    p { color: #5c695f; line-height: 1.6; margin: 8px 0 14px; }
+    .status { background: #f1f6f1; border: 1px solid #dce9de; border-radius: 12px; padding: 15px; margin: 20px 0; white-space: pre-line; line-height: 1.65; }
+    .notice { min-height: 23px; margin: 10px 0; font-weight: 600; }
+    .notice.error { color: #ae2f2f; }
+    .notice.success { color: #216844; }
+    .login { border: 1px solid #e2e4dc; background: #fcfdfa; border-radius: 14px; padding: 18px; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    label { display: block; font-size: 13px; font-weight: 700; }
+    input { width: 100%; border: 1px solid #cbd2c9; border-radius: 9px; background: #fff; padding: 11px; margin-top: 5px; font: inherit; }
+    input:focus { border-color: #24704b; outline: 2px solid #d3e9d9; }
+    .hint { font-size: 13px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    button { border: 0; border-radius: 9px; padding: 11px 17px; background: #236f4b; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #eaf2ec; color: #1e6241; }
+    button:disabled { opacity: .55; cursor: wait; }
+    details { margin-top: 24px; border-top: 1px solid #e7e9e4; padding-top: 16px; }
+    summary { cursor: pointer; font-weight: 700; }
+    details label { margin-top: 12px; }
+    @media (max-width: 560px) { .wrap { margin-top: 16px; } .card { padding: 17px; } .fields { grid-template-columns: 1fr; } .actions button { width: 100%; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="card">
+      <h1>樂善 CRM 物件同步</h1>
+      <p>每天 07:30 自動下載 64 份報表、更新 CRM，並整理物件資料圖片。</p>
+      <div id="status" class="status" role="status">讀取狀態中…</div>
+
+      <section class="login" aria-labelledby="backend-title">
+        <h2 id="backend-title">公司後台登入資料</h2>
+        <p>第一次填入帳號、密碼和驗證碼。之後每月初只需輸入新的驗證碼，再按「立即同步」。</p>
+        <div class="fields">
+          <label>後台帳號<input id="backendAccount" autocomplete="username" placeholder="公司後台帳號"></label>
+          <label>後台密碼<input id="backendPassword" type="password" autocomplete="current-password" placeholder="已儲存就留空"></label>
+          <label>本月驗證碼<input id="backendCode" type="password" autocomplete="one-time-code" placeholder="已儲存本月驗證碼就留空"></label>
+        </div>
+        <p class="hint">資料只存入這台 Mac 的鑰匙圈，不會寫進 CRM、Excel 或 GitHub。</p>
+        <div class="actions">
+          <button id="sync" type="button">儲存並立即同步</button>
+          <button id="saveBackend" class="secondary" type="button">只更新後台登入</button>
+          <button id="sheetSync" class="secondary" type="button">掃描物件資料</button>
+        </div>
+        <p id="notice" class="notice" role="alert" aria-live="polite"></p>
+      </section>
+
+      <details>
+        <summary>首次安全設定／重新安裝每日排程</summary>
+        <label>CRM 登入 Email<input id="email" type="email" autocomplete="username"></label>
+        <label>CRM 密碼<input id="password" type="password" autocomplete="current-password"></label>
+        <label>內部系統使用者編號<input id="userId" autocomplete="off"></label>
+        <label>輸出資料夾<input id="outputRoot"></label>
+        <p class="hint">CRM 密碼與內部編號也只會存入這台 Mac 的鑰匙圈。</p>
+        <div class="actions"><button id="setup" type="button">儲存安全設定並安裝 07:30 排程</button></div>
+      </details>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function show(message, ok) {
+      $("notice").textContent = message;
+      $("notice").className = `notice ${ok ? "success" : "error"}`;
+    }
+    function backendInput() {
+      return { account: $("backendAccount").value, password: $("backendPassword").value,
+        verificationCode: $("backendCode").value };
+    }
+    async function post(url, data) {
+      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      return { ok: response.ok, ...(await response.json()) };
+    }
+    async function refresh() {
+      try {
+        const status = await fetch("/api/status", { cache: "no-store" }).then((response) => response.json());
+        if (!$("outputRoot").value) $("outputRoot").value = status.outputRoot;
+        if (!$("backendAccount").value && status.backend.account) $("backendAccount").value = status.backend.account;
+        $("backendPassword").placeholder = status.backend.hasPassword ? "已儲存，免重填" : "請輸入後台密碼";
+        $("backendCode").placeholder = status.backend.codeCurrent ? "本月已儲存，免重填" : "請輸入本月新驗證碼";
+        $("sync").disabled = Boolean(status.running) || !status.credentialsReady;
+        $("sheetSync").disabled = Boolean(status.sheetRunning) || !status.credentialsReady;
+        const codeState = status.backend.codeCurrent ? `本月驗證碼已儲存（${status.backend.currentMonth}）` : "本月驗證碼待輸入";
+        $("status").textContent = [
+          `CRM 安全設定：${status.credentialsReady ? "完成" : "尚未完成"}`,
+          `公司後台：${status.backendSessionReady ? "已登入" : "待重新登入"}；${codeState}`,
+          status.running ? `物件同步中，開始時間：${status.running.startedAt}` : status.lastResult
+            ? `${status.lastResult.ok ? "上次同步成功" : "上次同步失敗"}：${status.lastResult.finishedAt}` : "尚無本次啟動後的同步紀錄",
+          `物件資料：${status.sheetRunning ? "掃描中" : status.sheetLastResult ? status.sheetLastResult.ok ? "上次掃描成功" : "上次掃描失敗" : "可按「掃描物件資料」"}`,
+          `輸出位置：${status.outputRoot}`,
+        ].join("\n");
+      } catch { show("無法連上這台電腦的同步工具，請確認背景服務已啟動。", false); }
+    }
+    async function submit(url, data, clearBackend = false) {
+      try {
+        const result = await post(url, data);
+        show(result.message, result.ok);
+        if (clearBackend) { $("backendPassword").value = ""; $("backendCode").value = ""; }
+        await refresh();
+      } catch { show("連線失敗，請稍後重試。", false); }
+    }
+    $("sync").addEventListener("click", () => submit("/api/sync", backendInput(), true));
+    $("saveBackend").addEventListener("click", () => submit("/api/backend-login", backendInput(), true));
+    $("sheetSync").addEventListener("click", () => submit("/api/sheets/scan", {}));
+    $("setup").addEventListener("click", () => submit("/api/setup", {
+      email: $("email").value, password: $("password").value,
+      userId: $("userId").value, outputRoot: $("outputRoot").value,
+    }).then(() => { $("password").value = ""; }));
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>

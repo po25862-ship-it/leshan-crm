@@ -5,18 +5,32 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn, execFileSync } = require("child_process");
+const { credentialStatus, ensureBackendSession, sessionReady } = require("./backend-auth");
 
 const HOST = "127.0.0.1";
 const PORT = 8877;
 const appDir = __dirname;
 const configDir = path.join(os.homedir(), ".leshan-property-sync");
 const configFile = path.join(configDir, "config.json");
-const backendCookieFile = path.join(configDir, "nh3-session-cookies.txt");
-const backendVerifiedFile = path.join(configDir, "nh3-session-verified.json");
+const sheetStatusFile = path.join(configDir, "sheet-import-status.json");
 let running = null;
 let lastResult = null;
 let sheetRunning = null;
-let sheetLastResult = null;
+let sheetLastResult = readJsonFile(sheetStatusFile, null);
+
+function readJsonFile(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch { return fallback; }
+}
+
+function appendLocalLog(file, chunk) {
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, chunk);
+  } catch (error) {
+    console.error(`本機紀錄寫入失敗：${error.message}`);
+  }
+}
 
 function defaultOutputRoot() {
   try {
@@ -51,52 +65,6 @@ function credentialsReady() {
   } catch { return false; }
 }
 
-function backendSessionReady() {
-  try {
-    const cookie = fs.statSync(backendCookieFile);
-    const verified = JSON.parse(fs.readFileSync(backendVerifiedFile, "utf8"));
-    return cookie.size > 50 && Date.now() - Date.parse(verified.verifiedAt) < 12 * 60 * 60 * 1000;
-  }
-  catch { return false; }
-}
-
-function loginBackend({ account, password, verificationCode }) {
-  fs.mkdirSync(configDir, { recursive: true });
-  try { fs.unlinkSync(backendVerifiedFile); } catch { /* 尚未驗證 */ }
-  execFileSync("curl", [
-    "--fail", "--silent", "--show-error", "--max-time", "40",
-    "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
-    "--output", "/dev/null", "http://nh3.twhg.com.tw/index.php",
-  ]);
-  execFileSync("curl", [
-    "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
-    "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
-    "--data-urlencode", `user_id1=${account}`,
-    "--data-urlencode", `user_pass1=${password}`,
-    "--data-urlencode", `id1=${verificationCode}`,
-    "--data-urlencode", "save_code=on",
-    "--output", "/dev/null",
-    "http://nh3.twhg.com.tw/lib/loginchk.php",
-  ]);
-  const response = execFileSync("curl", [
-    "--location", "--fail", "--silent", "--show-error", "--max-time", "40",
-    "--cookie", backendCookieFile, "--cookie-jar", backendCookieFile,
-    "http://nh3.twhg.com.tw/report/objdetail.php",
-  ], { encoding: "buffer", maxBuffer: 4 * 1024 * 1024 });
-  fs.chmodSync(backendCookieFile, 0o600);
-  const text = iconvBig5(response);
-  if (/meta\s+http-equiv=['"]?refresh[^>]+index\.php|form_login|user_pass1/i.test(text)) {
-    throw new Error("公司後台登入未成功，請確認帳號、密碼與驗證碼");
-  }
-  fs.writeFileSync(backendVerifiedFile, `${JSON.stringify({ verifiedAt: new Date().toISOString() })}\n`, { mode: 0o600 });
-  return true;
-}
-
-function iconvBig5(buffer) {
-  try { return new TextDecoder("big5").decode(buffer); }
-  catch { return buffer.toString("latin1"); }
-}
-
 function escapeXml(value) {
   return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -106,12 +74,13 @@ function plist(label, args, outputRoot, schedule = false) {
   const timing = schedule
     ? "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>"
     : "<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>";
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>${label}</string>\n<key>ProgramArguments</key><array>\n${argumentsXml}\n</array>\n${timing}\n<key>WorkingDirectory</key><string>${escapeXml(appDir)}</string>\n<key>EnvironmentVariables</key><dict><key>LESHAN_SYNC_OUTPUT_ROOT</key><string>${escapeXml(outputRoot)}</string></dict>\n<key>StandardOutPath</key><string>${escapeXml(path.join(outputRoot, `${label}.log`))}</string>\n<key>StandardErrorPath</key><string>${escapeXml(path.join(outputRoot, `${label}.error.log`))}</string>\n</dict></plist>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>${label}</string>\n<key>ProgramArguments</key><array>\n${argumentsXml}\n</array>\n${timing}\n<key>WorkingDirectory</key><string>${escapeXml(appDir)}</string>\n<key>EnvironmentVariables</key><dict><key>LESHAN_SYNC_OUTPUT_ROOT</key><string>${escapeXml(outputRoot)}</string></dict>\n<key>StandardOutPath</key><string>${escapeXml(path.join(configDir, `${label}.log`))}</string>\n<key>StandardErrorPath</key><string>${escapeXml(path.join(configDir, `${label}.error.log`))}</string>\n</dict></plist>\n`;
 }
 
 function installLaunchAgents(outputRoot) {
   const launchDir = path.join(os.homedir(), "Library", "LaunchAgents");
   fs.mkdirSync(launchDir, { recursive: true });
+  fs.mkdirSync(configDir, { recursive: true });
   fs.mkdirSync(outputRoot, { recursive: true });
   const serverLabel = "tw.com.leshan.property-sync-server";
   const dailyLabel = "tw.com.leshan.property-sync-daily";
@@ -120,9 +89,10 @@ function installLaunchAgents(outputRoot) {
   fs.writeFileSync(serverFile, plist(serverLabel, [process.execPath, path.join(appDir, "server.js")], outputRoot, false));
   fs.writeFileSync(dailyFile, plist(dailyLabel, [process.execPath, path.join(appDir, "daily.js")], outputRoot, true));
   const domain = `gui/${process.getuid()}`;
-  for (const file of [serverFile, dailyFile]) {
-    try { execFileSync("launchctl", ["bootstrap", domain, file], { stdio: "ignore" }); }
-    catch { /* 已載入時保留既有服務，重新登入後會套用最新 plist */ }
+  for (const [label, file] of [[serverLabel, serverFile], [dailyLabel, dailyFile]]) {
+    try { execFileSync("launchctl", ["bootout", `${domain}/${label}`], { stdio: "ignore" }); }
+    catch { /* 尚未載入 */ }
+    execFileSync("launchctl", ["bootstrap", domain, file], { stdio: "ignore" });
   }
   return { serverFile, dailyFile };
 }
@@ -130,19 +100,28 @@ function installLaunchAgents(outputRoot) {
 function runSync() {
   if (running) return false;
   const config = loadConfig();
-  const outputDir = path.join(config.outputRoot, today());
+  const runDate = today();
+  const outputDir = path.join(configDir, "runs", runDate);
+  const archiveDir = path.join(config.outputRoot, runDate);
   fs.mkdirSync(outputDir, { recursive: true });
   const logFile = path.join(outputDir, "同步紀錄.log");
   const child = spawn(process.execPath, [path.join(appDir, "sync.js"), "--apply-crm", "--output-dir", outputDir], {
     cwd: appDir, env: { ...process.env, LESHAN_SYNC_OUTPUT_ROOT: config.outputRoot }, stdio: ["ignore", "pipe", "pipe"],
   });
   running = { startedAt: new Date().toISOString(), pid: child.pid };
-  const logStream = fs.createWriteStream(logFile, { flags: "a" });
-  child.stdout.on("data", (chunk) => logStream.write(chunk));
-  child.stderr.on("data", (chunk) => logStream.write(chunk));
+  child.stdout.on("data", (chunk) => appendLocalLog(logFile, chunk));
+  child.stderr.on("data", (chunk) => appendLocalLog(logFile, chunk));
   child.on("close", (code) => {
-    logStream.end();
-    lastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, outputDir, logFile };
+    let archiveError = "";
+    if (code === 0) {
+      try {
+        fs.mkdirSync(archiveDir, { recursive: true });
+        fs.cpSync(outputDir, archiveDir, { recursive: true, force: true });
+      } catch (error) {
+        archiveError = error.message;
+      }
+    }
+    lastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, outputDir, archiveDir, archiveError, logFile };
     running = null;
   });
   return true;
@@ -151,17 +130,25 @@ function runSync() {
 function runSheetImport() {
   if (sheetRunning) return false;
   const config = loadConfig();
-  const logFile = path.join(config.outputRoot, "物件資料自動匯入.log");
+  const logFile = path.join(configDir, "logs", "物件資料自動匯入.log");
+  const archiveLogFile = path.join(config.outputRoot, "物件資料自動匯入.log");
   const child = spawn(process.execPath, [path.join(appDir, "sheet-import.js"), "--apply"], {
     cwd: appDir, env: process.env, stdio: ["ignore", "pipe", "pipe"],
   });
   sheetRunning = { startedAt: new Date().toISOString(), pid: child.pid };
-  const logStream = fs.createWriteStream(logFile, { flags: "a" });
-  child.stdout.on("data", (chunk) => logStream.write(chunk));
-  child.stderr.on("data", (chunk) => logStream.write(chunk));
+  child.stdout.on("data", (chunk) => appendLocalLog(logFile, chunk));
+  child.stderr.on("data", (chunk) => appendLocalLog(logFile, chunk));
   child.on("close", (code) => {
-    logStream.end();
-    sheetLastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, logFile };
+    let archiveError = "";
+    try {
+      fs.mkdirSync(path.dirname(archiveLogFile), { recursive: true });
+      fs.copyFileSync(logFile, archiveLogFile);
+    } catch (error) {
+      archiveError = error.message;
+    }
+    sheetLastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, logFile, archiveLogFile, archiveError };
+    try { fs.writeFileSync(sheetStatusFile, `${JSON.stringify(sheetLastResult, null, 2)}\n`, { mode: 0o600 }); }
+    catch (error) { console.error(`掃描狀態保存失敗：${error.message}`); }
     sheetRunning = null;
   });
   return true;
@@ -184,7 +171,14 @@ function readJson(request) {
   });
 }
 
-const page = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>樂善 CRM 物件同步</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f4ef;color:#292723;margin:0}.wrap{max-width:720px;margin:48px auto;padding:0 20px}.card{background:#fff;border:1px solid #ddd8cf;border-radius:16px;padding:28px;box-shadow:0 10px 30px #0000000d}h1{font-size:24px;margin:0 0 8px}p{color:#68635b;line-height:1.6}.status{background:#f2f5f0;border-radius:10px;padding:14px;margin:20px 0;white-space:pre-line}button{border:0;border-radius:9px;padding:11px 18px;background:#1f6f4a;color:white;font-weight:700;cursor:pointer;margin:12px 8px 0 0}button:disabled{opacity:.5}details{margin-top:24px;border-top:1px solid #eee;padding-top:18px}label{display:block;font-size:13px;font-weight:700;margin-top:12px}input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-top:5px}.minor{font-size:12px}</style></head><body><div class="wrap"><div class="card"><h1>樂善 CRM 物件同步</h1><p>每天 07:30 會自動下載 64 份報表、更新 CRM，再辨識「物件資料」圖片並分類保存。</p><div id="status" class="status">讀取狀態中…</div><button id="sync" onclick="startSync()">立即同步</button><button id="sheetSync" onclick="startSheetSync()">掃描物件資料</button><details><summary>公司後台登入（官網點閱狀態）</summary><label>後台帳號<input id="backendAccount" autocomplete="username"></label><label>後台密碼<input id="backendPassword" type="password" autocomplete="current-password"></label><label>後台驗證碼<input id="backendCode" type="password" autocomplete="one-time-code"></label><p class="minor">密碼與驗證碼不會保存；只保留這台 Mac 的登入工作階段。過期時再登入一次即可。</p><button onclick="backendLogin()">登入公司後台</button></details><details><summary>首次安全設定／重新安裝排程</summary><label>CRM 登入 Email<input id="email" type="email" autocomplete="username"></label><label>CRM 密碼<input id="password" type="password" autocomplete="current-password"></label><label>內部系統使用者編號<input id="userId" autocomplete="off"></label><label>輸出資料夾<input id="outputRoot" value=""></label><p class="minor">密碼與內部編號只會存入這台 Mac 的「鑰匙圈」，不會寫入專案或上傳 GitHub。</p><button onclick="setup()">儲存安全設定並安裝 07:30 排程</button></details></div></div><script>async function refresh(){const s=await fetch('/api/status').then(r=>r.json());document.querySelector('#outputRoot').value=document.querySelector('#outputRoot').value||s.outputRoot;document.querySelector('#sync').disabled=s.running||!s.credentialsReady;document.querySelector('#sheetSync').disabled=s.sheetRunning||!s.credentialsReady;document.querySelector('#status').textContent=(s.credentialsReady?'安全設定：完成':'安全設定：尚未完成')+'\\n後台官網狀態：'+(s.backendSessionReady?'已登入':'尚未登入')+'\\n'+(s.running?'正在同步，開始時間：'+s.running.startedAt:s.lastResult?(s.lastResult.ok?'上次同步成功：':'上次同步失敗：')+s.lastResult.finishedAt:'尚無本次啟動後的同步紀錄')+'\\n物件資料：'+(s.sheetRunning?'正在掃描與分類':s.sheetLastResult?(s.sheetLastResult.ok?'上次匯入成功':'上次匯入失敗'):'可按「掃描物件資料」')+'\\n輸出位置：'+s.outputRoot}async function startSync(){const r=await fetch('/api/sync',{method:'POST'}).then(r=>r.json());alert(r.message);refresh()}async function startSheetSync(){const r=await fetch('/api/sheets/scan',{method:'POST'}).then(r=>r.json());alert(r.message);refresh()}async function setup(){const data={email:email.value,password:password.value,userId:userId.value,outputRoot:outputRoot.value};const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());password.value='';alert(r.message);refresh()}async function backendLogin(){const data={account:backendAccount.value,password:backendPassword.value,verificationCode:backendCode.value};const r=await fetch('/api/backend-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());backendPassword.value='';backendCode.value='';alert(r.message);refresh()}refresh();setInterval(refresh,3000)</script></body></html>`;
+const page = fs.readFileSync(path.join(appDir, "page.html"), "utf8");
+
+if (process.argv.includes("--install-schedule")) {
+  const config = loadConfig();
+  installLaunchAgents(path.resolve(config.outputRoot));
+  console.log("07:30 自動同步排程已重新安裝並載入。");
+  process.exit(0);
+}
 
 http.createServer(async (request, response) => {
   try {
@@ -195,11 +189,15 @@ http.createServer(async (request, response) => {
     }
     if (request.method === "GET" && request.url === "/api/status") {
       const config = loadConfig();
-      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: backendSessionReady(), outputRoot: config.outputRoot, running, lastResult, sheetRunning, sheetLastResult });
+      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: sessionReady(), backend: credentialStatus(), outputRoot: config.outputRoot, running, lastResult, sheetRunning, sheetLastResult });
       return;
     }
     if (request.method === "POST" && request.url === "/api/sync") {
       if (!credentialsReady()) return sendJson(response, 400, { message: "請先完成安全設定。" });
+      if (running) return sendJson(response, 409, { message: "同步已在執行中。" });
+      const data = await readJson(request);
+      try { ensureBackendSession(data, { required: true }); }
+      catch (error) { return sendJson(response, 400, { message: error.message }); }
       const started = runSync();
       sendJson(response, started ? 202 : 409, { message: started ? "已開始同步，可留在此頁查看進度。" : "同步已在執行中。" });
       return;
@@ -212,9 +210,9 @@ http.createServer(async (request, response) => {
     }
     if (request.method === "POST" && request.url === "/api/backend-login") {
       const data = await readJson(request);
-      if (!data.account || !data.password || !data.verificationCode) return sendJson(response, 400, { message: "後台帳號、密碼與驗證碼都要填寫。" });
-      loginBackend(data);
-      sendJson(response, 200, { message: "公司後台登入工作階段已儲存。" });
+      try { ensureBackendSession(data, { required: true, forceLogin: true }); }
+      catch (error) { return sendJson(response, 400, { message: error.message }); }
+      sendJson(response, 200, { message: "公司後台已登入。帳號、密碼及本月驗證碼已存入這台 Mac 的鑰匙圈。" });
       return;
     }
     if (request.method === "POST" && request.url === "/api/setup") {

@@ -12,6 +12,8 @@ const { execFileSync } = require("child_process");
 const { inferPropertyLocation } = require("./location-inference");
 const { inferCommunity } = require("./community-matcher");
 const { firstSeenFields, firstMissingFields, firstOnHoldFields, shouldMarkFourStoreMissing } = require("./scan-timeline");
+const { ensureBackendSession } = require("./backend-auth");
+const roadKeyword = require("./road-keyword");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -46,7 +48,9 @@ const defaultOutputDir = process.env.LESHAN_SYNC_OUTPUT_ROOT
 const outputDir = path.resolve(argValue("--output-dir", defaultOutputDir));
 const reportDir = path.join(outputDir, "raw-64");
 const snapshotFile = path.join(outputDir, "snapshot.json");
-const previousFile = argValue("--previous", path.join(path.dirname(outputDir), "latest-snapshot.json"));
+const stateDir = path.join(os.homedir(), ".leshan-property-sync");
+const previousFile = argValue("--previous", path.join(stateDir, "latest-snapshot.json"));
+const legacyPreviousFile = path.join(path.dirname(outputDir), "latest-snapshot.json");
 const applyCrm = process.argv.includes("--apply-crm");
 
 const FIREBASE_CONFIG = {
@@ -101,7 +105,7 @@ function crmRecord(existing, incoming) {
   return { ...record, ...inferPropertyLocation({ ...existing, ...record }) };
 }
 
-async function applyToCrm(incomingRecords) {
+async function applyToCrm(incomingRecords, roadSummary = null) {
   const [{ initializeApp, deleteApp }, { getAuth, signInWithEmailAndPassword }, firestore] = await Promise.all([
     import("firebase/app"), import("firebase/auth"), import("firebase/firestore"),
   ]);
@@ -207,6 +211,10 @@ async function applyToCrm(incomingRecords) {
     runBatch.set(runRef, {
       date: today, completedAt: serverTimestamp(), sourceFileCount: 64,
       incomingCount: incomingRecords.length, ...counts, successful: true,
+      roadKeywordQueries: roadSummary?.successfulQueries || 0,
+      roadKeywordFailedQueries: roadSummary?.failedQueries || 0,
+      roadKeywordAccepted: roadSummary?.accepted || 0,
+      roadKeywordSkipped: roadSummary?.skipped || 0,
     });
     await runBatch.commit();
     return { records: mergedRecords, counts, backupPath };
@@ -326,6 +334,87 @@ async function enrichRecords(records, userId) {
   return { records: enriched, success, failed };
 }
 
+async function scanRoadKeywords(userId, fourStoreRecords) {
+  if (!fs.existsSync(backendCookieFile)) throw new Error("公司後台登入資料不存在，路段掃描已略過");
+  const roadDir = path.join(outputDir, "road-keywords");
+  fs.mkdirSync(roadDir, { recursive: true });
+  const targets = roadKeyword.targets;
+  let cursor = 0;
+  let completed = 0;
+  const reports = [];
+  const errors = [];
+  const worker = async () => {
+    while (cursor < targets.length) {
+      const target = targets[cursor++];
+      const file = path.join(roadDir, `${target.districtCode}-${target.road}.html`);
+      const body = `user_id=${encodeURIComponent(userId)}&txtDEPID=DE&txtOBJTYPE=&txtAREA=${target.districtCode}&tno=${roadKeyword.formEncodeBig5(target.road)}&tnof=&tsort=1&tQRC=Y&sendpok=`;
+      try {
+        await runCurl([
+          "--fail-with-body", "--silent", "--show-error", "--retry", "2", "--max-time", "40",
+          "--cookie", backendCookieFile,
+          "--referer", "http://nh3.twhg.com.tw/report/objdetail.php",
+          "--header", "Content-Type: application/x-www-form-urlencoded",
+          "--data-binary", body, "--output", file,
+          "http://nh3.twhg.com.tw/report/objreport.php",
+        ]);
+        const rows = roadKeyword.parseReport(fs.readFileSync(file), target);
+        reports.push({ target, rows });
+      } catch (error) {
+        errors.push({ target, message: error.message });
+        console.error(`路段查詢失敗 ${target.district}${target.road}: ${error.message}`);
+      }
+      completed += 1;
+      if (completed % 20 === 0 || completed === targets.length) {
+        console.log(`路段查詢 ${completed}/${targets.length}，成功 ${reports.length}，失敗 ${errors.length}`);
+      }
+    }
+  };
+  await Promise.all([worker(), worker()]);
+
+  // Keyword hits may come from the title or notes; full addresses must be checked.
+  // Never infer delisting from this scan, especially if a backend query failed.
+  const fourStoreNos = new Set(fourStoreRecords.map((record) => record.listingNo));
+  const candidates = new Map();
+  for (const report of reports) {
+    for (const row of report.rows) {
+      if (!fourStoreNos.has(row.listingNo) && !candidates.has(row.listingNo)) candidates.set(row.listingNo, row);
+    }
+  }
+  const details = await enrichRecords([...candidates.values()], userId);
+  const accepted = [];
+  const skipped = [];
+  for (const record of details.records) {
+    if (!record.detailEnriched) {
+      skipped.push({ listingNo: record.listingNo, reason: "詳細頁取得失敗" });
+      continue;
+    }
+    const location = roadKeyword.classifyAddress(record.address);
+    if (!location.accepted) {
+      skipped.push({ listingNo: record.listingNo, reason: location.reason, address: record.address });
+      continue;
+    }
+    const file = path.join(outputDir, "raw-details", `${record.listingNo}.html`);
+    const metadata = roadKeyword.detailMetadata(fs.readFileSync(file));
+    const category = metadata.category === "辦公室" ? "辦公" : metadata.category;
+    if (!CATEGORIES.some((item) => item.name === category) || !metadata.store) {
+      skipped.push({ listingNo: record.listingNo, reason: "詳細頁缺少可確認的類別或店別", address: record.address });
+      continue;
+    }
+    const { sourceRoad, sourceDistrict, detailEnriched, detailLandPing, detailParkingCount,
+      registeredTotalPing, ...fields } = record;
+    accepted.push({ ...fields, category, store: metadata.store, syncCoverage: "roadKeyword",
+      detailEnriched: true, matchedRoad: location.road, matchedDistrict: location.district });
+  }
+  const summary = {
+    scannedAt: new Date().toISOString(), totalQueries: targets.length, successfulQueries: reports.length,
+    errors, candidates: candidates.size, detailSuccess: details.success, detailFailed: details.failed,
+    accepted: accepted.length, skipped,
+  };
+  fs.writeFileSync(path.join(outputDir, "road-keyword-summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
+  console.log(`路段掃描完成：${accepted.length} 筆符合範圍、${skipped.length} 筆略過；只增補或更新，不以路段缺席判下架。`);
+  return { records: accepted, summary };
+}
+
 async function downloadReports(userId) {
   fs.mkdirSync(reportDir, { recursive: true });
   let completed = 0;
@@ -410,7 +499,7 @@ function parseReports(dir) {
       const officialCell = officialColumn >= 0 ? sheet[XLSX.utils.encode_cell({ r: rowIndex, c: officialColumn })] : null;
       const officialLink = officialCell?.l?.Target || "";
       const record = {
-        store: item.store.name, category: item.category.name, listingNo,
+        store: item.store.name, category: item.category.name, listingNo, syncCoverage: "fourStore",
         title: String(row[2] || "").trim(), address: String(row[3] || "").trim(),
         landPing: row[4] === "" ? null : Number(row[4]), titlePing: row[5] === "" ? null : Number(row[5]),
         floor: String(row[6] || "").trim(), orientation: String(row[7] || "").trim(), age: String(row[8] || "").trim(),
@@ -478,8 +567,14 @@ function parseOfficialStatusDirectory(dir, records) {
 }
 
 function loadPrevious() {
-  if (!fs.existsSync(previousFile)) return [];
-  return JSON.parse(fs.readFileSync(previousFile, "utf8")).records || [];
+  for (const file of [previousFile, legacyPreviousFile]) {
+    try {
+      if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8")).records || [];
+    } catch (error) {
+      console.error(`無法讀取前次快照 ${file}，改用其他快照：${error.message}`);
+    }
+  }
+  return [];
 }
 
 function makeDiff(previous, current) {
@@ -539,6 +634,17 @@ async function createWorkbook(records, diff, previousDate) {
 
 async function main() {
   fs.mkdirSync(outputDir, { recursive: true });
+  let backendReady = true;
+  if (!sourceDirArg && !officialStatusDirArg) {
+    try {
+      const backend = ensureBackendSession();
+      backendReady = backend.ready;
+      if (!backend.ready) console.warn(`官網狀態暫停更新：${backend.reason}`);
+    } catch (error) {
+      backendReady = false;
+      console.warn(`官網狀態暫停更新：${error.message}`);
+    }
+  }
   let sourceDir = sourceDirArg;
   let userId = "";
   if (!sourceDir) {
@@ -547,7 +653,7 @@ async function main() {
   }
   const snapshot = parseReports(sourceDir);
   let officialStatusDir = officialStatusDirArg ? path.resolve(officialStatusDirArg) : "";
-  if (!sourceDirArg && !officialStatusDir) officialStatusDir = await downloadOfficialStatusReports(userId);
+  if (!sourceDirArg && !officialStatusDir && backendReady) officialStatusDir = await downloadOfficialStatusReports(userId);
   if (officialStatusDir) {
     const official = parseOfficialStatusDirectory(officialStatusDir, snapshot.records);
     snapshot.records = official.records;
@@ -562,18 +668,35 @@ async function main() {
     snapshot.records = details.records;
     snapshot.details = { success: details.success, failed: details.failed };
   }
+  if (!sourceDirArg && backendReady && !process.argv.includes("--skip-roads")) {
+    try {
+      const roads = await scanRoadKeywords(userId, snapshot.records);
+      snapshot.records.push(...roads.records);
+      snapshot.roadKeywords = {
+        totalQueries: roads.summary.totalQueries, successfulQueries: roads.summary.successfulQueries,
+        failedQueries: roads.summary.errors.length, accepted: roads.summary.accepted,
+        skipped: roads.summary.skipped.length,
+      };
+    } catch (error) {
+      snapshot.roadKeywords = { failed: true, message: error.message };
+      console.error(`路段掃描失敗，四店 64 份報表仍照常同步：${error.message}`);
+    }
+  }
   const previous = loadPrevious();
   const diff = makeDiff(previous, snapshot.records);
   let outputRecords = snapshot.records;
   let crm = null;
   if (applyCrm) {
-    crm = await applyToCrm(snapshot.records);
+    crm = await applyToCrm(snapshot.records, snapshot.roadKeywords);
     outputRecords = crm.records;
   }
   const workbookPath = await createWorkbook(outputRecords, diff, previous.length ? "上次同步" : "首次");
   const payload = { generatedAt: new Date().toISOString(), ...snapshot, diff: { added: diff.added.length, removed: diff.removed.length, changed: diff.changed.length } };
   fs.writeFileSync(snapshotFile, `${JSON.stringify(payload, null, 2)}\n`);
-  fs.copyFileSync(snapshotFile, path.join(path.dirname(outputDir), "latest-snapshot.json"));
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(previousFile, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
+  try { fs.copyFileSync(snapshotFile, legacyPreviousFile); }
+  catch (error) { console.error(`Google Drive 前次快照備份失敗（不影響 CRM 更新）：${error.message}`); }
   const crmSummary = crm ? { counts: crm.counts, backupPath: crm.backupPath } : null;
   console.log(JSON.stringify({ workbookPath, snapshotFile, fileCount: snapshot.fileCount, rows: snapshot.rowCount, unique: snapshot.records.length, diff: payload.diff, crm: crmSummary }, null, 2));
 }
