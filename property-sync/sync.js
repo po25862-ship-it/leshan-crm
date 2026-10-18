@@ -582,7 +582,9 @@ function makeDiff(previous, current) {
   const newMap = new Map(current.map((item) => [item.listingNo, item]));
   return {
     added: current.filter((item) => !oldMap.has(item.listingNo)),
-    removed: previous.filter((item) => !newMap.has(item.listingNo)),
+    // Road-only properties cannot be called missing from a four-store report.
+    // A skipped or partial backend road scan must not make the export claim delisting.
+    removed: previous.filter((item) => item.syncCoverage !== "roadKeyword" && !newMap.has(item.listingNo)),
     changed: current.map((item) => ({ before: oldMap.get(item.listingNo), after: item }))
       .filter((item) => item.before && String(item.before.totalPrice) !== String(item.after.totalPrice)),
   };
