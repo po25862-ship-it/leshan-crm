@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { firstSeenFields, firstMissingFields, firstOnHoldFields } = require("./scan-timeline");
+const { firstSeenFields, firstMissingFields, firstOnHoldFields, shouldMarkFourStoreMissing } = require("./scan-timeline");
 
 const first = "2026-10-18T00:00:00.000Z";
 const later = "2026-10-19T00:00:00.000Z";
@@ -33,4 +33,12 @@ test("a previously recorded first absence is recovered when possible", () => {
 test("first temporary closure is not overwritten", () => {
   assert.deepEqual(firstOnHoldFields({}, first), { firstOnHoldAt: first });
   assert.deepEqual(firstOnHoldFields({ firstOnHoldAt: first }, later), {});
+});
+
+test("four-store sync never marks a road-search-only case missing", () => {
+  const incoming = new Map();
+  assert.equal(shouldMarkFourStoreMissing({ listingNo: "BV02405883", status: "active", syncCoverage: "roadKeyword" }, incoming), false);
+  assert.equal(shouldMarkFourStoreMissing({ listingNo: "DE02502011", status: "active" }, incoming), true);
+  incoming.set("DE02502011", {});
+  assert.equal(shouldMarkFourStoreMissing({ listingNo: "DE02502011", status: "active" }, incoming), false);
 });

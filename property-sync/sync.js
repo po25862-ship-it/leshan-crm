@@ -11,7 +11,7 @@ const { decode } = require("html-entities");
 const { execFileSync } = require("child_process");
 const { inferPropertyLocation } = require("./location-inference");
 const { inferCommunity } = require("./community-matcher");
-const { firstSeenFields, firstMissingFields, firstOnHoldFields } = require("./scan-timeline");
+const { firstSeenFields, firstMissingFields, firstOnHoldFields, shouldMarkFourStoreMissing } = require("./scan-timeline");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -174,7 +174,7 @@ async function applyToCrm(incomingRecords) {
     }
 
     for (const old of existing) {
-      if (!old.listingNo || incomingByNo.has(String(old.listingNo).trim()) || (old.status || "active") !== "active") continue;
+      if (!shouldMarkFourStoreMissing(old, incomingByNo)) continue;
       const missingSyncCount = Number(old.missingSyncCount || 0) + 1;
       const updates = { missingSyncCount, lastMissingAt: nowIso, ...firstMissingFields(old, nowIso), updatedAt: today };
       if (missingSyncCount >= 2) {

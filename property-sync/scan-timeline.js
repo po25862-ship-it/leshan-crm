@@ -20,4 +20,13 @@ function firstOnHoldFields(existing, nowIso) {
   return existing?.firstOnHoldAt ? {} : { firstOnHoldAt: nowIso };
 }
 
-module.exports = { firstSeenFields, firstMissingFields, firstOnHoldFields };
+// A four-store report cannot prove that a property found through a company-wide
+// road search has disappeared. Only the source that covers it may do that.
+function shouldMarkFourStoreMissing(existing, incomingByNo) {
+  return Boolean(existing?.listingNo)
+    && existing.syncCoverage !== "roadKeyword"
+    && !incomingByNo.has(String(existing.listingNo).trim())
+    && (existing.status || "active") === "active";
+}
+
+module.exports = { firstSeenFields, firstMissingFields, firstOnHoldFields, shouldMarkFourStoreMissing };
