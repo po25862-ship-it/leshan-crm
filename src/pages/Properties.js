@@ -24,6 +24,7 @@ import MarketIntelligence from "./MarketIntelligence";
 import a7Communities from "../lib/a7-communities.json";
 import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
+import { displayPropertyAgent } from "../lib/propertyAgent";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -1173,7 +1174,7 @@ export default function Properties() {
               </div>
               {(form.notes || form.agentInfo) && (
                 <div style={{ background: "var(--accent-soft)", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, lineHeight: 1.65 }}>
-                  {form.agentInfo && <div><strong>開發：</strong>{form.agentInfo}</div>}
+                  {form.agentInfo && <div><strong>負責業務：</strong>{displayPropertyAgent(form.agentInfo)}</div>}
                   {form.notes && <div><strong>備註：</strong>{form.notes}</div>}
                 </div>
               )}
@@ -1515,6 +1516,10 @@ export default function Properties() {
                 {p.communityName && <><strong>{p.communityName}</strong>　</>}
                 {p.area && <>{p.area}　</>}
                 {p.store}　{p.listingNo}　{p.address}
+              </div>
+              <div className="property-list-agent">
+                <span>負責業務</span>
+                <strong>{displayPropertyAgent(p.agentInfo)}</strong>
               </div>
               <div className="meta">
                 {Boolean(p.floor) && <>{p.floor}　</>}

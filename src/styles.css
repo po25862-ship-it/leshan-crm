@@ -118,6 +118,10 @@ main{padding:32px 32px 72px;max-width:1440px;margin:0 auto;}
 /* 物件列表搜尋結果與價格 */
 .property-search-summary{margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#EAF6F0;color:#176B4B;font-size:13px;font-weight:800;}
 .properties-list .property-list-price{display:inline-flex;align-items:baseline;gap:5px;width:fit-content;margin-top:7px;padding:5px 10px;border-radius:8px;background:#FFF2E6;color:#A9480B;font-size:13px;font-weight:800;}
+.properties-list .property-list-agent{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 7px;margin-top:5px;font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
+.properties-list .property-list-agent span{color:var(--muted);white-space:nowrap;}
+.properties-list .property-list-agent strong{color:var(--text);font-weight:700;}
+.desktop-content .properties-list .property-list-agent{font-size:10px;}
 .property-sort-bar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0 0 12px;font-size:13px;color:var(--muted);font-weight:700;}
 .property-sort-bar select{min-width:190px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);font-size:13px;}
 .property-inline-detail-host:empty{display:none;}
