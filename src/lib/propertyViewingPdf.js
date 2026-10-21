@@ -4,6 +4,47 @@ const A4 = [595.28, 841.89];
 const PAGE_MARGIN = 24;
 const MAX_TOTAL_BYTES = 120 * 1024 * 1024;
 
+function dateMillis(year, month, day) {
+  const timestamp = Date.UTC(year, month - 1, day);
+  const date = new Date(timestamp);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? timestamp : 0;
+}
+
+function dateFromFileName(name) {
+  const text = String(name || "");
+  const dates = [];
+  for (const match of text.matchAll(/(?:^|\D)((?:20\d{2})[./-]?[01]\d[./-]?[0-3]\d|\d{2}[01]\d[0-3]\d)(?=\D|$)/g)) {
+    const digits = match[1].replace(/\D/g, "");
+    const year = digits.length === 8 ? Number(digits.slice(0, 4)) : Number(digits.slice(0, 2)) < 80
+      ? 2000 + Number(digits.slice(0, 2)) : 1900 + Number(digits.slice(0, 2));
+    dates.push(dateMillis(year, Number(digits.slice(-4, -2)), Number(digits.slice(-2))));
+  }
+  for (const match of text.matchAll(/(?:^|\D)(\d{3})[./-](\d{1,2})[./-](\d{1,2})(?=\D|$)/g)) {
+    dates.push(dateMillis(1911 + Number(match[1]), Number(match[2]), Number(match[3])));
+  }
+  return Math.max(0, ...dates);
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") return value.seconds * 1000;
+  if (typeof value === "number") return value < 1e11 ? value * 1000 : value;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function storageUploadMillis(url) {
+  try {
+    const path = decodeURIComponent(new URL(url).pathname);
+    const match = path.match(/\/sheets\/(\d{13})_/);
+    return match ? Number(match[1]) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function getPropertySheetPlan(properties) {
   return properties.map((property) => {
     const rawFiles = Array.isArray(property.sheetFiles) && property.sheetFiles.length > 0
@@ -11,19 +52,33 @@ export function getPropertySheetPlan(properties) {
       : property.sheetFileUrl
         ? [{ url: property.sheetFileUrl, name: property.sheetFileName, type: property.sheetFileType }]
         : [];
-    const files = rawFiles.map((file, index) => {
+    const rankedFiles = rawFiles.map((file, index) => {
       const entry = typeof file === "string" ? { url: file } : (file || {});
-      return {
+      const normalized = {
         url: typeof entry.url === "string" ? entry.url.trim() : "",
         name: String(entry.name || `資料表 ${index + 1}`),
         type: String(entry.type || ""),
       };
+      return {
+        file: normalized,
+        index,
+        date: dateFromFileName(normalized.name) || timestampMillis(entry.uploadedAt || entry.createdAt) || storageUploadMillis(normalized.url),
+        uploadedAt: timestampMillis(entry.uploadedAt || entry.createdAt) || storageUploadMillis(normalized.url),
+      };
     });
+    const latest = rankedFiles.reduce((best, candidate) => {
+      if (!best || candidate.date > best.date) return candidate;
+      if (candidate.date === best.date && candidate.uploadedAt > best.uploadedAt) return candidate;
+      if (candidate.date === best.date && candidate.uploadedAt === best.uploadedAt && candidate.index > best.index) return candidate;
+      return best;
+    }, null);
+    const files = latest ? [latest.file] : [];
     return {
       id: property.id,
       title: property.title || property.listingNo || "未命名物件",
       listingNo: property.listingNo || "",
       files,
+      skippedCount: Math.max(0, rawFiles.length - files.length),
       missing: files.length === 0,
       invalid: files.some((file) => !file.url),
     };

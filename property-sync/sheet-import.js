@@ -196,7 +196,7 @@ async function applyMatched(results, context) {
         const url = await context.storageModule.getDownloadURL(storageRef);
         const sheetFiles = [...(property.sheetFiles || [])];
         if (!sheetFiles.some((item) => item.sha256 === result.hash)) {
-          sheetFiles.push({ url, name: result.file, type: mimeType(result.file), sha256: result.hash, storageKind: "firebase" });
+          sheetFiles.push({ url, name: result.file, type: mimeType(result.file), sha256: result.hash, storageKind: "firebase", uploadedAt: new Date().toISOString() });
           await context.firestore.updateDoc(context.firestore.doc(context.db, "properties", property.id), { sheetFiles });
           property.sheetFiles = sheetFiles;
         }

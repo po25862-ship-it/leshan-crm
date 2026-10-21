@@ -328,7 +328,7 @@ export default function Properties() {
         const storageRef = ref(storage, `properties/${editingId}/sheets/${Date.now()}_${safeName}`);
         await uploadBytes(storageRef, file);
         const url = await getDownloadURL(storageRef);
-        newFiles.push({ url, name: file.name, type: file.type });
+        newFiles.push({ url, name: file.name, type: file.type, uploadedAt: new Date().toISOString() });
       }
       const nextFiles = [...(form.sheetFiles || []), ...newFiles];
       await update(editingId, { sheetFiles: nextFiles });

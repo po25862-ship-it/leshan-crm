@@ -14,14 +14,54 @@ test("plans all attachments in the selected property order, including legacy fil
     { id: "three", title: "第三間", sheetFiles: [] },
   ]);
 
-  expect(plan.map((entry) => [entry.title, entry.files.length, entry.missing])).toEqual([
-    ["第一間", 2, false],
-    ["第二間", 1, false],
-    ["第三間", 0, true],
+  expect(plan.map((entry) => [entry.title, entry.files.length, entry.skippedCount, entry.missing])).toEqual([
+    ["第一間", 1, 1, false],
+    ["第二間", 1, 0, false],
+    ["第三間", 0, 0, true],
   ]);
+  expect(plan[0].files[0].url).toBe("https://example.com/b.jpg");
 });
 
-test("merges every PDF page in property and attachment order", async () => {
+test("chooses the newest dated LINE sheet even if an older one was appended later", () => {
+  const [entry] = getPropertySheetPlan([{
+    id: "one", title: "鴻廣新A7", sheetFiles: [
+      { url: "https://example.com/new.jpg", name: "LINE_ALBUM_115.08進案物調_261004_8.jpg" },
+      { url: "https://example.com/old.jpg", name: "LINE_ALBUM_115.08進案物調_260824_1.jpg" },
+    ],
+  }]);
+  expect(entry.files[0].url).toBe("https://example.com/new.jpg");
+  expect(entry.skippedCount).toBe(1);
+});
+
+test("uses upload time, then list order, when filenames have no date", () => {
+  const [datedUpload, listFallback] = getPropertySheetPlan([
+    { id: "one", sheetFiles: [
+      { url: "https://example.com/new.jpg", name: "新版.jpg", uploadedAt: "2026-10-21T09:00:00Z" },
+      { url: "https://example.com/old.jpg", name: "舊版.jpg", uploadedAt: "2026-10-20T09:00:00Z" },
+    ] },
+    { id: "two", sheetFiles: [
+      { url: "https://example.com/first.jpg", name: "第一份.jpg" },
+      { url: "https://example.com/last.jpg", name: "最後一份.jpg" },
+    ] },
+  ]);
+  expect(datedUpload.files[0].url).toBe("https://example.com/new.jpg");
+  expect(listFallback.files[0].url).toBe("https://example.com/last.jpg");
+});
+
+test("merges only the newest source file for one property", async () => {
+  const load = jest.fn(async () => tinyPng);
+  const merged = await mergePropertySheets([{
+    id: "one", title: "兩份物調", sheetFiles: [
+      { url: "https://example.com/old.png", name: "LINE_ALBUM_260824_1.png" },
+      { url: "https://example.com/new.png", name: "LINE_ALBUM_261004_1.png" },
+    ],
+  }], load);
+  expect(load).toHaveBeenCalledTimes(1);
+  expect(load).toHaveBeenCalledWith("https://example.com/new.png");
+  expect(merged).toMatchObject({ fileCount: 1, summaryCount: 0, pageCount: 1 });
+});
+
+test("keeps all pages of the chosen PDF in property order", async () => {
   const first = await PDFDocument.create();
   first.addPage([400, 500]);
   first.addPage([500, 400]);

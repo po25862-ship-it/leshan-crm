@@ -44,7 +44,7 @@ export default function PropertyViewingPdf({ properties, onClose }) {
       <div className="property-viewing-pdf-head">
         <div>
           <h2>合併帶看資料表 PDF</h2>
-          <p>依勾選順序整理 {plan.length} 間物件：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。原始檔不會更動，也不會另外上傳合併檔。</p>
+          <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留，不會另外上傳合併檔。</p>
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>關閉</button>
       </div>
@@ -54,7 +54,7 @@ export default function PropertyViewingPdf({ properties, onClose }) {
             <strong>{entry.title}</strong>
             {entry.listingNo && <span>{entry.listingNo}</span>}
             <em className={entry.invalid ? "is-missing" : entry.missing ? "is-summary" : ""}>
-              {entry.invalid ? "檔案連結不完整" : entry.missing ? "以系統摘要代替原始物調表" : `${entry.files.length} 份資料表`}
+              {entry.invalid ? "檔案連結不完整" : entry.missing ? "以系統摘要代替原始物調表" : entry.skippedCount > 0 ? `取最新 1 份（略過 ${entry.skippedCount} 份舊檔）` : "1 份資料表"}
             </em>
             {entry.files.length > 0 && <small>{entry.files.map((file) => file.name).join("、")}</small>}
           </li>
