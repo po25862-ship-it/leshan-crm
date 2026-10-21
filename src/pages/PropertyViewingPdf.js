@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { todayStr } from "../lib/dates";
 import { getPropertySheetPlan, mergePropertySheets } from "../lib/propertyViewingPdf";
+import { downloadPropertySheet } from "../lib/propertySheetDownload";
+import { useAuth } from "../AuthContext";
 
 export default function PropertyViewingPdf({ properties, onClose }) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -16,7 +19,7 @@ export default function PropertyViewingPdf({ properties, onClose }) {
     setError("");
     setResult(null);
     try {
-      const merged = await mergePropertySheets(properties);
+      const merged = await mergePropertySheets(properties, (url) => downloadPropertySheet(url, user));
       const url = URL.createObjectURL(new Blob([merged.bytes], { type: "application/pdf" }));
       setResult({
         ...merged,
