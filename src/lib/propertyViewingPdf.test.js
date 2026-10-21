@@ -1,5 +1,11 @@
 import { PDFDocument } from "pdf-lib";
 import { getPropertySheetPlan, mergePropertySheets } from "./propertyViewingPdf";
+import { buildPropertySummary } from "./propertySummaryCanvas";
+
+const tinyPng = Uint8Array.from(Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=",
+  "base64",
+));
 
 test("plans all attachments in the selected property order, including legacy files", () => {
   const plan = getPropertySheetPlan([
@@ -39,13 +45,9 @@ test("merges every PDF page in property and attachment order", async () => {
 });
 
 test("turns an uploaded image into a printable PDF page", async () => {
-  const png = Uint8Array.from(Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=",
-    "base64",
-  ));
   const merged = await mergePropertySheets([
     { id: "one", title: "圖片資料表", sheetFiles: [{ url: "https://example.com/sheet.png", name: "sheet.png" }] },
-  ], async () => png);
+  ], async () => tinyPng);
   const output = await PDFDocument.load(merged.bytes);
 
   expect(merged.pageCount).toBe(1);
@@ -68,11 +70,41 @@ test("flattens a filled PDF form so its content can be printed after merging", a
   expect(output.getForm().getFields()).toHaveLength(0);
 });
 
-test("does not silently omit a selected property without a sheet", async () => {
-  await expect(mergePropertySheets([
+test("places a CRM summary page exactly where a selected property has no sheet", async () => {
+  const original = await PDFDocument.create();
+  original.addPage([400, 500]);
+  const summaryProperties = [];
+  const merged = await mergePropertySheets([
     { id: "one", title: "有資料表", sheetFiles: [{ url: "https://example.com/a.pdf" }] },
     { id: "two", title: "缺資料表", sheetFiles: [] },
-  ], async () => { throw new Error("should not fetch"); })).rejects.toThrow("缺資料表");
+    { id: "three", title: "也缺資料表", sheetFiles: [] },
+  ], async () => await original.save(), async (property) => {
+    summaryProperties.push(property.title);
+    return tinyPng;
+  });
+  const output = await PDFDocument.load(merged.bytes);
+  expect(summaryProperties).toEqual(["缺資料表", "也缺資料表"]);
+  expect(merged).toMatchObject({ fileCount: 1, summaryCount: 2, pageCount: 3 });
+  expect(output.getPages().map((page) => Math.round(page.getWidth()))).toEqual([400, 595, 595]);
+});
+
+test("summary uses only known CRM fields and marks missing values explicitly", () => {
+  const summary = buildPropertySummary({
+    title: "文化二路兩房", listingNo: "DE123", totalPrice: "1280", mainBuildingPing: "15.1",
+    address: "桃園市龜山區文化二路", status: "active", layout: "0/0/0",
+    notes: "內部備註不該印在帶看資料",
+  }, new Date("2026-10-21T00:00:00Z"));
+  expect(summary.basic[0]).toEqual(["總價", "1280 萬"]);
+  expect(summary.basic[1]).toEqual(["格局", "未提供"]);
+  expect(summary.areas[1]).toEqual(["主建物", "15.1 坪"]);
+  expect(summary.location[2]).toEqual(["地址", "桃園市龜山區文化二路"]);
+  expect(JSON.stringify(summary)).not.toContain("內部備註");
+});
+
+test("blocks an incomplete attachment link instead of silently using a summary", async () => {
+  await expect(mergePropertySheets([
+    { id: "one", title: "檔案網址壞掉", sheetFiles: [{ url: "" }] },
+  ], async () => { throw new Error("should not fetch"); })).rejects.toThrow("資料表連結不完整");
 });
 
 test("reports which file failed instead of returning a partial PDF", async () => {

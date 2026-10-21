@@ -1,3 +1,5 @@
+import { renderPropertySummaryPng } from "./propertySummaryCanvas";
+
 const A4 = [595.28, 841.89];
 const PAGE_MARGIN = 24;
 const MAX_TOTAL_BYTES = 120 * 1024 * 1024;
@@ -75,12 +77,12 @@ async function convertImageToPng(bytes, contentType) {
   }
 }
 
-export async function mergePropertySheets(properties, loadFile = loadFileFromUrl) {
+export async function mergePropertySheets(properties, loadFile = loadFileFromUrl, renderSummary = renderPropertySummaryPng) {
   const plan = getPropertySheetPlan(properties);
   if (plan.length === 0) throw new Error("請先勾選要列印的物件。");
-  const unavailable = plan.filter((entry) => entry.missing || entry.invalid);
+  const unavailable = plan.filter((entry) => entry.invalid);
   if (unavailable.length > 0) {
-    throw new Error(`以下物件沒有可讀取的資料表：${unavailable.map((entry) => entry.title).join("、")}。請先補上檔案，或取消勾選後再製作。`);
+    throw new Error(`以下物件的資料表連結不完整：${unavailable.map((entry) => entry.title).join("、")}。請先補上檔案，或取消勾選後再製作。`);
   }
 
   // Load only when the user asks for a PDF, keeping the regular property list lightweight.
@@ -89,8 +91,20 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
   merged.setTitle("帶看物件資料表");
   let totalBytes = 0;
   let fileCount = 0;
+  let summaryCount = 0;
 
-  for (const property of plan) {
+  for (const [index, property] of plan.entries()) {
+    if (property.missing) {
+      try {
+        const image = await merged.embedPng(await renderSummary(properties[index]));
+        const page = merged.addPage(A4);
+        page.drawImage(image, { x: 0, y: 0, width: A4[0], height: A4[1] });
+        summaryCount += 1;
+      } catch (error) {
+        throw new Error(`「${property.title}」的系統摘要無法製作：${error.message || "未知錯誤"}`);
+      }
+      continue;
+    }
     for (const file of property.files) {
       try {
         const loaded = await loadFile(file.url);
@@ -133,5 +147,5 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
     }
   }
 
-  return { bytes: await merged.save(), pageCount: merged.getPageCount(), fileCount };
+  return { bytes: await merged.save(), pageCount: merged.getPageCount(), fileCount, summaryCount };
 }

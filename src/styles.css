@@ -139,7 +139,9 @@ main{padding:32px 32px 72px;max-width:1440px;margin:0 auto;}
 .property-viewing-pdf-list li span{color:var(--muted);margin-right:9px;}
 .property-viewing-pdf-list li em{font-style:normal;color:var(--accent);font-weight:700;}
 .property-viewing-pdf-list li em.is-missing{color:var(--danger);}
+.property-viewing-pdf-list li em.is-summary{color:#A0481B;}
 .property-viewing-pdf-list li small{display:block;color:var(--muted);font-size:12px;overflow-wrap:anywhere;}
+.property-viewing-pdf-summary-note{padding:10px 12px;border-radius:8px;background:#FFF1E6;color:#88421E;font-size:13px;line-height:1.5;}
 .property-viewing-pdf-warning{padding:10px 12px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:13px;line-height:1.5;}
 .property-viewing-pdf-actions{display:flex;flex-wrap:wrap;gap:10px;}
 .property-viewing-pdf-ready{margin:12px 0 0;color:var(--accent);font-size:13px;font-weight:700;}
