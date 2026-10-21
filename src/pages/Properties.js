@@ -10,6 +10,7 @@ import { todayStr, formatDate } from "../lib/dates";
 import { withAgid, withoutAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
+import PropertyViewingPdf from "./PropertyViewingPdf";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 import { TAIWAN_REGIONS, TAIWAN_CITIES, normalizeRegionText } from "../lib/taiwanRegions";
 import { parseFloor, isTopFloor } from "../lib/floor";
@@ -163,6 +164,7 @@ export default function Properties() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showViewingPdf, setShowViewingPdf] = useState(false);
   const [showMobileTools, setShowMobileTools] = useState(false);
 
   const copyUrl = async (url) => {
@@ -179,6 +181,7 @@ export default function Properties() {
   };
 
   const toggleSelect = (id) => {
+    setShowViewingPdf(false);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -384,6 +387,7 @@ export default function Properties() {
   };
 
   const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy);
+  const selectedProperties = Array.from(selectedIds, (id) => items.find((item) => item.id === id)).filter(Boolean);
   const hasKeyword = Boolean(keyword.trim());
   const categoryPool = hasKeyword ? pool.filter((p) => matchesPropertyFilters(p, true)) : pool;
   const categoryCounts = {};
@@ -812,6 +816,7 @@ export default function Properties() {
               setSelectionMode((value) => !value);
               setSelectedIds(new Set());
               setShowForm(false);
+              setShowViewingPdf(false);
             }}
           >
             {selectionMode ? "結束勾選" : "勾選傳送"}
@@ -864,11 +869,20 @@ export default function Properties() {
       )}
 
       {selectedIds.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
           <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>已選 {selectedIds.size} 筆物件</span>
-          <button className="btn" onClick={() => setShowShare(true)}>分享給客人</button>
-          <button className="btn ghost" onClick={() => setSelectedIds(new Set())}>清除選取</button>
+          <button className="btn" onClick={() => { setShowShare(true); setShowViewingPdf(false); }}>分享給客人</button>
+          <button className="btn ghost" onClick={() => { setShowViewingPdf((value) => !value); setShowShare(false); }}>合併帶看資料 PDF</button>
+          <button className="btn ghost" onClick={() => { setSelectedIds(new Set()); setShowViewingPdf(false); }}>清除選取</button>
         </div>
+      )}
+
+      {showViewingPdf && selectedProperties.length > 0 && (
+        <PropertyViewingPdf
+          key={Array.from(selectedIds).join("|")}
+          properties={selectedProperties}
+          onClose={() => setShowViewingPdf(false)}
+        />
       )}
 
       {showShare && (
