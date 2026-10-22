@@ -61,7 +61,8 @@ function matchRange(value, min, max) {
 
 function propertyHasParking(property) {
   if (String(property.parkingDescription || "").trim() === "無") return false;
-  return Number(property.parkingCount || 0) > 0 || Number(property.parkingPing || 0) > 0 || Boolean(String(property.parkingDescription || "").trim());
+  return Number(property.parkingCount || 0) > 0 || Number(property.parkingPing || 0) > 0
+    || Boolean(String(property.parkingNumber || "").trim()) || Boolean(String(property.parkingDescription || "").trim());
 }
 
 const emptyForm = {
@@ -77,6 +78,7 @@ const emptyForm = {
   auxiliaryBuildingPing: "",
   commonAreaPing: "",
   parkingPing: "",
+  parkingNumber: "",
   parkingDescription: "",
   floor: "",
   orientation: "",
@@ -1171,6 +1173,7 @@ export default function Properties() {
                   form.commonAreaPing && `公設 ${form.commonAreaPing} 坪`,
                   form.parkingPing && `車位 ${form.parkingPing} 坪`,
                 ].filter(Boolean).join("・")} />
+                <DetailValue label="車位編號" value={form.parkingNumber} />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>案件掃描紀錄</div>
@@ -1337,6 +1340,10 @@ export default function Properties() {
               <div className="form-field">
                 <label>車位（數量）</label>
                 <input value={form.parkingCount} onChange={(e) => setForm({ ...form, parkingCount: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label>車位編號</label>
+                <input value={form.parkingNumber || ""} onChange={(e) => setForm({ ...form, parkingNumber: e.target.value })} placeholder="例如：B2-123；多個請用頓號分隔" />
               </div>
               <div className="form-field">
                 <label>車位說明</label>

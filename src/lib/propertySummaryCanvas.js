@@ -13,6 +13,14 @@ function ping(value) {
   return Number.isFinite(number) && number > 0 ? `${value} 坪` : "未提供";
 }
 
+function parkingNumber(property) {
+  const entered = String(property.parkingNumber || "").trim();
+  if (entered) return entered;
+  // Older records sometimes put an explicitly labelled space number in the description.
+  const labelled = String(property.parkingDescription || "").match(/(?:車位|車格)\s*(?:編號|號碼)\s*[：:#]?\s*([^\s，,；;。]+)/);
+  return valueOrMissing(labelled?.[1]);
+}
+
 export function buildPropertySummary(property, date = new Date()) {
   const status = { active: "在售", onHold: "暫時不賣", sold: "已售出" }[property.status] || "未提供";
   const price = Number(property.totalPrice);
@@ -44,6 +52,7 @@ export function buildPropertySummary(property, date = new Date()) {
       ["商圈／區域", valueOrMissing(property.area)],
       ["地址", valueOrMissing(property.address)],
       ["負責業務", valueOrMissing(property.agentInfo)],
+      ["車位編號", parkingNumber(property)],
     ],
   };
 }
@@ -135,11 +144,11 @@ export async function renderPropertySummaryPng(property) {
   ctx.font = `700 14px ${FONT}`;
   ctx.fillText("位置與聯絡", 36, 642);
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(36, 655, PAGE_WIDTH - 72, 137);
+  ctx.fillRect(36, 655, PAGE_WIDTH - 72, 151);
   ctx.strokeStyle = "#DCE4DF";
-  ctx.strokeRect(36.5, 655.5, PAGE_WIDTH - 73, 136);
+  ctx.strokeRect(36.5, 655.5, PAGE_WIDTH - 73, 150);
   summary.location.forEach(([label, value], index) => {
-    const y = 679 + index * 29;
+    const y = 676 + index * 27;
     ctx.fillStyle = "#65756E";
     ctx.font = `600 10px ${FONT}`;
     ctx.fillText(label, 49, y);
@@ -150,9 +159,9 @@ export async function renderPropertySummaryPng(property) {
 
   ctx.fillStyle = "#65756E";
   ctx.font = `10px ${FONT}`;
-  ctx.fillText(`產生日期：${summary.generatedAt}   ·   資料來源：CRM 物件欄位`, 36, 817);
+  ctx.fillText(`產生日期：${summary.generatedAt}   ·   資料來源：CRM 物件欄位`, 36, 825);
   ctx.textAlign = "right";
-  ctx.fillText("實際現況請以最新委託資料確認", PAGE_WIDTH - 36, 817);
+  ctx.fillText("實際現況請以最新委託資料確認", PAGE_WIDTH - 36, 825);
 
   const blob = await new Promise((resolve, reject) => {
     canvas.toBlob((value) => value ? resolve(value) : reject(new Error("系統摘要製作失敗")), "image/png");

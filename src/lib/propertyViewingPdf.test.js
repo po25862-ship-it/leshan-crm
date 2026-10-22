@@ -138,7 +138,17 @@ test("summary uses only known CRM fields and marks missing values explicitly", (
   expect(summary.basic[1]).toEqual(["格局", "未提供"]);
   expect(summary.areas[1]).toEqual(["主建物", "15.1 坪"]);
   expect(summary.location[2]).toEqual(["地址", "桃園市龜山區文化二路"]);
+  expect(summary.location[4]).toEqual(["車位編號", "未提供"]);
   expect(JSON.stringify(summary)).not.toContain("內部備註");
+});
+
+test("summary includes a saved parking space number, or an explicitly labelled legacy number", () => {
+  expect(buildPropertySummary({ parkingNumber: "B2-123、B2-124", parkingDescription: "坡道平面" }).location[4])
+    .toEqual(["車位編號", "B2-123、B2-124"]);
+  expect(buildPropertySummary({ parkingDescription: "坡道平面，車位編號：B3-45" }).location[4])
+    .toEqual(["車位編號", "B3-45"]);
+  expect(buildPropertySummary({ parkingDescription: "1個坡道平面車位" }).location[4])
+    .toEqual(["車位編號", "未提供"]);
 });
 
 test("blocks an incomplete attachment link instead of silently using a summary", async () => {
