@@ -147,6 +147,8 @@ test("summary includes a saved parking space number, or an explicitly labelled l
     .toEqual(["車位編號", "B2-123、B2-124"]);
   expect(buildPropertySummary({ parkingDescription: "坡道平面，車位編號：B3-45" }).location[4])
     .toEqual(["車位編號", "B3-45"]);
+  expect(buildPropertySummary({ parkingDescription: "1個坡道式平面車位 編號B1-5" }).location[4])
+    .toEqual(["車位編號", "B1-5"]);
   expect(buildPropertySummary({ parkingDescription: "1個坡道平面車位" }).location[4])
     .toEqual(["車位編號", "未提供"]);
 });

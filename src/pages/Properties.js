@@ -26,6 +26,7 @@ import a7Communities from "../lib/a7-communities.json";
 import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
+import { getPropertyParkingNumber } from "../lib/propertyParkingNumber";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -202,7 +203,7 @@ export default function Properties() {
   };
 
   const openEdit = (item) => {
-    setForm({ ...emptyForm, ...item, customFields: item.customFields || [] });
+    setForm({ ...emptyForm, ...item, parkingNumber: getPropertyParkingNumber(item), customFields: item.customFields || [] });
     setEditingId(item.id);
     setOriginalTotalPrice(item.totalPrice);
     setEditMode(false);
@@ -218,7 +219,7 @@ export default function Properties() {
   useEffect(() => {
     if (!showForm || !editingId || editMode) return;
     const current = items.find((item) => item.id === editingId);
-    if (current) setForm({ ...emptyForm, ...current, customFields: current.customFields || [] });
+    if (current) setForm({ ...emptyForm, ...current, parkingNumber: getPropertyParkingNumber(current), customFields: current.customFields || [] });
   }, [items, showForm, editingId, editMode]);
 
   // 支援用網址直接開啟指定物件（?open=ID），讓其他頁面（例如客需的推薦物件）可以連結過來直接看到該筆物件

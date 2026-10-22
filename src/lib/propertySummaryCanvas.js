@@ -1,3 +1,5 @@
+import { getPropertyParkingNumber } from "./propertyParkingNumber";
+
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const SCALE = 2;
@@ -11,14 +13,6 @@ function valueOrMissing(value) {
 function ping(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? `${value} 坪` : "未提供";
-}
-
-function parkingNumber(property) {
-  const entered = String(property.parkingNumber || "").trim();
-  if (entered) return entered;
-  // Older records sometimes put an explicitly labelled space number in the description.
-  const labelled = String(property.parkingDescription || "").match(/(?:車位|車格)\s*(?:編號|號碼)\s*[：:#]?\s*([^\s，,；;。]+)/);
-  return valueOrMissing(labelled?.[1]);
 }
 
 export function buildPropertySummary(property, date = new Date()) {
@@ -52,7 +46,7 @@ export function buildPropertySummary(property, date = new Date()) {
       ["商圈／區域", valueOrMissing(property.area)],
       ["地址", valueOrMissing(property.address)],
       ["負責業務", valueOrMissing(property.agentInfo)],
-      ["車位編號", parkingNumber(property)],
+      ["車位編號", valueOrMissing(getPropertyParkingNumber(property))],
     ],
   };
 }
