@@ -14,6 +14,7 @@ const { inferCommunity } = require("./community-matcher");
 const { firstSeenFields, firstMissingFields, firstOnHoldFields, shouldMarkFourStoreMissing } = require("./scan-timeline");
 const { ensureBackendSession } = require("./backend-auth");
 const roadKeyword = require("./road-keyword");
+const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = require("./floorplan-address");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -117,6 +118,8 @@ async function applyToCrm(incomingRecords, roadSummary = null) {
     const db = getFirestore(app);
     const propertySnapshot = await getDocs(collection(db, "properties"));
     const existing = propertySnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    const floorplansByAddress = indexRememberedFloorplans(existing);
+    const mappedFloorplans = (address) => floorplansByAddress.get(floorplanAddressKey(address)) || [];
     const backupPath = path.join(outputDir, `CRM同步前備份_${today}.json`);
     fs.writeFileSync(backupPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), records: jsonSafe(existing) }, null, 2)}\n`);
 
@@ -136,6 +139,8 @@ async function applyToCrm(incomingRecords, roadSummary = null) {
         const data = {
           ...incoming, ...inferredLocation,
           communityName: incoming.communityName || inferredCommunity?.name || "",
+          floorplanFiles: mappedFloorplans(incoming.address),
+          floorplanAddressFiles: mappedFloorplans(incoming.address),
           status: "active", statusChangedAt: today, missingSyncCount: 0,
           autoMissingOnHold: false, lastSeenAt: nowIso, ...firstSeenFields(null, nowIso), updatedAt: today,
           lastPriceChange: null, customFields: [], createdAt: serverTimestamp(),
@@ -152,6 +157,10 @@ async function applyToCrm(incomingRecords, roadSummary = null) {
 
       const merged = crmRecord(old, incoming);
       const updates = { ...merged, missingSyncCount: 0, lastSeenAt: nowIso, ...firstSeenFields(old, nowIso), updatedAt: today };
+      const floorplanFiles = mergeFloorplanFiles(old.floorplanFiles, mappedFloorplans(merged.address));
+      if (floorplanFiles.length > (old.floorplanFiles || []).length) updates.floorplanFiles = floorplanFiles;
+      const rememberedFloorplans = mergeFloorplanFiles(old.floorplanAddressFiles, mappedFloorplans(merged.address));
+      if (rememberedFloorplans.length > (old.floorplanAddressFiles || []).length) updates.floorplanAddressFiles = rememberedFloorplans;
       const oldPrice = old.totalPrice;
       const priceChanged = incoming.totalPrice !== null && incoming.totalPrice !== "" && String(oldPrice ?? "") !== String(incoming.totalPrice);
       if (priceChanged) {

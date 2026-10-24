@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
-import { writeBatch, doc, collection, addDoc, serverTimestamp, updateDoc, arrayUnion } from "firebase/firestore";
+import { writeBatch, doc, collection, addDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
@@ -29,6 +29,9 @@ import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
 import { getPropertyParkingNumber } from "../lib/propertyParkingNumber";
 import { validateFloorplanFiles } from "../lib/floorplanUpload";
+import floorplanAddress from "../lib/floorplanAddress";
+
+const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -100,6 +103,7 @@ const emptyForm = {
   lastPriceChange: null,
   sheetFiles: [],
   floorplanFiles: [],
+  floorplanAddressFiles: [],
   customFields: [],
 };
 
@@ -123,11 +127,76 @@ function formatScanTime(value) {
   }).format(date);
 }
 
+function FloorplanSharingPanel({ source, file, properties, busy, onApply, onClose }) {
+  const [keyword, setKeyword] = useState("");
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const search = keyword.trim().toLowerCase();
+  const matches = properties.filter((item) => item.id !== source.id && (
+    !search || [item.title, item.listingNo, item.address, item.communityName]
+      .some((value) => String(value || "").toLowerCase().includes(search))
+  ));
+  const visible = matches.slice(0, 50);
+  const sourceHasDoorplate = Boolean(floorplanAddressKey(source.address));
+
+  const toggle = (id) => setSelectedIds((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  return (
+    <div id="floorplan-sharing-panel" style={{ marginTop: 14, padding: 14, border: "1px solid var(--border)", borderRadius: 10, background: "#FAFAF8" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
+        <strong style={{ fontSize: 13 }}>套用「{file.name || "格局圖"}」到其他案件</strong>
+        <button type="button" className="btn ghost" onClick={onClose}>關閉</button>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+        {sourceHasDoorplate
+          ? `目前門牌：${source.address}。以後完整門牌相同的物件會自動顯示這張圖。`
+          : "目前物件沒有完整門牌；可套用到其他案件，但本件需補上完整地址後才能記住門牌。"}
+      </div>
+      <input
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+        placeholder="搜尋其他案件：案名、委託編號或地址"
+        aria-label="搜尋要套用格局圖的案件"
+        style={{ width: "100%", padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, boxSizing: "border-box", marginBottom: 9 }}
+      />
+      <div style={{ maxHeight: 250, overflowY: "auto", display: "grid", gap: 5 }}>
+        {visible.map((item) => (
+          <label key={item.id} style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "8px 9px", borderRadius: 7, background: "#fff", cursor: "pointer" }}>
+            <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggle(item.id)} disabled={busy} style={{ marginTop: 2 }} />
+            <span style={{ minWidth: 0, fontSize: 12, lineHeight: 1.5 }}>
+              <strong>{item.title || "未命名物件"}</strong>・{item.listingNo || "無編號"}<br />
+              <span style={{ color: "var(--muted)", overflowWrap: "anywhere" }}>{item.address || "尚無地址"}</span>
+              {!floorplanAddressKey(item.address) && <span style={{ color: "#A05B1F" }}>（只套用本件，不記住門牌）</span>}
+            </span>
+          </label>
+        ))}
+        {visible.length === 0 && <div style={{ fontSize: 12, color: "var(--muted)", padding: 8 }}>找不到其他案件</div>}
+      </div>
+      {matches.length > visible.length && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>先顯示 50 筆，請輸入案名或編號縮小範圍。</div>}
+      <div style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+        <button type="button" className="btn" disabled={busy || (selectedIds.size === 0 && !sourceHasDoorplate)} onClick={() => onApply([...selectedIds])}>
+          {busy ? "套用中…" : selectedIds.size ? `套用到 ${selectedIds.size} 個案件` : "記住此門牌"}
+        </button>
+        <span style={{ fontSize: 11, color: "var(--muted)" }}>已選 {selectedIds.size} 筆；原有格局圖不會被覆蓋</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Properties() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection("properties", "createdAt");
+  const floorplansByAddress = useMemo(() => indexRememberedFloorplans(items), [items]);
+  const withKnownFloorplans = useCallback((item) => ({
+    ...item,
+    floorplanFiles: mergeFloorplanFiles(item.floorplanFiles, floorplansByAddress.get(floorplanAddressKey(item.address))),
+  }), [floorplansByAddress]);
   const { items: linkedCases } = useCollection("cases", "createdAt");
   const { items: needs, update: updateNeed } = useNeedsCollection(user.uid);
   const [showForm, setShowForm] = useState(false);
@@ -171,6 +240,8 @@ export default function Properties() {
   const [showShare, setShowShare] = useState(false);
   const [showViewingPdf, setShowViewingPdf] = useState(false);
   const [showMobileTools, setShowMobileTools] = useState(false);
+  const [sharingFloorplanFile, setSharingFloorplanFile] = useState(null);
+  const [applyingFloorplan, setApplyingFloorplan] = useState(false);
 
   const copyUrl = async (url) => {
     try {
@@ -198,6 +269,7 @@ export default function Properties() {
   const [uploadingFloorplan, setUploadingFloorplan] = useState(false);
 
   const openNew = () => {
+    setSharingFloorplanFile(null);
     setForm(emptyForm);
     setEditingId(null);
     setOriginalTotalPrice(null);
@@ -206,7 +278,8 @@ export default function Properties() {
   };
 
   const openEdit = (item) => {
-    setForm({ ...emptyForm, ...item, parkingNumber: getPropertyParkingNumber(item), customFields: item.customFields || [] });
+    setSharingFloorplanFile(null);
+    setForm({ ...emptyForm, ...withKnownFloorplans(item), parkingNumber: getPropertyParkingNumber(item), customFields: item.customFields || [] });
     setEditingId(item.id);
     setOriginalTotalPrice(item.totalPrice);
     setEditMode(false);
@@ -222,8 +295,8 @@ export default function Properties() {
   useEffect(() => {
     if (!showForm || !editingId || editMode) return;
     const current = items.find((item) => item.id === editingId);
-    if (current) setForm({ ...emptyForm, ...current, parkingNumber: getPropertyParkingNumber(current), customFields: current.customFields || [] });
-  }, [items, showForm, editingId, editMode]);
+    if (current) setForm({ ...emptyForm, ...withKnownFloorplans(current), parkingNumber: getPropertyParkingNumber(current), customFields: current.customFields || [] });
+  }, [items, showForm, editingId, editMode, withKnownFloorplans]);
 
   // 支援用網址直接開啟指定物件（?open=ID），讓其他頁面（例如客需的推薦物件）可以連結過來直接看到該筆物件
   const [searchParams, setSearchParams] = useSearchParams();
@@ -254,7 +327,16 @@ export default function Properties() {
     e.preventDefault();
     if (!form.title.trim()) return;
 
-    const formToSave = { ...form, websiteUrl: withoutAgid(form.websiteUrl), updatedAt: todayStr() };
+    const addressKey = floorplanAddressKey(form.address);
+    const previousAddressKey = floorplanAddressKey(items.find((item) => item.id === editingId)?.address);
+    const rememberedFiles = editingId && addressKey !== previousAddressKey
+      ? floorplansByAddress.get(addressKey)
+      : mergeFloorplanFiles(form.floorplanAddressFiles, floorplansByAddress.get(addressKey));
+    const formToSave = {
+      ...withKnownFloorplans(form),
+      floorplanAddressFiles: mergeFloorplanFiles(rememberedFiles),
+      websiteUrl: withoutAgid(form.websiteUrl), updatedAt: todayStr(),
+    };
 
     if (editingId) {
       const priceChanged =
@@ -367,24 +449,108 @@ export default function Properties() {
         const url = await getDownloadURL(storageRef);
         uploadedFiles.push({ url, name: file.name, type: file.type, uploadedAt: new Date().toISOString() });
       }
-      await updateDoc(doc(db, "properties", propertyId), { floorplanFiles: arrayUnion(...uploadedFiles) });
-      const appendNewFiles = (existingFiles = []) => {
-        const existingUrls = new Set(existingFiles.map((file) => file.url));
-        return [...existingFiles, ...uploadedFiles.filter((file) => !existingUrls.has(file.url))];
-      };
+      const source = items.find((item) => item.id === propertyId) || form;
+      const rememberAddress = Boolean(floorplanAddressKey(source.address));
+      const updates = { floorplanFiles: arrayUnion(...uploadedFiles) };
+      if (rememberAddress) updates.floorplanAddressFiles = arrayUnion(...uploadedFiles);
+      const batch = writeBatch(db);
+      batch.update(doc(db, "properties", propertyId), updates);
+      await batch.commit();
       updateReadCache("collection::properties", (current) => current.map((item) => (
         item.id === propertyId
-          ? { ...item, floorplanFiles: appendNewFiles(item.floorplanFiles) }
+          ? {
+            ...item,
+            floorplanFiles: mergeFloorplanFiles(item.floorplanFiles, uploadedFiles),
+            floorplanAddressFiles: rememberAddress
+              ? mergeFloorplanFiles(item.floorplanAddressFiles, uploadedFiles)
+              : item.floorplanAddressFiles,
+          }
           : item
       )));
       setForm((current) => current.id === propertyId
-        ? { ...current, floorplanFiles: appendNewFiles(current.floorplanFiles) }
+        ? {
+          ...current,
+          floorplanFiles: mergeFloorplanFiles(current.floorplanFiles, uploadedFiles),
+          floorplanAddressFiles: rememberAddress
+            ? mergeFloorplanFiles(current.floorplanAddressFiles, uploadedFiles)
+            : current.floorplanAddressFiles,
+        }
         : current);
     } catch (error) {
       console.error("格局圖上傳失敗", error);
       alert("格局圖上傳失敗，請確認登入狀態或稍後重試。若仍失敗，請檢查 Firebase Storage 設定。");
     } finally {
       setUploadingFloorplan(false);
+    }
+  };
+
+  const applyFloorplanToProperties = async (targetIds) => {
+    const file = sharingFloorplanFile;
+    const sourceId = editingId;
+    if (!file || !sourceId || applyingFloorplan) return;
+    const source = items.find((item) => item.id === sourceId) || form;
+    const targets = targetIds.map((id) => items.find((item) => item.id === id)).filter(Boolean);
+    if (targets.length > 100) {
+      alert("一次最多套用 100 個案件，請分批操作。");
+      return;
+    }
+
+    const addressed = new Set();
+    for (const item of [source, ...targets]) {
+      const key = floorplanAddressKey(item.address);
+      if (key) addressed.add(key);
+    }
+    if (addressed.size === 0 && targets.length === 0) {
+      alert("請先補上完整門牌，或選擇要套用的其他案件。");
+      return;
+    }
+
+    setApplyingFloorplan(true);
+    try {
+      const batch = writeBatch(db);
+      const affectedIds = new Map();
+      for (const item of [source, ...targets]) {
+        const addToProperty = !(item.floorplanFiles || []).some((existing) => existing.url === file.url);
+        const rememberAddress = Boolean(floorplanAddressKey(item.address))
+          && !(item.floorplanAddressFiles || []).some((existing) => existing.url === file.url);
+        if (!addToProperty && !rememberAddress) continue;
+        const updates = {};
+        if (addToProperty) updates.floorplanFiles = arrayUnion(file);
+        if (rememberAddress) updates.floorplanAddressFiles = arrayUnion(file);
+        batch.update(doc(db, "properties", item.id), updates);
+        affectedIds.set(item.id, { addToProperty, rememberAddress });
+      }
+      if (affectedIds.size === 0) {
+        setSharingFloorplanFile(null);
+        alert("所選案件已經有這張格局圖，門牌也已記住。");
+        return;
+      }
+      await batch.commit();
+
+      updateReadCache("collection::properties", (current) => current.map((item) => {
+        const changes = affectedIds.get(item.id);
+        return changes ? {
+          ...item,
+          floorplanFiles: changes.addToProperty ? mergeFloorplanFiles(item.floorplanFiles, [file]) : item.floorplanFiles,
+          floorplanAddressFiles: changes.rememberAddress ? mergeFloorplanFiles(item.floorplanAddressFiles, [file]) : item.floorplanAddressFiles,
+        } : item;
+      }));
+      setForm((current) => current.id === sourceId
+        ? {
+          ...current,
+          floorplanFiles: mergeFloorplanFiles(current.floorplanFiles, [file]),
+          floorplanAddressFiles: floorplanAddressKey(source.address)
+            ? mergeFloorplanFiles(current.floorplanAddressFiles, [file])
+            : current.floorplanAddressFiles,
+        }
+        : current);
+      setSharingFloorplanFile(null);
+      alert(`已套用到 ${targets.length} 個其他案件；${addressed.size} 個完整門牌已記住。`);
+    } catch (error) {
+      console.error("套用格局圖失敗", error);
+      alert("格局圖未能套用到其他案件，請稍後重試。");
+    } finally {
+      setApplyingFloorplan(false);
     }
   };
 
@@ -642,9 +808,15 @@ export default function Properties() {
 
     const applyNew = (row) => {
       const newRef = doc(collection(db, "properties"));
+      const knownFloorplans = floorplansByAddress.get(floorplanAddressKey(row.address)) || [];
       ops.push({
         ref: newRef,
-        data: { ...row, status: "active", statusChangedAt: todayStr(), updatedAt: todayStr(), lastPriceChange: null, customFields: [], createdAt: new Date() },
+        data: {
+          ...row, status: "active", statusChangedAt: todayStr(), updatedAt: todayStr(),
+          lastPriceChange: null, customFields: [],
+          floorplanFiles: knownFloorplans, floorplanAddressFiles: knownFloorplans,
+          createdAt: new Date(),
+        },
         merge: false,
       });
       ops.push({
@@ -1268,17 +1440,36 @@ export default function Properties() {
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>格局圖（{(form.floorplanFiles || []).length}）</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 9 }}>
+                  {floorplanAddressKey(form.address)
+                    ? "上傳後會記住此完整門牌；也可選擇一張圖，套用到其他案件。"
+                    : "地址尚未包含完整門牌；格局圖仍可上傳，但補齊地址後才能自動配對。"}
+                </div>
                 {(form.floorplanFiles || []).length === 0 ? (
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未上傳格局圖</div>
                 ) : (
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     {(form.floorplanFiles || []).map((file, idx) => (
-                      <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", gap: 6, maxWidth: 180 }}>
-                        <img src={file.url} alt={file.name || `格局圖 ${idx + 1}`} style={{ width: 150, maxHeight: 150, objectFit: "contain", borderRadius: 6 }} />
-                        <span style={{ overflowWrap: "anywhere" }}>{file.name || `格局圖 ${idx + 1}`}</span>
-                      </a>
+                      <div key={file.url || idx} style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 180 }}>
+                        <a href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", gap: 6 }}>
+                          <img src={file.url} alt={file.name || `格局圖 ${idx + 1}`} style={{ width: 150, maxHeight: 150, objectFit: "contain", borderRadius: 6 }} />
+                          <span style={{ overflowWrap: "anywhere" }}>{file.name || `格局圖 ${idx + 1}`}</span>
+                        </a>
+                        <button type="button" className="btn ghost" onClick={() => setSharingFloorplanFile(file)} style={{ fontSize: 12 }}>套用到其他案件</button>
+                      </div>
                     ))}
                   </div>
+                )}
+                {sharingFloorplanFile && (
+                  <FloorplanSharingPanel
+                    key={sharingFloorplanFile.url}
+                    source={form}
+                    file={sharingFloorplanFile}
+                    properties={items}
+                    busy={applyingFloorplan}
+                    onApply={applyFloorplanToProperties}
+                    onClose={() => setSharingFloorplanFile(null)}
+                  />
                 )}
               </div>
             </div>
