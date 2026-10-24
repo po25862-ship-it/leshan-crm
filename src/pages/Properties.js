@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
-import { writeBatch, doc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { writeBatch, doc, collection, addDoc, serverTimestamp, updateDoc, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
+import { updateReadCache } from "../hooks/firestoreReadCache";
 import { todayStr, formatDate } from "../lib/dates";
 import { withAgid, withoutAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
@@ -27,6 +28,7 @@ import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
 import { getPropertyParkingNumber } from "../lib/propertyParkingNumber";
+import { validateFloorplanFiles } from "../lib/floorplanUpload";
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -193,6 +195,7 @@ export default function Properties() {
     });
   };
   const [uploadingSheet, setUploadingSheet] = useState(false);
+  const [uploadingFloorplan, setUploadingFloorplan] = useState(false);
 
   const openNew = () => {
     setForm(emptyForm);
@@ -341,6 +344,48 @@ export default function Properties() {
       alert("上傳失敗，請確認 Firebase Storage 是否已啟用。");
     }
     setUploadingSheet(false);
+  };
+
+  const handleFloorplanUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    const propertyId = editingId;
+    if (files.length === 0 || !propertyId || uploadingFloorplan) return;
+    const validationError = validateFloorplanFiles(files);
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
+
+    setUploadingFloorplan(true);
+    try {
+      const uploadedFiles = [];
+      for (const file of files) {
+        const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fff]/g, "_");
+        const storageRef = ref(storage, `properties/${propertyId}/floorplans/${crypto.randomUUID()}_${safeName}`);
+        await uploadBytes(storageRef, file, { contentType: file.type });
+        const url = await getDownloadURL(storageRef);
+        uploadedFiles.push({ url, name: file.name, type: file.type, uploadedAt: new Date().toISOString() });
+      }
+      await updateDoc(doc(db, "properties", propertyId), { floorplanFiles: arrayUnion(...uploadedFiles) });
+      const appendNewFiles = (existingFiles = []) => {
+        const existingUrls = new Set(existingFiles.map((file) => file.url));
+        return [...existingFiles, ...uploadedFiles.filter((file) => !existingUrls.has(file.url))];
+      };
+      updateReadCache("collection::properties", (current) => current.map((item) => (
+        item.id === propertyId
+          ? { ...item, floorplanFiles: appendNewFiles(item.floorplanFiles) }
+          : item
+      )));
+      setForm((current) => current.id === propertyId
+        ? { ...current, floorplanFiles: appendNewFiles(current.floorplanFiles) }
+        : current);
+    } catch (error) {
+      console.error("格局圖上傳失敗", error);
+      alert("格局圖上傳失敗，請確認登入狀態或稍後重試。若仍失敗，請檢查 Firebase Storage 設定。");
+    } finally {
+      setUploadingFloorplan(false);
+    }
   };
 
   const removeSheet = async (idx) => {
@@ -808,6 +853,16 @@ export default function Properties() {
 
   return (
     <main>
+      <input
+        id="property-floorplan-upload"
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp,.heic,image/jpeg,image/png,image/webp,image/heic"
+        multiple
+        onChange={handleFloorplanUpload}
+        disabled={uploadingFloorplan}
+        aria-label="選擇格局圖"
+        style={{ display: "none" }}
+      />
       <div className="top-actions properties-top-actions">
         <div className="section-title">
           物件（{hasKeyword ? filtered.length : pool.length}）
@@ -1151,6 +1206,9 @@ export default function Properties() {
                   {form.websiteUrl && form.websitePublished === true && <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟網頁</a>}
                   {form.websiteUrl && form.websitePublished === true && <button type="button" className="btn ghost" onClick={() => copyUrl(form.websiteUrl)}>複製網址</button>}
                   {form.websiteUrl && form.websitePublished !== true && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>}
+                  <label htmlFor="property-floorplan-upload" className="btn ghost" style={{ cursor: uploadingFloorplan ? "wait" : "pointer" }}>
+                    {uploadingFloorplan ? "格局圖上傳中…" : "＋ 上傳格局圖"}
+                  </label>
                   <button type="button" className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
                   <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>關閉</button>
                 </div>
@@ -1433,11 +1491,14 @@ export default function Properties() {
               )}
             </div>
 
-            {editingId && (form.floorplanFiles || []).length > 0 && (
+            {editingId && (
               <div className="form-field">
-                <label>格局圖（由樂善小幫手上傳）</label>
+                <label>格局圖</label>
+                <label htmlFor="property-floorplan-upload" className="btn ghost" style={{ cursor: uploadingFloorplan ? "wait" : "pointer", width: "fit-content", marginBottom: 10 }}>
+                  {uploadingFloorplan ? "格局圖上傳中…" : "＋ 上傳格局圖"}
+                </label>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {form.floorplanFiles.map((file, idx) => (
+                  {(form.floorplanFiles || []).map((file, idx) => (
                     <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", gap: 6, maxWidth: 180 }}>
                       <img src={file.url} alt={file.name || `格局圖 ${idx + 1}`} style={{ width: 150, maxHeight: 150, objectFit: "contain", borderRadius: 6 }} />
                       <span style={{ overflowWrap: "anywhere" }}>{file.name || `格局圖 ${idx + 1}`}</span>
