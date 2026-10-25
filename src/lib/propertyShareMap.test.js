@@ -1,4 +1,6 @@
-import { publicRoadParts, chooseRoadPosition, locateSharedProperties, mercatorPoint } from "./propertyShareMap";
+import { publicRoadParts, chooseRoadPosition, locateSharedProperties, mercatorPoint,
+  getManualSharePoint, saveManualSharePoint, clearManualSharePoint } from "./propertyShareMap";
+import { getShareMapLayout, pointFromShareMapClick } from "./renderPropertyShareMap";
 
 test("分享地圖只使用公開路段，不把門牌傳給定位服務", () => {
   expect(publicRoadParts("桃園市龜山區文青路12號8樓")).toEqual({
@@ -84,4 +86,29 @@ test("定位服務故障不再被誤認為地址缺漏，也不快取失敗結�
   } finally {
     global.fetch = previousFetch;
   }
+});
+
+test("物件價格會交給圖片製作，手動位置在同一瀏覽器記住但地址變更時失效", async () => {
+  localStorage.clear();
+  const property = { id: "test-property", title: "九揚天下", totalPrice: 1368, address: "桃園市龜山區文化二路" };
+  const adjusted = { lat: 25.058, lng: 121.362 };
+  expect(saveManualSharePoint(property, adjusted)).toBe(true);
+  expect(getManualSharePoint(property)).toEqual(adjusted);
+  const result = await locateSharedProperties([property]);
+  expect(result[0]).toMatchObject({ price: 1368, point: adjusted, manual: true });
+  expect(getManualSharePoint({ ...property, address: "桃園市龜山區文三三街" })).toBeNull();
+  clearManualSharePoint(property);
+  expect(getManualSharePoint(property)).toBeNull();
+});
+
+test("點擊地圖時能把圖片座標換回地理位置，點到案名欄不移動標記", () => {
+  const location = { point: { lat: 25.0605444, lng: 121.364725 } };
+  const layout = getShareMapLayout([location]);
+  const projected = mercatorPoint(location.point.lat, location.point.lng, layout.viewport.zoom);
+  const x = layout.mapX + projected.x - layout.viewport.left;
+  const y = layout.mapY + projected.y - layout.viewport.top;
+  const clicked = pointFromShareMapClick(layout, x, y);
+  expect(clicked.lat).toBeCloseTo(location.point.lat, 6);
+  expect(clicked.lng).toBeCloseTo(location.point.lng, 6);
+  expect(pointFromShareMapClick(layout, 900, y)).toBeNull();
 });

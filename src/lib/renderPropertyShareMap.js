@@ -35,6 +35,30 @@ function chooseViewport(locations, mapHeight) {
   throw new Error("無法計算地圖範圍");
 }
 
+export function getShareMapLayout(locations) {
+  const height = Math.max(850, 180 + locations.length * 93);
+  const mapHeight = height - 180;
+  return {
+    width: WIDTH, height, mapX: MAP_X, mapY: MAP_Y,
+    mapWidth: MAP_WIDTH, mapHeight,
+    viewport: chooseViewport(locations, mapHeight),
+  };
+}
+
+export function pointFromShareMapClick(layout, x, y) {
+  if (x < layout.mapX || x > layout.mapX + layout.mapWidth
+    || y < layout.mapY || y > layout.mapY + layout.mapHeight) return null;
+  const { zoom, left, top } = layout.viewport;
+  const scale = 256 * 2 ** zoom;
+  const worldX = left + x - layout.mapX;
+  const worldY = top + y - layout.mapY;
+  const point = {
+    lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * worldY / scale))) * 180 / Math.PI,
+    lng: worldX / scale * 360 - 180,
+  };
+  return point.lat > 21 && point.lat < 26 && point.lng > 119 && point.lng < 123 ? point : null;
+}
+
 function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   let remaining = String(text || "");
   let line = 0;
@@ -49,9 +73,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
 }
 
 export async function renderPropertyShareMap(locations) {
-  const height = Math.max(850, 180 + locations.length * 73);
-  const mapHeight = height - 180;
-  const viewport = chooseViewport(locations, mapHeight);
+  const { height, mapHeight, viewport } = getShareMapLayout(locations);
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = height;
@@ -134,7 +156,7 @@ export async function renderPropertyShareMap(locations) {
   ctx.strokeStyle = "#D8E4DC";
   ctx.strokeRect(810, MAP_Y, 360, mapHeight);
   locations.forEach((item, index) => {
-    const y = MAP_Y + 31 + index * 73;
+    const y = MAP_Y + 34 + index * 93;
     ctx.beginPath();
     ctx.arc(839, y, 18, 0, Math.PI * 2);
     ctx.fillStyle = item.point ? "#DE5B1E" : "#A7AAA6";
@@ -148,15 +170,20 @@ export async function renderPropertyShareMap(locations) {
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = "#182D24";
     ctx.font = "bold 16px 'Noto Sans TC', sans-serif";
-    wrapText(ctx, item.title, 867, y - 7, 280, 20);
+    wrapText(ctx, item.title, 867, y - 14, 280, 20);
+    ctx.fillStyle = "#B64917";
+    ctx.font = "bold 16px 'Noto Sans TC', sans-serif";
+    const price = item.price === "" || item.price === null || item.price === undefined
+      ? "價格未提供" : `總價 ${item.price} 萬`;
+    ctx.fillText(price, 867, y + 29);
     ctx.fillStyle = item.point ? "#66776C" : "#A0473D";
     ctx.font = "12px 'Noto Sans TC', sans-serif";
-    wrapText(ctx, item.point ? item.road : "位置待確認・地圖未標記", 867, y + 32, 280, 14, 1);
+    wrapText(ctx, item.point ? item.road : "位置待確認・地圖未標記", 867, y + 49, 280, 14, 1);
     if (index < locations.length - 1) {
       ctx.strokeStyle = "#E7ECE8";
       ctx.beginPath();
-      ctx.moveTo(825, y + 40);
-      ctx.lineTo(1154, y + 40);
+      ctx.moveTo(825, y + 61);
+      ctx.lineTo(1154, y + 61);
       ctx.stroke();
     }
   });

@@ -1,6 +1,7 @@
 import { truncateAddress } from "./address";
 
 const CACHE_KEY = "leshan-property-share-road-positions-v1";
+const MANUAL_KEY = "leshan-property-share-manual-positions-v1";
 const DAY = 24 * 60 * 60 * 1000;
 // Verified public-road reference points. Keep these district-specific: the same
 // street name can exist elsewhere in Taoyuan, and a road point is not a doorplate.
@@ -45,6 +46,42 @@ function loadCache() {
 function saveCache(cache) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); }
   catch { /* Private browsing may disable storage; the map can still be made. */ }
+}
+
+function validPoint(point) {
+  return Number.isFinite(point?.lat) && Number.isFinite(point?.lng)
+    && point.lat > 21 && point.lat < 26 && point.lng > 119 && point.lng < 123;
+}
+
+function manualPositions() {
+  try { return JSON.parse(localStorage.getItem(MANUAL_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+export function getManualSharePoint(property) {
+  if (!property?.id) return null;
+  const saved = manualPositions()[property.id];
+  return saved?.address === String(property.address || "").trim() && validPoint(saved.point)
+    ? saved.point : null;
+}
+
+export function saveManualSharePoint(property, point) {
+  if (!property?.id || !validPoint(point)) return false;
+  try {
+    const saved = manualPositions();
+    saved[property.id] = { address: String(property.address || "").trim(), point };
+    localStorage.setItem(MANUAL_KEY, JSON.stringify(saved));
+    return true;
+  } catch { return false; }
+}
+
+export function clearManualSharePoint(property) {
+  if (!property?.id) return;
+  try {
+    const saved = manualPositions();
+    delete saved[property.id];
+    localStorage.setItem(MANUAL_KEY, JSON.stringify(saved));
+  } catch { /* The current image can still be used without storage. */ }
 }
 
 function queuedGeocode(parts) {
@@ -94,11 +131,14 @@ export async function locateSharedProperties(properties, onProgress = () => {}) 
 
   const locations = properties.map((property, index) => {
     const parts = partsList[index];
+    const manualPoint = getManualSharePoint(property);
     return {
       number: index + 1,
       title: property.title || "未命名物件",
+      price: property.totalPrice,
       road: parts?.publicAddress || "地址待確認",
-      point: parts ? known.get(parts.publicAddress) || null : null,
+      point: manualPoint || (parts ? known.get(parts.publicAddress) || null : null),
+      manual: Boolean(manualPoint),
     };
   });
   if (unique.length > 0 && locations.every((item) => !item.point) && serviceFailed) {
