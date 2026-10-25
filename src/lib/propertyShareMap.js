@@ -2,6 +2,12 @@ import { truncateAddress } from "./address";
 
 const CACHE_KEY = "leshan-property-share-road-positions-v1";
 const DAY = 24 * 60 * 60 * 1000;
+// Verified public-road reference points. Keep these district-specific: the same
+// street name can exist elsewhere in Taoyuan, and a road point is not a doorplate.
+const ROAD_FALLBACKS = {
+  "桃園市龜山區文化二路": { lat: 25.0605444, lng: 121.364725 },
+  "桃園市龜山區文三三街": { lat: 25.0566579, lng: 121.3591297 },
+};
 let lastGeocodeRequestAt = 0;
 let geocodeQueue = Promise.resolve();
 
@@ -60,6 +66,7 @@ function queuedGeocode(parts) {
 export async function locateSharedProperties(properties, onProgress = () => {}) {
   const cache = loadCache();
   const known = new Map();
+  let serviceFailed = false;
   const partsList = properties.map((property) => publicRoadParts(property.address));
   const unique = [...new Map(partsList.filter(Boolean).map((parts) => [parts.publicAddress, parts])).values()];
 
@@ -67,22 +74,25 @@ export async function locateSharedProperties(properties, onProgress = () => {}) 
     const parts = unique[index];
     onProgress(`正在定位路段 ${index + 1}/${unique.length}…`);
     const cached = cache[parts.publicAddress];
-    let point;
-    if (cached && cached.expiresAt > Date.now()) {
+    let point = ROAD_FALLBACKS[parts.publicAddress] || null;
+    if (!point && cached?.point && cached.expiresAt > Date.now()) {
       point = cached.point;
-    } else {
+    } else if (!point) {
       try {
         point = await queuedGeocode(parts);
-        cache[parts.publicAddress] = { point, expiresAt: Date.now() + (point ? 90 * DAY : 60 * 60 * 1000) };
-        saveCache(cache);
+        if (point) {
+          cache[parts.publicAddress] = { point, expiresAt: Date.now() + 90 * DAY };
+          saveCache(cache);
+        }
       } catch {
+        serviceFailed = true;
         point = null;
       }
     }
     known.set(parts.publicAddress, point);
   }
 
-  return properties.map((property, index) => {
+  const locations = properties.map((property, index) => {
     const parts = partsList[index];
     return {
       number: index + 1,
@@ -91,6 +101,10 @@ export async function locateSharedProperties(properties, onProgress = () => {}) 
       point: parts ? known.get(parts.publicAddress) || null : null,
     };
   });
+  if (unique.length > 0 && locations.every((item) => !item.point) && serviceFailed) {
+    throw new Error("定位服務暫時無法連線，路段地址仍在；請稍後按「重試製作位置圖」。");
+  }
+  return locations;
 }
 
 export function mercatorPoint(lat, lng, zoom) {
