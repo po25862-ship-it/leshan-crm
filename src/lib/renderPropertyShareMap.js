@@ -1,5 +1,6 @@
 import { mercatorPoint } from "./propertyShareMap";
 import { getShareMapLayout, SHARE_MAP_ROW_HEIGHT } from "./shareMapLayout";
+import { getMapBackgroundStyle } from "./shareMapStyles";
 
 const TILE_SIZE = 256;
 const tileCache = new Map();
@@ -23,7 +24,7 @@ function loadTile(zoom, x, y) {
   return request;
 }
 
-async function drawMapTiles(ctx, section) {
+async function drawMapTiles(ctx, section, mapStyle) {
   const { zoom, left, top } = section.viewport;
   const worldTiles = 2 ** zoom;
   const requests = [];
@@ -41,11 +42,13 @@ async function drawMapTiles(ctx, section) {
   ctx.clip();
   ctx.fillStyle = "#E9EFEB";
   ctx.fillRect(section.mapX, section.mapY, section.mapWidth, section.mapHeight);
+  ctx.filter = getMapBackgroundStyle(mapStyle).filter;
   for (const tile of tiles) {
     ctx.drawImage(tile.image,
       section.mapX + tile.x * TILE_SIZE - left,
       section.mapY + tile.y * TILE_SIZE - top);
   }
+  ctx.filter = "none";
 
   ctx.fillStyle = "rgba(255,255,255,.95)";
   ctx.fillRect(section.mapX + 13, section.mapY + 13, 326, 39);
@@ -140,7 +143,7 @@ function drawSectionList(ctx, section) {
   });
 }
 
-export async function renderPropertyShareMap(locations, viewportOverrides = {}) {
+export async function renderPropertyShareMap(locations, viewportOverrides = {}, mapStyle = "standard") {
   const layout = getShareMapLayout(locations, viewportOverrides);
   const canvas = document.createElement("canvas");
   canvas.width = layout.width;
@@ -167,7 +170,7 @@ export async function renderPropertyShareMap(locations, viewportOverrides = {}) 
     ctx.textAlign = "right";
     ctx.fillText(`${section.items.length} 間物件`, section.mapX + section.mapWidth - 14, section.titleY + 37);
     ctx.textAlign = "start";
-    await drawMapTiles(ctx, section);
+    await drawMapTiles(ctx, section, mapStyle);
     drawSectionList(ctx, section);
   }
 

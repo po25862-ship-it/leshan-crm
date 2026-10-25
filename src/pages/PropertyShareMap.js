@@ -4,6 +4,14 @@ import { clearManualSharePoint, locateSharedProperties, saveManualSharePoint } f
 import { getShareMapLayout, panShareMapViewport, pointFromShareMapClick,
   shareMapSectionAt, zoomShareMapViewport } from "../lib/shareMapLayout";
 import { renderPropertyShareMap } from "../lib/renderPropertyShareMap";
+import { getMapBackgroundStyle, MAP_BACKGROUND_STYLES } from "../lib/shareMapStyles";
+
+const STYLE_STORAGE_KEY = "leshan-property-share-map-style-v1";
+
+function savedMapStyle() {
+  try { return getMapBackgroundStyle(localStorage.getItem(STYLE_STORAGE_KEY)).id; }
+  catch { return "standard"; }
+}
 
 export default function PropertyShareMap({ properties }) {
   const [busy, setBusy] = useState(false);
@@ -16,6 +24,7 @@ export default function PropertyShareMap({ properties }) {
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [activeSectionKey, setActiveSectionKey] = useState("section-0");
+  const [mapStyle, setMapStyle] = useState(savedMapStyle);
   const pointerStart = useRef(null);
 
   const showImage = useCallback((blob, nextLocations, viewports) => {
@@ -33,7 +42,7 @@ export default function PropertyShareMap({ properties }) {
     try {
       const locations = await locateSharedProperties(properties, setProgress);
       setProgress("正在繪製地圖與物件編號…");
-      const blob = await renderPropertyShareMap(locations);
+      const blob = await renderPropertyShareMap(locations, {}, mapStyle);
       showImage(blob, locations, {});
       setActiveSectionKey("section-0");
     } catch (err) {
@@ -43,7 +52,7 @@ export default function PropertyShareMap({ properties }) {
       setBusy(false);
       setProgress("");
     }
-  }, [properties, busy, showImage]);
+  }, [properties, busy, showImage, mapStyle]);
 
   useEffect(() => {
     generate();
@@ -78,7 +87,7 @@ export default function PropertyShareMap({ properties }) {
     setError("");
     setProgress("正在更新圖片位置…");
     try {
-      const blob = await renderPropertyShareMap(nextLocations);
+      const blob = await renderPropertyShareMap(nextLocations, {}, mapStyle);
       showImage(blob, nextLocations, {});
       setActiveSectionKey("section-0");
       const saved = saveManualSharePoint(properties[adjustingNumber - 1], point);
@@ -99,7 +108,7 @@ export default function PropertyShareMap({ properties }) {
     setError("");
     setProgress("正在移動地圖…");
     try {
-      const blob = await renderPropertyShareMap(locations, nextViewports);
+      const blob = await renderPropertyShareMap(locations, nextViewports, mapStyle);
       showImage(blob, locations, nextViewports);
     } catch (err) {
       setError(err.message || "地圖移動失敗，請稍後重試。");
@@ -111,6 +120,24 @@ export default function PropertyShareMap({ properties }) {
 
   const changeViewport = (sectionKey, nextViewport) => {
     if (nextViewport) renderViewports({ ...image.viewports, [sectionKey]: nextViewport });
+  };
+
+  const chooseMapStyle = async (nextStyle) => {
+    if (busy || !image || nextStyle === mapStyle) return;
+    setBusy(true);
+    setError("");
+    setProgress("正在更換地圖底圖…");
+    try {
+      const blob = await renderPropertyShareMap(locations, image.viewports, nextStyle);
+      showImage(blob, locations, image.viewports);
+      setMapStyle(nextStyle);
+      try { localStorage.setItem(STYLE_STORAGE_KEY, nextStyle); } catch { /* Preference is optional. */ }
+    } catch (err) {
+      setError(err.message || "底圖切換失敗，請稍後重試。");
+    } finally {
+      setBusy(false);
+      setProgress("");
+    }
   };
 
   const imageCoordinates = (event) => {
@@ -173,6 +200,19 @@ export default function PropertyShareMap({ properties }) {
       {error && <div className="property-share-map-error" role="alert">{error}</div>}
       {notice && <div className="property-share-map-loading" role="status">{notice}</div>}
       {image && <>
+        <div className="property-share-map-styles" role="group" aria-label="選擇地圖底圖風格">
+          <span className="property-share-map-styles-title">背景底圖</span>
+          <div className="property-share-map-style-options">
+            {MAP_BACKGROUND_STYLES.map((style) => <button key={style.id} type="button"
+              className={`property-share-map-style${mapStyle === style.id ? " is-selected" : ""}`}
+              aria-pressed={mapStyle === style.id} disabled={busy}
+              onClick={() => chooseMapStyle(style.id)}>
+              <span className={`property-share-map-style-swatch is-${style.swatch}`} aria-hidden="true" />
+              <span>{style.label}</span>
+            </button>)}
+          </div>
+          <small>只更換地圖底色；物件編號、案名與總價不變。</small>
+        </div>
         <div className={`property-share-map-picker${dragging ? " is-dragging" : ""}`}
           onPointerDown={onMapPointerDown} onPointerMove={onMapPointerMove}
           onPointerUp={onMapPointerUp} onPointerCancel={() => { pointerStart.current = null; setDragging(false); }}>
@@ -207,7 +247,7 @@ export default function PropertyShareMap({ properties }) {
           </div>
         )}
         <div className="property-share-map-actions">
-          <a className="btn" href={image.url} download={`物件位置圖_${todayStr()}_${properties.length}間.png`}>下載圖片</a>
+          <a className="btn" href={image.url} download={`物件位置圖_${getMapBackgroundStyle(mapStyle).label}_${todayStr()}_${properties.length}間.png`}>下載圖片</a>
           {typeof ClipboardItem !== "undefined" && <button type="button" className="btn ghost" onClick={copyImage}>{copied ? "已複製圖片" : "複製圖片"}</button>}
           <button type="button" className="btn ghost" onClick={generate} disabled={busy}>重新製作</button>
         </div>
