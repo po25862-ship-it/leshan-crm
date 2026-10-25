@@ -171,6 +171,7 @@ main{padding:32px 32px 72px;max-width:1440px;margin:0 auto;}
 .property-share-map-style-swatch.is-bright{background:linear-gradient(135deg,transparent 43%,#fff 44%,#fff 54%,transparent 55%),linear-gradient(25deg,transparent 39%,#FFF4D4 40%,#FFF4D4 50%,transparent 51%),#AAD8AE;}
 .property-share-map-style-swatch.is-liberty{background:linear-gradient(135deg,transparent 43%,#FAFAF3 44%,#FAFAF3 54%,transparent 55%),linear-gradient(25deg,transparent 39%,#ECE1BD 40%,#ECE1BD 50%,transparent 51%),#D8E0CF;}
 .property-share-map-style-swatch.is-dark{background:linear-gradient(135deg,transparent 43%,#657986 44%,#657986 54%,transparent 55%),linear-gradient(25deg,transparent 39%,#3D6571 40%,#3D6571 50%,transparent 51%),#27343D;}
+.property-share-map-style-swatch.is-pen{background:repeating-linear-gradient(140deg,transparent 0 5px,#595951 5px 6px,transparent 6px 13px),linear-gradient(42deg,transparent 38%,#fffdf5 39%,#fffdf5 48%,#45453d 49%,#45453d 51%,#fffdf5 52%,#fffdf5 59%,transparent 60%),#fffdf5;}
 .property-share-map-styles small{margin:8px 0 0;}
 .property-share-map-picker img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-sm);user-select:none;-webkit-user-drag:none;}
 .property-share-map-picker{width:100%;cursor:grab;touch-action:none;}

@@ -9,7 +9,7 @@ function centerFromViewport(section) {
     Math.atan(Math.sinh(Math.PI * (1 - 2 * y / scale))) * 180 / Math.PI];
 }
 
-export async function drawOpenFreeMapSnapshot(ctx, section, styleUrl) {
+export async function drawOpenFreeMapSnapshot(ctx, section, styleUrl, mapStyle) {
   const { Map, setWorkerUrl } = await import("maplibre-gl");
   // CRA cannot reliably resolve MapLibre's import.meta worker URL after bundling.
   // Serve the matching module worker from our own origin instead.
@@ -34,12 +34,20 @@ export async function drawOpenFreeMapSnapshot(ctx, section, styleUrl) {
       renderWorldCopies: false,
       canvasContextAttributes: { preserveDrawingBuffer: true },
     });
+    if (mapStyle === "pen") {
+      const { applyPenSketchMapStyle } = await import("./penSketchMapStyle");
+      map.once("load", () => applyPenSketchMapStyle(map));
+    }
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("新版地圖載入逾時，請改選原始街道或稍後重試。")), 20000);
       map.once("idle", () => { clearTimeout(timer); resolve(); });
       map.resize();
     });
     ctx.drawImage(map.getCanvas(), section.mapX, section.mapY, section.mapWidth, section.mapHeight);
+    if (mapStyle === "pen") {
+      const { drawPenSketchDetails } = await import("./penSketchMapStyle");
+      drawPenSketchDetails(ctx, map, section);
+    }
   } finally {
     map?.remove();
     host.remove();

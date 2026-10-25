@@ -35,7 +35,7 @@ async function drawMapTiles(ctx, section, mapStyle) {
   ctx.fillRect(section.mapX, section.mapY, section.mapWidth, section.mapHeight);
   if (style.styleUrl) {
     const { drawOpenFreeMapSnapshot } = await import("./openFreeMapSnapshot");
-    await drawOpenFreeMapSnapshot(ctx, section, style.styleUrl);
+    await drawOpenFreeMapSnapshot(ctx, section, style.styleUrl, mapStyle);
   } else {
     const worldTiles = 2 ** zoom;
     const requests = [];
