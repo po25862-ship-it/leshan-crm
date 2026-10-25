@@ -8,6 +8,7 @@ import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { openLinePersonalTool } from "../lib/linePersonal";
 import BuyerRecipientPicker from "./BuyerRecipientPicker";
+import PropertyShareMap from "./PropertyShareMap";
 
 // defaultBuyerId（選填）：從客需的「推薦物件」開啟分享時，該客需本來就綁定買方，
 // 直接預選起來，不用再選一次；其他呼叫端（例如物件列表的多選分享）不傳就跟原本一樣要自己選。
@@ -23,7 +24,7 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const recipientId = selectedBuyerId !== undefined ? selectedBuyerId : buyerId;
   const [logging, setLogging] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [includeMaps, setIncludeMaps] = useState(true);
+  const [includeMaps, setIncludeMaps] = useState(false);
 
   // 開頭文字或選取的物件變動時，重新產生預覽文字（產生後你還是可以自己再手動調整）
   useEffect(() => {
@@ -76,10 +77,13 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   };
 
   return (
-    <div className="panel" style={{ marginBottom: 24, maxWidth: 640 }}>
+    <div className="panel property-share-panel" style={{ marginBottom: 24 }}>
       <div className="section-title" style={{ fontSize: 15 }}>
         分享物件（已選 {properties.length} 筆）
       </div>
+
+      <div className="property-share-grid">
+      <div className="property-share-main">
 
       {!agid && (
         <div style={{ background: "var(--danger-soft)", color: "var(--danger)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 12, lineHeight: 1.6 }}>
@@ -94,10 +98,10 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
 
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 13, cursor: "pointer" }}>
         <input type="checkbox" checked={includeMaps} onChange={(e) => setIncludeMaps(e.target.checked)} />
-        每間物件附上位置地圖連結
+        文字另外附上地圖連結（選填）
       </label>
       {includeMaps && <p style={{ margin: "0 0 14px", color: "var(--muted)", fontSize: 12, lineHeight: 1.6 }}>
-        LINE 文字訊息無法直接嵌入地圖圖片；客人點連結即可查看。地圖只搜尋公開路段，非精確門牌，請確認實際位置。
+        分享文字會另外附上每間的路段連結；位置圖可下載成圖片，直接傳給客人。
       </p>}
 
       <div className="form-field">
@@ -131,6 +135,9 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
         <button className="btn ghost" onClick={onLogToBuyer} disabled={logging || !recipientId}>
           {logging ? "記錄中…" : "記錄到互動紀錄"}
         </button>
+      </div>
+      </div>
+      <PropertyShareMap key={properties.map((property) => property.id).join("|")} properties={properties} />
       </div>
     </div>
   );
