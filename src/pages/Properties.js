@@ -1121,7 +1121,7 @@ export default function Properties() {
 
       {showShare && (
         <PropertyShare
-          properties={items.filter((p) => selectedIds.has(p.id))}
+          properties={selectedProperties}
           onClose={() => setShowShare(false)}
         />
       )}

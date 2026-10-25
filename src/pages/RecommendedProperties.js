@@ -100,7 +100,7 @@ export default function RecommendedProperties({ value, onChange, need }) {
         {activeRecommendations.length > 0 && <button type="button" className={selectionMode ? "btn" : "btn ghost"} onClick={() => { setSelectionMode((current) => !current); setSelectedIds(new Set()); setShowShare(false); }}>{selectionMode ? "結束勾選" : "勾選傳送"}</button>}
       </div>
       {selectedIds.size > 0 && <div className="share-selection-bar"><strong>已選 {selectedIds.size} 筆</strong><button type="button" className="btn" onClick={() => setShowShare(true)}>分享給客人</button><button type="button" className="btn ghost" onClick={() => setSelectedIds(new Set())}>清除</button></div>}
-      {showShare && <PropertyShare properties={recommended.map((item) => propertyMap[item.propertyId]).filter((property) => property && selectedIds.has(property.id))} onClose={() => setShowShare(false)} defaultBuyerId={need?.contactId || ""} />}
+      {showShare && <PropertyShare properties={Array.from(selectedIds, (id) => propertyMap[id]).filter(Boolean)} onClose={() => setShowShare(false)} defaultBuyerId={need?.contactId || ""} />}
       <div className="property-match-grid recommended-grid">
         {activeRecommendations.map((item) => {
           const property = propertyMap[item.propertyId];

@@ -3,8 +3,7 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
-import { withAgid } from "../lib/url";
-import { truncateAddress } from "../lib/address";
+import { buildPropertyShareText } from "../lib/propertyShareText";
 import { todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
@@ -23,27 +22,12 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const [buyerId, setBuyerId] = useState(defaultBuyerId);
   const [logging, setLogging] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  const buildText = (introText) =>
-    [
-      introText,
-      "",
-      ...properties.flatMap((p) => {
-        const line1 = [p.title, p.communityName, p.area, truncateAddress(p.address), p.totalPrice ? `${p.totalPrice}萬` : ""]
-          .filter(Boolean)
-          .join("・");
-        const line2 = p.websiteUrl ? withAgid(p.websiteUrl, agid) : "";
-        return [line1, line2, ""];
-      }),
-    ]
-      .join("\n")
-      .trim();
+  const [includeMaps, setIncludeMaps] = useState(true);
 
   // 開頭文字或選取的物件變動時，重新產生預覽文字（產生後你還是可以自己再手動調整）
   useEffect(() => {
-    setPreviewText(buildText(intro));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intro, properties, agid]);
+    setPreviewText(buildPropertyShareText(properties, intro, agid, includeMaps));
+  }, [intro, properties, agid, includeMaps]);
 
   const onCopy = async () => {
     try {
@@ -107,10 +91,18 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
         <textarea rows="2" value={intro} onChange={(e) => setIntro(e.target.value)} />
       </div>
 
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 13, cursor: "pointer" }}>
+        <input type="checkbox" checked={includeMaps} onChange={(e) => setIncludeMaps(e.target.checked)} />
+        每間物件附上位置地圖連結
+      </label>
+      {includeMaps && <p style={{ margin: "0 0 14px", color: "var(--muted)", fontSize: 12, lineHeight: 1.6 }}>
+        LINE 文字訊息無法直接嵌入地圖圖片；客人點連結即可查看。地圖只搜尋公開路段，非精確門牌，請確認實際位置。
+      </p>}
+
       <div className="form-field">
         <label>預覽（可以自己再修改，複製/記錄都是用這裡的內容）</label>
         <textarea
-          rows={Math.min(14, 4 + properties.length * 2)}
+          rows={Math.min(18, 4 + properties.length * (includeMaps ? 3 : 2))}
           value={previewText}
           onChange={(e) => setPreviewText(e.target.value)}
           style={{ fontFamily: "inherit", background: "#FAFAF8" }}
