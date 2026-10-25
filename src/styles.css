@@ -159,9 +159,11 @@ main{padding:32px 32px 72px;max-width:1440px;margin:0 auto;}
 .property-share-map{min-width:0;padding:16px;border:1px solid var(--border);border-radius:12px;background:#F7FAF7;}
 .property-share-map h3{margin:0 0 5px;font-size:16px;color:var(--ink);}
 .property-share-map p,.property-share-map small{display:block;margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.55;}
-.property-share-map a>img,.property-share-map-picker img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-sm);}
-.property-share-map-picker{display:block;width:100%;padding:0;border:0;background:none;cursor:crosshair;text-align:left;}
-.property-share-map-picker:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:8px;}
+.property-share-map-picker img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-sm);user-select:none;-webkit-user-drag:none;}
+.property-share-map-picker{width:100%;cursor:grab;touch-action:none;}
+.property-share-map-picker.is-dragging{cursor:grabbing;}
+.property-share-map-navigation{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px;}
+.property-share-map-navigation a{text-decoration:none;}
 .property-share-map-edit{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:9px;background:#fff;}
 .property-share-map-edit label{display:grid;gap:6px;color:var(--ink);font-size:12px;font-weight:700;}
 .property-share-map-edit select{width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:8px;background:#fff;color:var(--ink);font:inherit;}

@@ -1,6 +1,7 @@
 import { publicRoadParts, chooseRoadPosition, locateSharedProperties, mercatorPoint,
   getManualSharePoint, saveManualSharePoint, clearManualSharePoint } from "./propertyShareMap";
-import { getShareMapLayout, pointFromShareMapClick } from "./renderPropertyShareMap";
+import { getShareMapLayout, panShareMapViewport, pointFromShareMapClick,
+  zoomShareMapViewport } from "./renderPropertyShareMap";
 
 test("分享地圖只使用公開路段，不把門牌傳給定位服務", () => {
   expect(publicRoadParts("桃園市龜山區文青路12號8樓")).toEqual({
@@ -33,14 +34,14 @@ test("同一路段只查一次，定位查詢不包含客戶不需看到的門�
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ features: [{
-      properties: { name: "文青路", city: "桃園市", countrycode: "TW" },
+      properties: { name: "文興路", city: "桃園市", countrycode: "TW" },
       geometry: { coordinates: [121.39, 25.04] },
     }] }),
   });
   try {
     const result = await locateSharedProperties([
-      { title: "第一間", address: "桃園市龜山區文青路12號8樓" },
-      { title: "第二間", address: "桃園市龜山區文青路50號4樓" },
+      { title: "第一間", address: "桃園市龜山區文興路12號8樓" },
+      { title: "第二間", address: "桃園市龜山區文興路50號4樓" },
     ]);
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch.mock.calls[0][0]).not.toContain("12%E8%99%9F");
@@ -68,6 +69,22 @@ test("截圖中的龜山兩條路在定位服務故障或舊的空快取時仍�
       { lat: 25.0605444, lng: 121.364725 },
       { lat: 25.0566579, lng: 121.3591297 },
     ]);
+    expect(global.fetch).not.toHaveBeenCalled();
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
+
+test("只選 A7 常用路段的物件也能離線產生參考位置", async () => {
+  localStorage.clear();
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn().mockRejectedValue(new Error("network unavailable"));
+  try {
+    const result = await locateSharedProperties([
+      { title: "A7 物件", address: "桃園市龜山區文青路200號" },
+      { title: "A7 物件二", address: "桃園市龜山區樂善二路100號" },
+    ]);
+    expect(result.every((item) => item.point)).toBe(true);
     expect(global.fetch).not.toHaveBeenCalled();
   } finally {
     global.fetch = previousFetch;
@@ -111,4 +128,18 @@ test("點擊地圖時能把圖片座標換回地理位置，點到案名欄不�
   expect(clicked.lat).toBeCloseTo(location.point.lat, 6);
   expect(clicked.lng).toBeCloseTo(location.point.lng, 6);
   expect(pointFromShareMapClick(layout, 900, y)).toBeNull();
+});
+
+test("拖曳地圖會平移範圍，放大縮小保持畫面中心位置", () => {
+  const location = { point: { lat: 25.0605444, lng: 121.364725 } };
+  const layout = getShareMapLayout([location]);
+  const panned = panShareMapViewport(layout, 100, -50);
+  expect(panned.left).toBeCloseTo(layout.viewport.left - 100);
+  expect(panned.top).toBeCloseTo(layout.viewport.top + 50);
+  const centerX = layout.mapX + layout.mapWidth / 2;
+  const centerY = layout.mapY + layout.mapHeight / 2;
+  const before = pointFromShareMapClick(layout, centerX, centerY);
+  const after = pointFromShareMapClick(getShareMapLayout([location], zoomShareMapViewport(layout, -1)), centerX, centerY);
+  expect(after.lat).toBeCloseTo(before.lat, 6);
+  expect(after.lng).toBeCloseTo(before.lng, 6);
 });

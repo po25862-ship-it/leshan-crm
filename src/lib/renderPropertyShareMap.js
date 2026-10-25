@@ -35,14 +35,42 @@ function chooseViewport(locations, mapHeight) {
   throw new Error("無法計算地圖範圍");
 }
 
-export function getShareMapLayout(locations) {
+export function getShareMapLayout(locations, viewportOverride = null) {
   const height = Math.max(850, 180 + locations.length * 93);
   const mapHeight = height - 180;
   return {
     width: WIDTH, height, mapX: MAP_X, mapY: MAP_Y,
     mapWidth: MAP_WIDTH, mapHeight,
-    viewport: chooseViewport(locations, mapHeight),
+    viewport: viewportOverride || chooseViewport(locations, mapHeight),
   };
+}
+
+function clampViewport(layout, viewport) {
+  const worldSize = 256 * 2 ** viewport.zoom;
+  return {
+    ...viewport,
+    left: Math.min(Math.max(0, viewport.left), worldSize - layout.mapWidth),
+    top: Math.min(Math.max(0, viewport.top), worldSize - layout.mapHeight),
+  };
+}
+
+export function panShareMapViewport(layout, dx, dy) {
+  return clampViewport(layout, {
+    ...layout.viewport,
+    left: layout.viewport.left - dx,
+    top: layout.viewport.top - dy,
+  });
+}
+
+export function zoomShareMapViewport(layout, change) {
+  const old = layout.viewport;
+  const zoom = Math.min(18, Math.max(5, old.zoom + change));
+  const factor = 2 ** (zoom - old.zoom);
+  return clampViewport(layout, {
+    zoom,
+    left: (old.left + layout.mapWidth / 2) * factor - layout.mapWidth / 2,
+    top: (old.top + layout.mapHeight / 2) * factor - layout.mapHeight / 2,
+  });
 }
 
 export function pointFromShareMapClick(layout, x, y) {
@@ -72,8 +100,8 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   }
 }
 
-export async function renderPropertyShareMap(locations) {
-  const { height, mapHeight, viewport } = getShareMapLayout(locations);
+export async function renderPropertyShareMap(locations, viewportOverride = null) {
+  const { height, mapHeight, viewport } = getShareMapLayout(locations, viewportOverride);
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = height;
