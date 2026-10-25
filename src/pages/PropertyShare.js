@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { useCollection } from "../hooks/useCollection";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { buildPropertyShareText } from "../lib/propertyShareText";
 import { todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { openLinePersonalTool } from "../lib/linePersonal";
+import BuyerRecipientPicker from "./BuyerRecipientPicker";
 
 // defaultBuyerId（選填）：從客需的「推薦物件」開啟分享時，該客需本來就綁定買方，
 // 直接預選起來，不用再選一次；其他呼叫端（例如物件列表的多選分享）不傳就跟原本一樣要自己選。
-export default function PropertyShare({ properties, onClose, defaultBuyerId = "" }) {
+export default function PropertyShare({ properties, onClose, defaultBuyerId = "", selectedBuyerId }) {
   const { user } = useAuth();
   const { agid } = usePersonalAgid();
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
@@ -20,6 +20,7 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const [intro, setIntro] = useState("下面有推薦你幾間物件，您看看有沒有合適的");
   const [previewText, setPreviewText] = useState("");
   const [buyerId, setBuyerId] = useState(defaultBuyerId);
+  const recipientId = selectedBuyerId !== undefined ? selectedBuyerId : buyerId;
   const [logging, setLogging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [includeMaps, setIncludeMaps] = useState(true);
@@ -51,13 +52,13 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   };
 
   const onLogToBuyer = async () => {
-    if (!buyerId) {
+    if (!recipientId) {
       alert("請先選擇要記錄到哪位買方");
       return;
     }
     setLogging(true);
     try {
-      await addDoc(collection(db, `contacts/${buyerId}/interactions`), {
+      await addDoc(collection(db, `contacts/${recipientId}/interactions`), {
         date: todayStr(),
         properties: properties.map((p) => ({ label: p.title, propertyId: p.id })),
         feedback: "",
@@ -122,16 +123,12 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-        <div className="form-field">
-          <label>同時記錄到買方的互動紀錄（選填）</label>
-          <select value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
-            <option value="">— 選擇買方客戶 —</option>
-            {buyers.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}{b.phone ? `（${b.phone}）` : ""}</option>
-            ))}
-          </select>
-        </div>
-        <button className="btn ghost" onClick={onLogToBuyer} disabled={logging || !buyerId}>
+        {selectedBuyerId === undefined ? (
+          <BuyerRecipientPicker value={buyerId} onChange={setBuyerId} />
+        ) : (
+          <div style={{ fontSize: 13, marginBottom: 12 }}>介紹對象：<strong>{buyers.find((buyer) => buyer.id === recipientId)?.name || "尚未指定客戶"}</strong>（可在上方更改）</div>
+        )}
+        <button className="btn ghost" onClick={onLogToBuyer} disabled={logging || !recipientId}>
           {logging ? "記錄中…" : "記錄到互動紀錄"}
         </button>
       </div>

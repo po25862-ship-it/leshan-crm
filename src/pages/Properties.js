@@ -11,6 +11,7 @@ import { todayStr, formatDate } from "../lib/dates";
 import { withAgid, withoutAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
+import BuyerRecipientPicker from "./BuyerRecipientPicker";
 import PropertyViewingPdf from "./PropertyViewingPdf";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 import { TAIWAN_REGIONS, TAIWAN_CITIES, normalizeRegionText } from "../lib/taiwanRegions";
@@ -240,6 +241,7 @@ export default function Properties() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [selectedBuyerId, setSelectedBuyerId] = useState("");
   const [showViewingPdf, setShowViewingPdf] = useState(false);
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [sharingFloorplanFile, setSharingFloorplanFile] = useState(null);
@@ -269,6 +271,14 @@ export default function Properties() {
   };
   const [uploadingSheet, setUploadingSheet] = useState(false);
   const [uploadingFloorplan, setUploadingFloorplan] = useState(false);
+
+  useEffect(() => {
+    if (selectedIds.size === 0) {
+      setSelectedBuyerId("");
+      setShowShare(false);
+      setShowViewingPdf(false);
+    }
+  }, [selectedIds]);
 
   const openNew = () => {
     setSharingFloorplanFile(null);
@@ -1049,7 +1059,9 @@ export default function Properties() {
             onClick={() => {
               setSelectionMode((value) => !value);
               setSelectedIds(new Set());
+              setSelectedBuyerId("");
               setShowForm(false);
+              setShowShare(false);
               setShowViewingPdf(false);
             }}
           >
@@ -1105,9 +1117,10 @@ export default function Properties() {
       {selectedIds.size > 0 && (
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
           <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>已選 {selectedIds.size} 筆物件</span>
+          <BuyerRecipientPicker value={selectedBuyerId} onChange={setSelectedBuyerId} />
           <button className="btn" onClick={() => { setShowShare(true); setShowViewingPdf(false); }}>分享給客人</button>
           <button className="btn ghost" onClick={() => { setShowViewingPdf((value) => !value); setShowShare(false); }}>合併帶看資料 PDF</button>
-          <button className="btn ghost" onClick={() => { setSelectedIds(new Set()); setShowViewingPdf(false); }}>清除選取</button>
+          <button className="btn ghost" onClick={() => { setSelectedIds(new Set()); setSelectedBuyerId(""); setShowShare(false); setShowViewingPdf(false); }}>清除選取</button>
         </div>
       )}
 
@@ -1115,6 +1128,7 @@ export default function Properties() {
         <PropertyViewingPdf
           key={Array.from(selectedIds).join("|")}
           properties={selectedProperties}
+          buyerId={selectedBuyerId}
           onClose={() => setShowViewingPdf(false)}
         />
       )}
@@ -1122,6 +1136,7 @@ export default function Properties() {
       {showShare && (
         <PropertyShare
           properties={selectedProperties}
+          selectedBuyerId={selectedBuyerId}
           onClose={() => setShowShare(false)}
         />
       )}

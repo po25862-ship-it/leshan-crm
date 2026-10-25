@@ -3,9 +3,13 @@ import { todayStr } from "../lib/dates";
 import { getPropertySheetPlan, mergePropertySheets } from "../lib/propertyViewingPdf";
 import { downloadPropertySheet } from "../lib/propertySheetDownload";
 import { useAuth } from "../AuthContext";
+import { useSharedCollection } from "../hooks/useSharedCollection";
 
-export default function PropertyViewingPdf({ properties, onClose }) {
+export default function PropertyViewingPdf({ properties, buyerId, onClose }) {
   const { user } = useAuth();
+  const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
+  const buyerName = contacts.find((contact) => contact.id === buyerId)?.name || "";
+  const safeBuyerName = buyerName.replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 24);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -18,6 +22,10 @@ export default function PropertyViewingPdf({ properties, onClose }) {
     if (result?.url) URL.revokeObjectURL(result.url);
   }, [result]);
 
+  useEffect(() => {
+    setResult(null);
+  }, [buyerId]);
+
   const createPdf = async () => {
     if (busy || unavailable.length > 0) return;
     setBusy(true);
@@ -29,7 +37,7 @@ export default function PropertyViewingPdf({ properties, onClose }) {
       setResult({
         ...merged,
         url,
-        filename: `帶看物件資料表_${todayStr()}_${properties.length}間.pdf`,
+        filename: `帶看物件資料表_${safeBuyerName ? `${safeBuyerName}_` : ""}${todayStr()}_${properties.length}間.pdf`,
       });
     } catch (err) {
       console.error(err);
@@ -44,6 +52,7 @@ export default function PropertyViewingPdf({ properties, onClose }) {
       <div className="property-viewing-pdf-head">
         <div>
           <h2>合併帶看資料表 PDF</h2>
+          {buyerName && <p>準備介紹給：{buyerName}</p>}
           <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留，不會另外上傳合併檔。</p>
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>關閉</button>
