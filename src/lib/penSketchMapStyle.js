@@ -26,6 +26,10 @@ export function applyPenSketchMapStyle(map) {
       if (/road_oneway|shield|poi_r|airport/.test(id)) {
         map.setLayoutProperty(id, "visibility", "none");
       } else {
+        if (layer.layout?.["text-field"]) {
+          map.setLayoutProperty(id, "text-field", ["coalesce",
+            ["get", "name:nonlatin"], ["get", "name:zh-Hant"], ["get", "name:zh"], ""]);
+        }
         map.setPaintProperty(id, "text-color", "#292b29");
         map.setPaintProperty(id, "text-halo-color", PAPER);
         map.setPaintProperty(id, "text-halo-width", 1.4);
