@@ -28,6 +28,7 @@ import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
 import { getPropertyParkingNumber } from "../lib/propertyParkingNumber";
+import { matchesWebsiteFilter } from "../lib/propertyWebsite";
 import { validateFloorplanFiles } from "../lib/floorplanUpload";
 import floorplanAddress from "../lib/floorplanAddress";
 
@@ -217,6 +218,7 @@ export default function Properties() {
   const [maxAge, setMaxAge] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
+  const [websiteFilter, setWebsiteFilter] = useState("all");
   const [parkingFilter, setParkingFilter] = useState("all");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [layoutKeyword, setLayoutKeyword] = useState("");
@@ -588,6 +590,7 @@ export default function Properties() {
     if (!matchRange(parseAge(p.age), minAge, maxAge)) return false;
     if (cityFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(cityFilter))) return false;
     if (districtFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(districtFilter))) return false;
+    if (!matchesWebsiteFilter(p, websiteFilter)) return false;
     if (parkingFilter === "yes" && !propertyHasParking(p)) return false;
     if (parkingFilter === "no" && propertyHasParking(p)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
@@ -603,17 +606,17 @@ export default function Properties() {
   const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy);
   const selectedProperties = Array.from(selectedIds, (id) => items.find((item) => item.id === id)).filter(Boolean);
   const hasKeyword = Boolean(keyword.trim());
-  const categoryPool = hasKeyword ? pool.filter((p) => matchesPropertyFilters(p, true)) : pool;
+  const categoryPool = pool.filter((p) => matchesPropertyFilters(p, true));
   const categoryCounts = {};
   categoryPool.forEach((p) => {
     const category = p.category || "未分類";
     categoryCounts[category] = (categoryCounts[category] || 0) + 1;
   });
-  const statusCounts = hasKeyword ? {
+  const statusCounts = {
     active: activeItems.filter((p) => matchesPropertyFilters(p)).length,
     onHold: onHoldItems.filter((p) => matchesPropertyFilters(p)).length,
     sold: soldItems.filter((p) => matchesPropertyFilters(p)).length,
-  } : null;
+  };
 
   const advancedFilterCount = [
     minMainBuildingPing, maxMainBuildingPing, minTitlePing, maxTitlePing,
@@ -640,6 +643,7 @@ export default function Properties() {
     setMaxAge("");
     setCityFilter("");
     setDistrictFilter("");
+    setWebsiteFilter("all");
     setParkingFilter("all");
     setActiveCategory("全部");
   };
@@ -1037,7 +1041,7 @@ export default function Properties() {
       />
       <div className="top-actions properties-top-actions">
         <div className="section-title">
-          物件（{hasKeyword ? filtered.length : pool.length}）
+          物件（{filtered.length}）
         </div>
         <div className="properties-toolbar" style={{ display: "flex", gap: 10 }}>
           <button
@@ -1177,13 +1181,13 @@ export default function Properties() {
       {/* 狀態切換 */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => { setViewMode("active"); setShowForm(false); }}>
-          在售（{statusCounts ? statusCounts.active : activeItems.length}）
+          在售（{statusCounts.active}）
         </button>
         <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("onHold"); setShowForm(false); }}>
-          暫時不賣（{statusCounts ? statusCounts.onHold : onHoldItems.length}）
+          暫時不賣（{statusCounts.onHold}）
         </button>
         <button className={viewMode === "sold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("sold"); setShowForm(false); }}>
-          已售出（{statusCounts ? statusCounts.sold : soldItems.length}）
+          已售出（{statusCounts.sold}）
         </button>
       </div>
 
@@ -1242,6 +1246,16 @@ export default function Properties() {
           {(TAIWAN_REGIONS[cityFilter] || []).map((d) => (
             <option key={d} value={d}>{d}</option>
           ))}
+        </select>
+        <select
+          value={websiteFilter}
+          onChange={(e) => setWebsiteFilter(e.target.value)}
+          aria-label="官網篩選"
+          style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
+        >
+          <option value="all">官網：全部</option>
+          <option value="published">有官網</option>
+          <option value="unpublished">沒官網</option>
         </select>
         <input
           value={minPrice}
