@@ -146,6 +146,7 @@ export async function locateSharedProperties(properties, onProgress = () => {}) 
       number: index + 1,
       title: property.title || "未命名物件",
       price: property.totalPrice,
+      area: property.area || "",
       road: parts?.publicAddress || "地址待確認",
       point: manualPoint || (parts ? known.get(parts.publicAddress) || null : null),
       manual: Boolean(manualPoint),

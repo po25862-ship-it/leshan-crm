@@ -1,7 +1,7 @@
 import { publicRoadParts, chooseRoadPosition, locateSharedProperties, mercatorPoint,
   getManualSharePoint, saveManualSharePoint, clearManualSharePoint } from "./propertyShareMap";
 import { getShareMapLayout, panShareMapViewport, pointFromShareMapClick,
-  zoomShareMapViewport } from "./renderPropertyShareMap";
+  shareMapSectionAt, zoomShareMapViewport } from "./shareMapLayout";
 
 test("分享地圖只使用公開路段，不把門牌傳給定位服務", () => {
   expect(publicRoadParts("桃園市龜山區文青路12號8樓")).toEqual({
@@ -119,27 +119,52 @@ test("物件價格會交給圖片製作，手動位置在同一瀏覽器記住�
 });
 
 test("點擊地圖時能把圖片座標換回地理位置，點到案名欄不移動標記", () => {
-  const location = { point: { lat: 25.0605444, lng: 121.364725 } };
+  const location = { number: 1, point: { lat: 25.0605444, lng: 121.364725 } };
   const layout = getShareMapLayout([location]);
-  const projected = mercatorPoint(location.point.lat, location.point.lng, layout.viewport.zoom);
-  const x = layout.mapX + projected.x - layout.viewport.left;
-  const y = layout.mapY + projected.y - layout.viewport.top;
+  const section = layout.sections[0];
+  const projected = mercatorPoint(location.point.lat, location.point.lng, section.viewport.zoom);
+  const x = section.mapX + projected.x - section.viewport.left;
+  const y = section.mapY + projected.y - section.viewport.top;
   const clicked = pointFromShareMapClick(layout, x, y);
   expect(clicked.lat).toBeCloseTo(location.point.lat, 6);
   expect(clicked.lng).toBeCloseTo(location.point.lng, 6);
-  expect(pointFromShareMapClick(layout, 900, y)).toBeNull();
+  expect(pointFromShareMapClick(layout, x, section.listY + 20)).toBeNull();
 });
 
 test("拖曳地圖會平移範圍，放大縮小保持畫面中心位置", () => {
-  const location = { point: { lat: 25.0605444, lng: 121.364725 } };
+  const location = { number: 1, point: { lat: 25.0605444, lng: 121.364725 } };
   const layout = getShareMapLayout([location]);
-  const panned = panShareMapViewport(layout, 100, -50);
-  expect(panned.left).toBeCloseTo(layout.viewport.left - 100);
-  expect(panned.top).toBeCloseTo(layout.viewport.top + 50);
-  const centerX = layout.mapX + layout.mapWidth / 2;
-  const centerY = layout.mapY + layout.mapHeight / 2;
+  const section = layout.sections[0];
+  const panned = panShareMapViewport(layout, section.key, 100, -50);
+  expect(panned.left).toBeCloseTo(section.viewport.left - 100);
+  expect(panned.top).toBeCloseTo(section.viewport.top + 50);
+  const centerX = section.mapX + section.mapWidth / 2;
+  const centerY = section.mapY + section.mapHeight / 2;
   const before = pointFromShareMapClick(layout, centerX, centerY);
-  const after = pointFromShareMapClick(getShareMapLayout([location], zoomShareMapViewport(layout, -1)), centerX, centerY);
+  const zoomed = zoomShareMapViewport(layout, section.key, -1);
+  const after = pointFromShareMapClick(getShareMapLayout([location], { [section.key]: zoomed }), centerX, centerY);
   expect(after.lat).toBeCloseTo(before.lat, 6);
   expect(after.lng).toBeCloseTo(before.lng, 6);
+});
+
+test("A8 與 A7 物件各用放大的地圖，維持原本編號並合成直式圖片", () => {
+  const items = [
+    { number: 1, area: "A8長庚生活圈", point: { lat: 25.0605444, lng: 121.364725 } },
+    { number: 2, area: "A7重劃區", point: { lat: 25.0474222, lng: 121.3910019 } },
+    { number: 3, area: "A7重劃區", point: { lat: 25.0393629, lng: 121.3920594 } },
+  ];
+  const layout = getShareMapLayout(items);
+  expect(layout.sections.map((section) => section.label)).toEqual(["A8 長庚生活圈", "A7 重劃區"]);
+  expect(layout.sections.map((section) => section.items.map((item) => item.number))).toEqual([[1], [2, 3]]);
+  expect(layout.height).toBeGreaterThan(layout.width);
+  const lower = layout.sections[1];
+  expect(shareMapSectionAt(layout, lower.mapX + 30, lower.mapY + 30)?.key).toBe(lower.key);
+});
+
+test("相近的同區物件仍共用一塊地圖", () => {
+  const items = [
+    { number: 1, area: "A7重劃區", point: { lat: 25.0474222, lng: 121.3910019 } },
+    { number: 2, area: "A7重劃區", point: { lat: 25.0393629, lng: 121.3920594 } },
+  ];
+  expect(getShareMapLayout(items).sections).toHaveLength(1);
 });

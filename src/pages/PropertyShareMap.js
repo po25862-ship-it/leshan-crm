@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { todayStr } from "../lib/dates";
 import { clearManualSharePoint, locateSharedProperties, saveManualSharePoint } from "../lib/propertyShareMap";
 import { getShareMapLayout, panShareMapViewport, pointFromShareMapClick,
-  renderPropertyShareMap, zoomShareMapViewport } from "../lib/renderPropertyShareMap";
+  shareMapSectionAt, zoomShareMapViewport } from "../lib/shareMapLayout";
+import { renderPropertyShareMap } from "../lib/renderPropertyShareMap";
 
 export default function PropertyShareMap({ properties }) {
   const [busy, setBusy] = useState(false);
@@ -14,11 +15,12 @@ export default function PropertyShareMap({ properties }) {
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [activeSectionKey, setActiveSectionKey] = useState("section-0");
   const pointerStart = useRef(null);
 
-  const showImage = useCallback((blob, nextLocations, viewport) => {
+  const showImage = useCallback((blob, nextLocations, viewports) => {
     const url = URL.createObjectURL(blob);
-    setImage({ url, blob, viewport, missing: nextLocations.filter((item) => !item.point).length });
+    setImage({ url, blob, viewports, missing: nextLocations.filter((item) => !item.point).length });
     setLocations(nextLocations);
   }, []);
 
@@ -31,9 +33,9 @@ export default function PropertyShareMap({ properties }) {
     try {
       const locations = await locateSharedProperties(properties, setProgress);
       setProgress("正在繪製地圖與物件編號…");
-      const viewport = getShareMapLayout(locations).viewport;
-      const blob = await renderPropertyShareMap(locations, viewport);
-      showImage(blob, locations, viewport);
+      const blob = await renderPropertyShareMap(locations);
+      showImage(blob, locations, {});
+      setActiveSectionKey("section-0");
     } catch (err) {
       console.error(err);
       setError(err.message || "位置圖製作失敗，請稍後重試。");
@@ -67,7 +69,7 @@ export default function PropertyShareMap({ properties }) {
   const moveSelectedMarker = async (point) => {
     if (adjustingNumber === null || busy || !locations.length) return;
     if (!point) {
-      setError("請點圖片左側的地圖區域，不能點右側案名清單。");
+      setError("請點圖片中的地圖區域，不能點物件清單。");
       return;
     }
     const nextLocations = locations.map((item) => item.number === adjustingNumber
@@ -76,8 +78,9 @@ export default function PropertyShareMap({ properties }) {
     setError("");
     setProgress("正在更新圖片位置…");
     try {
-      const blob = await renderPropertyShareMap(nextLocations, image.viewport);
-      showImage(blob, nextLocations, image.viewport);
+      const blob = await renderPropertyShareMap(nextLocations);
+      showImage(blob, nextLocations, {});
+      setActiveSectionKey("section-0");
       const saved = saveManualSharePoint(properties[adjustingNumber - 1], point);
       setNotice(saved ? `第 ${adjustingNumber} 間已調整；這台電腦會記住位置，下載圖片也是新位置。`
         : `第 ${adjustingNumber} 間已調整；下載圖片是新位置，但此瀏覽器無法記住設定。`);
@@ -90,14 +93,14 @@ export default function PropertyShareMap({ properties }) {
     }
   };
 
-  const changeViewport = async (nextViewport) => {
+  const renderViewports = async (nextViewports) => {
     if (busy || !image || !locations.length) return;
     setBusy(true);
     setError("");
     setProgress("正在移動地圖…");
     try {
-      const blob = await renderPropertyShareMap(locations, nextViewport);
-      showImage(blob, locations, nextViewport);
+      const blob = await renderPropertyShareMap(locations, nextViewports);
+      showImage(blob, locations, nextViewports);
     } catch (err) {
       setError(err.message || "地圖移動失敗，請稍後重試。");
     } finally {
@@ -106,9 +109,13 @@ export default function PropertyShareMap({ properties }) {
     }
   };
 
+  const changeViewport = (sectionKey, nextViewport) => {
+    if (nextViewport) renderViewports({ ...image.viewports, [sectionKey]: nextViewport });
+  };
+
   const imageCoordinates = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const layout = getShareMapLayout(locations, image.viewport);
+    const layout = getShareMapLayout(locations, image.viewports);
     return {
       layout,
       x: (event.clientX - rect.left) * layout.width / rect.width,
@@ -119,9 +126,10 @@ export default function PropertyShareMap({ properties }) {
   const onMapPointerDown = (event) => {
     if (busy || (event.pointerType === "mouse" && event.button !== 0)) return;
     const { layout, x, y } = imageCoordinates(event);
-    if (x < layout.mapX || x > layout.mapX + layout.mapWidth
-      || y < layout.mapY || y > layout.mapY + layout.mapHeight) return;
-    pointerStart.current = { pointerId: event.pointerId, x, y };
+    const section = shareMapSectionAt(layout, x, y);
+    if (!section) return;
+    pointerStart.current = { pointerId: event.pointerId, sectionKey: section.key, x, y };
+    setActiveSectionKey(section.key);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -140,7 +148,7 @@ export default function PropertyShareMap({ properties }) {
     const dx = x - start.x;
     const dy = y - start.y;
     if (Math.hypot(dx, dy) > 8) {
-      changeViewport(panShareMapViewport(layout, dx, dy));
+      changeViewport(start.sectionKey, panShareMapViewport(layout, start.sectionKey, dx, dy));
     } else if (adjustingNumber !== null) {
       moveSelectedMarker(pointFromShareMapClick(layout, x, y));
     }
@@ -153,10 +161,14 @@ export default function PropertyShareMap({ properties }) {
     generate();
   };
 
+  const imageLayout = image && locations.length ? getShareMapLayout(locations, image.viewports) : null;
+  const activeSection = imageLayout?.sections.find((section) => section.key === activeSectionKey)
+    || imageLayout?.sections[0];
+
   return (
     <section className="property-share-map" aria-label="物件位置圖">
       <h3>物件位置圖</h3>
-      <p>圖上編號對應左側分享文字。拖曳地圖可移動到 A7 等區域；下載 PNG 後可直接傳給客人。</p>
+      <p>不同區域會分開放大，編號對應左側分享文字；下載一張 PNG 即可傳給客人。</p>
       {busy && <div className="property-share-map-loading" role="status">{progress || "正在製作位置圖…"}</div>}
       {error && <div className="property-share-map-error" role="alert">{error}</div>}
       {notice && <div className="property-share-map-loading" role="status">{notice}</div>}
@@ -167,9 +179,14 @@ export default function PropertyShareMap({ properties }) {
           <img src={image.url} draggable="false" alt={`已標示 ${properties.length} 間物件編號、案名及價格的位置圖`} />
         </div>
         <div className="property-share-map-navigation" aria-label="移動地圖">
-          <button type="button" className="btn ghost" onClick={() => changeViewport(zoomShareMapViewport(getShareMapLayout(locations, image.viewport), 1))} disabled={busy || image.viewport.zoom >= 18}>放大＋</button>
-          <button type="button" className="btn ghost" onClick={() => changeViewport(zoomShareMapViewport(getShareMapLayout(locations, image.viewport), -1))} disabled={busy || image.viewport.zoom <= 5}>縮小－</button>
-          <button type="button" className="btn ghost" onClick={() => changeViewport(getShareMapLayout(locations).viewport)} disabled={busy}>顯示全部標記</button>
+          {imageLayout.sections.length > 1 && <label className="property-share-map-zone">操作區域
+            <select value={activeSection.key} onChange={(event) => setActiveSectionKey(event.target.value)}>
+              {imageLayout.sections.map((section) => <option key={section.key} value={section.key}>{section.label}</option>)}
+            </select>
+          </label>}
+          <button type="button" className="btn ghost" onClick={() => changeViewport(activeSection.key, zoomShareMapViewport(imageLayout, activeSection.key, 1))} disabled={busy || activeSection.viewport.zoom >= 18}>放大＋</button>
+          <button type="button" className="btn ghost" onClick={() => changeViewport(activeSection.key, zoomShareMapViewport(imageLayout, activeSection.key, -1))} disabled={busy || activeSection.viewport.zoom <= 5}>縮小－</button>
+          <button type="button" className="btn ghost" onClick={() => renderViewports({})} disabled={busy}>重設地圖範圍</button>
           <a className="btn ghost" href={image.url} target="_blank" rel="noreferrer">查看大圖</a>
         </div>
         {image.missing > 0 && <small>{image.missing} 間因地址不足或路段未找到，已在圖片中標為「位置待確認」，不會亂放地圖點。</small>}
@@ -182,7 +199,7 @@ export default function PropertyShareMap({ properties }) {
                 {locations.map((item) => <option key={item.number} value={item.number}>{item.number}. {item.title}</option>)}
               </select>
             </label>
-            <p>先拖曳地圖找到位置，可用「縮小」看更大範圍；選好物件後點圖片左側地圖，編號就會移到該處。</p>
+            <p>選好物件後，點任何一塊地圖上的正確位置即可移動編號；也可以先拖曳或縮放該區地圖。</p>
             <div className="property-share-map-actions">
               <button type="button" className="btn ghost" onClick={() => setAdjustingNumber(null)}>取消調整</button>
               {locations[adjustingNumber - 1]?.manual && <button type="button" className="btn ghost" onClick={resetSelectedMarker} disabled={busy}>恢復自動位置</button>}
