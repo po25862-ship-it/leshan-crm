@@ -26,29 +26,33 @@ function loadTile(zoom, x, y) {
 
 async function drawMapTiles(ctx, section, mapStyle) {
   const { zoom, left, top } = section.viewport;
-  const worldTiles = 2 ** zoom;
-  const requests = [];
-  for (let x = Math.floor(left / TILE_SIZE); x <= Math.floor((left + section.mapWidth) / TILE_SIZE); x += 1) {
-    for (let y = Math.floor(top / TILE_SIZE); y <= Math.floor((top + section.mapHeight) / TILE_SIZE); y += 1) {
-      if (x >= 0 && x < worldTiles && y >= 0 && y < worldTiles) {
-        requests.push({ x, y, image: loadTile(zoom, x, y) });
-      }
-    }
-  }
-  const tiles = await Promise.all(requests.map(async (tile) => ({ ...tile, image: await tile.image })));
+  const style = getMapBackgroundStyle(mapStyle);
   ctx.save();
   ctx.beginPath();
   ctx.rect(section.mapX, section.mapY, section.mapWidth, section.mapHeight);
   ctx.clip();
   ctx.fillStyle = "#E9EFEB";
   ctx.fillRect(section.mapX, section.mapY, section.mapWidth, section.mapHeight);
-  ctx.filter = getMapBackgroundStyle(mapStyle).filter;
-  for (const tile of tiles) {
-    ctx.drawImage(tile.image,
-      section.mapX + tile.x * TILE_SIZE - left,
-      section.mapY + tile.y * TILE_SIZE - top);
+  if (style.styleUrl) {
+    const { drawOpenFreeMapSnapshot } = await import("./openFreeMapSnapshot");
+    await drawOpenFreeMapSnapshot(ctx, section, style.styleUrl);
+  } else {
+    const worldTiles = 2 ** zoom;
+    const requests = [];
+    for (let x = Math.floor(left / TILE_SIZE); x <= Math.floor((left + section.mapWidth) / TILE_SIZE); x += 1) {
+      for (let y = Math.floor(top / TILE_SIZE); y <= Math.floor((top + section.mapHeight) / TILE_SIZE); y += 1) {
+        if (x >= 0 && x < worldTiles && y >= 0 && y < worldTiles) {
+          requests.push({ x, y, image: loadTile(zoom, x, y) });
+        }
+      }
+    }
+    const tiles = await Promise.all(requests.map(async (tile) => ({ ...tile, image: await tile.image })));
+    for (const tile of tiles) {
+      ctx.drawImage(tile.image,
+        section.mapX + tile.x * TILE_SIZE - left,
+        section.mapY + tile.y * TILE_SIZE - top);
+    }
   }
-  ctx.filter = "none";
 
   ctx.fillStyle = "rgba(255,255,255,.95)";
   ctx.fillRect(section.mapX + 13, section.mapY + 13, 326, 39);
@@ -179,7 +183,10 @@ export async function renderPropertyShareMap(locations, viewportOverrides = {}, 
   ctx.fillText("位置依公開路段示意，並非實際門牌；同路段物件可能共用標記。", 28, layout.height - 42);
   ctx.fillStyle = "#5D7165";
   ctx.font = "18px 'Noto Sans TC', sans-serif";
-  ctx.fillText("地圖資料 © OpenStreetMap contributors · 定位資料 © OpenStreetMap contributors / Photon", 28, layout.height - 17);
+  const credits = getMapBackgroundStyle(mapStyle).styleUrl
+    ? "OpenFreeMap © OpenMapTiles · Data from OpenStreetMap · 定位資料 © OpenStreetMap / Photon"
+    : "地圖資料 © OpenStreetMap contributors · 定位資料 © OpenStreetMap / Photon";
+  ctx.fillText(credits, 28, layout.height - 17);
 
   return new Promise((resolve, reject) => {
     try {

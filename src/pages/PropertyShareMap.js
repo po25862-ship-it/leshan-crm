@@ -10,7 +10,7 @@ const STYLE_STORAGE_KEY = "leshan-property-share-map-style-v1";
 
 function savedMapStyle() {
   try { return getMapBackgroundStyle(localStorage.getItem(STYLE_STORAGE_KEY)).id; }
-  catch { return "standard"; }
+  catch { return "positron"; }
 }
 
 export default function PropertyShareMap({ properties }) {
@@ -42,7 +42,15 @@ export default function PropertyShareMap({ properties }) {
     try {
       const locations = await locateSharedProperties(properties, setProgress);
       setProgress("正在繪製地圖與物件編號…");
-      const blob = await renderPropertyShareMap(locations, {}, mapStyle);
+      let blob;
+      try {
+        blob = await renderPropertyShareMap(locations, {}, mapStyle);
+      } catch (mapError) {
+        if (mapStyle === "classic") throw mapError;
+        blob = await renderPropertyShareMap(locations, {}, "classic");
+        setMapStyle("classic");
+        setNotice("新版底圖暫時無法載入，已先用原始街道圖；稍後可再切換。");
+      }
       showImage(blob, locations, {});
       setActiveSectionKey("section-0");
     } catch (err) {
@@ -211,7 +219,7 @@ export default function PropertyShareMap({ properties }) {
               <span>{style.label}</span>
             </button>)}
           </div>
-          <small>只更換地圖底色；物件編號、案名與總價不變。</small>
+          <small>這些是真正不同的街道底圖；物件編號、案名與總價不變。</small>
         </div>
         <div className={`property-share-map-picker${dragging ? " is-dragging" : ""}`}
           onPointerDown={onMapPointerDown} onPointerMove={onMapPointerMove}
@@ -253,7 +261,7 @@ export default function PropertyShareMap({ properties }) {
         </div>
       </>}
       {!busy && !image && <button type="button" className="btn ghost" onClick={generate}>重試製作位置圖</button>}
-      <small>地圖為公開路段示意，並非精確門牌。地圖與定位資料來源：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>。</small>
+      <small>地圖為公開路段示意，並非精確門牌。新版底圖資料來源：<a href="https://openfreemap.org/" target="_blank" rel="noreferrer">OpenFreeMap</a>、<a href="https://openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a>、<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>。</small>
     </section>
   );
 }

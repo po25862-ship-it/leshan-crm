@@ -1,8 +1,9 @@
 import { getMapBackgroundStyle, MAP_BACKGROUND_STYLES } from "./shareMapStyles";
 
-test("底圖提供四種不同風格，無效選項回到原色", () => {
-  expect(MAP_BACKGROUND_STYLES).toHaveLength(4);
-  expect(new Set(MAP_BACKGROUND_STYLES.map((style) => style.filter)).size).toBe(4);
-  expect(getMapBackgroundStyle("soft").label).toBe("柔和淡彩");
-  expect(getMapBackgroundStyle("unknown").id).toBe("standard");
+test("底圖提供真正不同的地圖樣式，舊的調色選項移至新版淺色圖", () => {
+  expect(MAP_BACKGROUND_STYLES).toHaveLength(5);
+  expect(new Set(MAP_BACKGROUND_STYLES.filter((style) => style.styleUrl).map((style) => style.styleUrl)).size).toBe(4);
+  expect(getMapBackgroundStyle("bright").label).toBe("清楚街道");
+  expect(getMapBackgroundStyle("soft").id).toBe("positron");
+  expect(getMapBackgroundStyle("unknown").id).toBe("positron");
 });

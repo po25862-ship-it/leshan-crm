@@ -1,10 +1,12 @@
 export const MAP_BACKGROUND_STYLES = [
-  { id: "standard", label: "標準彩色", filter: "none", swatch: "standard" },
-  { id: "soft", label: "柔和淡彩", filter: "saturate(0.62) contrast(0.92) brightness(1.06)", swatch: "soft" },
-  { id: "mono", label: "黑白街道", filter: "grayscale(1) contrast(0.88) brightness(1.1)", swatch: "mono" },
-  { id: "warm", label: "暖色米白", filter: "sepia(0.35) saturate(0.85) brightness(1.04)", swatch: "warm" },
+  { id: "positron", label: "極簡淺色", styleUrl: "https://tiles.openfreemap.org/styles/positron", swatch: "positron" },
+  { id: "bright", label: "清楚街道", styleUrl: "https://tiles.openfreemap.org/styles/bright", swatch: "bright" },
+  { id: "liberty", label: "柔和城市", styleUrl: "https://tiles.openfreemap.org/styles/liberty", swatch: "liberty" },
+  { id: "dark", label: "深色夜景", styleUrl: "https://tiles.openfreemap.org/styles/dark", swatch: "dark" },
+  { id: "classic", label: "原始街道", styleUrl: null, swatch: "classic" },
 ];
 
 export function getMapBackgroundStyle(id) {
-  return MAP_BACKGROUND_STYLES.find((style) => style.id === id) || MAP_BACKGROUND_STYLES[0];
+  const migrated = { standard: "positron", soft: "positron", mono: "positron", warm: "bright" }[id] || id;
+  return MAP_BACKGROUND_STYLES.find((style) => style.id === migrated) || MAP_BACKGROUND_STYLES[0];
 }
