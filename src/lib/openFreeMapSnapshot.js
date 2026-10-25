@@ -10,7 +10,10 @@ function centerFromViewport(section) {
 }
 
 export async function drawOpenFreeMapSnapshot(ctx, section, styleUrl) {
-  const { Map } = await import("maplibre-gl");
+  const { Map, setWorkerUrl } = await import("maplibre-gl");
+  // CRA cannot reliably resolve MapLibre's import.meta worker URL after bundling.
+  // Serve the matching module worker from our own origin instead.
+  setWorkerUrl(`${process.env.PUBLIC_URL || ""}/maplibre-gl-worker.mjs`);
   const host = document.createElement("div");
   Object.assign(host.style, {
     position: "fixed", left: "-10000px", top: "0", zIndex: "-1",
