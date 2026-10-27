@@ -190,3 +190,6 @@ main{padding:32px 32px 72px;max-width:1440px;margin:0 auto;}
 .property-share-map-actions a{text-decoration:none;}
 @media(max-width:900px){.property-share-grid{grid-template-columns:1fr;}.property-share-map{order:-1;}}
 @media(max-width:640px){.property-share-map-style{flex-basis:calc(50% - 8px);}}
+
+/* Registered total and its parking-exclusive area stay adjacent. */
+.property-key-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px;}

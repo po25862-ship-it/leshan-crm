@@ -34,6 +34,7 @@ import { validateFloorplanFiles } from "../lib/floorplanUpload";
 import { getPropertyManagementFee, formatPropertyManagementFee, managementFeeImportFields } from "../lib/propertyManagementFee";
 import floorplanAddress from "../lib/floorplanAddress";
 import commonArea from "../lib/propertyCommonArea";
+import { formatPropertyAreaWithoutParking } from "../lib/propertyAreaWithoutParking";
 
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
 const { companyCommonAreaFields, EXCLUDING_PARKING } = commonArea;
@@ -1425,10 +1426,11 @@ export default function Properties() {
                   <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>關閉</button>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 14 }}>
+              <div className="property-key-stats">
                 <DetailValue label="總價" value={form.totalPrice ? `${form.totalPrice} 萬` : "—"} accent />
                 <DetailValue label="格局" value={form.layout} />
                 <DetailValue label="權狀坪" value={form.titlePing ? `${form.titlePing} 坪` : "—"} />
+                <DetailValue label="扣車面積" value={formatPropertyAreaWithoutParking(form)} />
                 <DetailValue label="主建物" value={form.mainBuildingPing ? `${form.mainBuildingPing} 坪` : "—"} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
@@ -1593,8 +1595,13 @@ export default function Properties() {
                 <input value={form.landPing} onChange={(e) => setForm({ ...form, landPing: e.target.value })} />
               </div>
               <div className="form-field">
-                <label>權狀坪</label>
-                <input value={form.titlePing} onChange={(e) => setForm({ ...form, titlePing: e.target.value })} />
+                <label htmlFor="property-title-ping">權狀坪</label>
+                <input id="property-title-ping" value={form.titlePing} onChange={(e) => setForm({ ...form, titlePing: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label htmlFor="property-area-without-parking">扣車面積（坪）</label>
+                <input id="property-area-without-parking" readOnly value={formatPropertyAreaWithoutParking(form)} />
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>自動計算：權狀坪 − 車位坪數</div>
               </div>
               <div className="form-field">
                 <label>主建物（坪）</label>
@@ -1609,8 +1616,8 @@ export default function Properties() {
                 <input value={form.commonAreaPing} onChange={(e) => setForm({ ...form, commonAreaPing: e.target.value })} />
               </div>
               <div className="form-field">
-                <label>車位（坪）</label>
-                <input value={form.parkingPing} onChange={(e) => setForm({ ...form, parkingPing: e.target.value })} />
+                <label htmlFor="property-parking-ping">車位（坪）</label>
+                <input id="property-parking-ping" value={form.parkingPing} onChange={(e) => setForm({ ...form, parkingPing: e.target.value })} />
               </div>
               <div className="form-field">
                 <label>樓別</label>
