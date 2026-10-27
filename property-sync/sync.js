@@ -15,6 +15,8 @@ const { firstSeenFields, firstMissingFields, firstOnHoldFields, shouldMarkFourSt
 const { ensureBackendSession } = require("./backend-auth");
 const roadKeyword = require("./road-keyword");
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = require("./floorplan-address");
+const { managementFeeFromLines } = require("./management-fee");
+const { companyCommonAreaFields } = require("./common-area");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -32,7 +34,7 @@ const CATEGORIES = [
   { code: "14", name: "農地" }, { code: "15", name: "農舍" },
   { code: "16", name: "廠辦" }, { code: "22", name: "土地類其他" },
 ];
-const HEADER = ["店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向", "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名", "官網點閱網址", "詳細資料表", "備註"];
+const HEADER = ["店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向", "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名", "官網點閱網址", "詳細資料表", "備註", "管理費"];
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -103,6 +105,13 @@ function crmRecord(existing, incoming) {
     record.communityName = inferCommunity({ ...existing, ...record })?.name || "";
   }
   record.notes = preserve(existing, incoming, "notes");
+  for (const field of ["commonAreaGrossPing", "commonAreaBasis"]) {
+    const value = incoming.detailEnriched && incoming.commonAreaPing != null
+      ? incoming[field] : existing?.[field];
+    if (value !== undefined) record[field] = value;
+  }
+  record.managementFee = incoming.detailEnriched && String(incoming.managementFee ?? "").trim() !== ""
+    ? incoming.managementFee : preserve(existing, incoming, "managementFee");
   return { ...record, ...inferPropertyLocation({ ...existing, ...record }) };
 }
 
@@ -284,12 +293,16 @@ function parseDetail(buffer, listingNo) {
   if (pageListingNo && pageListingNo !== listingNo) throw new Error(`${listingNo} 詳細頁編號不一致`);
   const parkingDescription = lineMatch(lines, /^有無車位[：:]\s*(.*)$/);
   const parkingMatch = parkingDescription.match(/^(\d+)個/);
+  const commonAreaPing = numberOrNull(lineMatch(lines, /公設[：:]\s*([\d.]+)/));
+  const parkingPing = numberOrNull(lineMatch(lines, /含車位\s*([\d.]+)\s*坪/));
   return {
     address: lineMatch(lines, /^座落[：:]\s*(.+)$/),
+    managementFee: pageListingNo === listingNo ? managementFeeFromLines(lines) : "",
     mainBuildingPing: numberOrNull(lineMatch(lines, /主建物[：:]\s*([\d.]+)/)),
     auxiliaryBuildingPing: numberOrNull(lineMatch(lines, /附屬建物[：:]\s*([\d.]+)/)),
-    commonAreaPing: numberOrNull(lineMatch(lines, /公設[：:]\s*([\d.]+)/)),
-    parkingPing: numberOrNull(lineMatch(lines, /含車位\s*([\d.]+)\s*坪/)),
+    commonAreaPing,
+    ...(pageListingNo === listingNo ? companyCommonAreaFields({ commonAreaPing, parkingPing }) : {}),
+    parkingPing,
     registeredTotalPing: numberOrNull(lineMatch(lines, /◎?總坪\s*([\d.]+)/)),
     detailLandPing: numberOrNull(lineMatch(lines, /權狀地坪[：:]\s*([\d.]+)/)),
     parkingDescription,
@@ -633,9 +646,9 @@ async function createWorkbook(records, diff, previousDate) {
   for (const category of CATEGORIES) {
     const sheet = workbook.addWorksheet(category.name, { views: [{ state: "frozen", ySplit: 1 }], properties: { defaultRowHeight: 18 } });
     styleHeader(sheet.addRow(HEADER));
-    for (const p of records.filter((item) => item.category === category.name)) sheet.addRow([p.store, p.listingNo, p.title, p.address, p.landPing, p.titlePing, p.floor, p.orientation, p.age, p.layout, p.parkingCount, p.totalPrice, p.occupancy, p.laneWidth, p.agentInfo, p.websiteUrl, "", p.notes]);
-    sheet.autoFilter = { from: "A1", to: "R1" };
-    const widths = [20, 18, 38, 36, 10, 10, 10, 18, 14, 12, 9, 12, 11, 9, 28, 42, 15, 60];
+    for (const p of records.filter((item) => item.category === category.name)) sheet.addRow([p.store, p.listingNo, p.title, p.address, p.landPing, p.titlePing, p.floor, p.orientation, p.age, p.layout, p.parkingCount, p.totalPrice, p.occupancy, p.laneWidth, p.agentInfo, p.websiteUrl, "", p.notes, p.managementFee ?? ""]);
+    sheet.autoFilter = { from: "A1", to: "S1" };
+    const widths = [20, 18, 38, 36, 10, 10, 10, 18, 14, 12, 9, 12, 11, 9, 28, 42, 15, 60, 24];
     sheet.columns.forEach((column, index2) => { column.width = widths[index2]; });
   }
   const workbookPath = path.join(outputDir, `物件總表_匯出_${today}.xlsx`);
@@ -712,4 +725,19 @@ async function main() {
   console.log(JSON.stringify({ workbookPath, snapshotFile, fileCount: snapshot.fileCount, rows: snapshot.rowCount, unique: snapshot.records.length, diff: payload.diff, crm: crmSummary }, null, 2));
 }
 
-main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
+async function withAuthenticatedCrm(callback) {
+  const [{ initializeApp, deleteApp }, { getAuth, signInWithEmailAndPassword }, firestore] = await Promise.all([
+    import("firebase/app"), import("firebase/auth"), import("firebase/firestore"),
+  ]);
+  const app = initializeApp(FIREBASE_CONFIG, `property-fee-backfill-${Date.now()}`);
+  try {
+    const { email, password } = syncCredentials();
+    await signInWithEmailAndPassword(getAuth(app), email, password);
+    return await callback(firestore.getFirestore(app), firestore);
+  } finally {
+    await deleteApp(app).catch(() => {});
+  }
+}
+
+module.exports = { parseDetail, crmRecord, createWorkbook, withAuthenticatedCrm };
+if (require.main === module) main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

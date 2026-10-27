@@ -33,8 +33,10 @@ import { matchesWebsiteFilter } from "../lib/propertyWebsite";
 import { validateFloorplanFiles } from "../lib/floorplanUpload";
 import { getPropertyManagementFee, formatPropertyManagementFee, managementFeeImportFields } from "../lib/propertyManagementFee";
 import floorplanAddress from "../lib/floorplanAddress";
+import commonArea from "../lib/propertyCommonArea";
 
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
+const { companyCommonAreaFields, EXCLUDING_PARKING } = commonArea;
 
 const STATUS_LABELS = { active: "在售", onHold: "暫時不賣", sold: "已售出" };
 const STATUS_ORDER = ["active", "onHold", "sold"];
@@ -350,6 +352,8 @@ export default function Properties() {
     const formToSave = {
       ...withKnownFloorplans(form),
       managementFee: String(form.managementFee ?? "").trim(),
+      ...(!editingId || String(form.commonAreaPing) !== String(items.find((item) => item.id === editingId)?.commonAreaPing)
+        ? { commonAreaBasis: EXCLUDING_PARKING } : {}),
       floorplanAddressFiles: mergeFloorplanFiles(rememberedFiles),
       websiteUrl: withoutAgid(form.websiteUrl), updatedAt: todayStr(),
     };
@@ -935,7 +939,7 @@ export default function Properties() {
         if (record.address) updates.address = String(record.address).trim();
         if (record.mainBuildingPing != null) updates.mainBuildingPing = Number(record.mainBuildingPing);
         if (record.auxiliaryBuildingPing != null) updates.auxiliaryBuildingPing = Number(record.auxiliaryBuildingPing);
-        if (record.commonAreaPing != null) updates.commonAreaPing = Number(record.commonAreaPing);
+        Object.assign(updates, companyCommonAreaFields(record));
         if (record.parkingPing != null) updates.parkingPing = Number(record.parkingPing);
         if (record.parkingDescription) updates.parkingDescription = String(record.parkingDescription).trim();
         if (record.managementFee !== null && record.managementFee !== undefined && String(record.managementFee).trim() !== "") updates.managementFee = String(record.managementFee).trim();
@@ -1437,7 +1441,7 @@ export default function Properties() {
                 <DetailValue label="地坪" value={form.landPing ? `${form.landPing} 坪` : "—"} />
                 <DetailValue label="附屬／公設／車位" value={[
                   form.auxiliaryBuildingPing && `附屬 ${form.auxiliaryBuildingPing} 坪`,
-                  form.commonAreaPing && `公設 ${form.commonAreaPing} 坪`,
+                  form.commonAreaPing !== "" && form.commonAreaPing != null && `公設 ${form.commonAreaPing} 坪`,
                   form.parkingPing && `車位 ${form.parkingPing} 坪`,
                 ].filter(Boolean).join("・")} />
                 <DetailValue label="車位編號" value={form.parkingNumber} />
@@ -1601,7 +1605,7 @@ export default function Properties() {
                 <input value={form.auxiliaryBuildingPing} onChange={(e) => setForm({ ...form, auxiliaryBuildingPing: e.target.value })} />
               </div>
               <div className="form-field">
-                <label>公設（坪）</label>
+                <label>公設（不含車位，坪）</label>
                 <input value={form.commonAreaPing} onChange={(e) => setForm({ ...form, commonAreaPing: e.target.value })} />
               </div>
               <div className="form-field">

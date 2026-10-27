@@ -13,7 +13,7 @@ function valueOrMissing(value) {
 
 function ping(value) {
   const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? `${value} 坪` : "未提供";
+  return value != null && String(value).trim() !== "" && Number.isFinite(number) && number >= 0 ? `${value} 坪` : "未提供";
 }
 
 export function buildPropertySummary(property, date = new Date()) {
@@ -35,7 +35,7 @@ export function buildPropertySummary(property, date = new Date()) {
       ["權狀坪數", ping(property.titlePing)],
       ["主建物", ping(property.mainBuildingPing)],
       ["附屬建物", ping(property.auxiliaryBuildingPing)],
-      ["公設", ping(property.commonAreaPing)],
+      ["公設（不含車位）", ping(property.commonAreaPing)],
       ["車位面積", ping(property.parkingPing)],
       ["地坪", ping(property.landPing)],
       ["屋齡", valueOrMissing(property.age)],
