@@ -31,6 +31,7 @@ import { displayPropertyAgent } from "../lib/propertyAgent";
 import { getPropertyParkingNumber } from "../lib/propertyParkingNumber";
 import { matchesWebsiteFilter } from "../lib/propertyWebsite";
 import { validateFloorplanFiles } from "../lib/floorplanUpload";
+import { getPropertyManagementFee, formatPropertyManagementFee, managementFeeImportFields } from "../lib/propertyManagementFee";
 import floorplanAddress from "../lib/floorplanAddress";
 
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
@@ -94,6 +95,7 @@ const emptyForm = {
   layout: "",
   parkingCount: "",
   totalPrice: "",
+  managementFee: "",
   occupancy: "",
   laneWidth: "",
   agentInfo: "",
@@ -197,6 +199,7 @@ export default function Properties() {
   const floorplansByAddress = useMemo(() => indexRememberedFloorplans(items), [items]);
   const withKnownFloorplans = useCallback((item) => ({
     ...item,
+    managementFee: getPropertyManagementFee(item),
     floorplanFiles: mergeFloorplanFiles(item.floorplanFiles, floorplansByAddress.get(floorplanAddressKey(item.address))),
   }), [floorplansByAddress]);
   const { items: linkedCases } = useCollection("cases", "createdAt");
@@ -346,6 +349,7 @@ export default function Properties() {
       : mergeFloorplanFiles(form.floorplanAddressFiles, floorplansByAddress.get(addressKey));
     const formToSave = {
       ...withKnownFloorplans(form),
+      managementFee: String(form.managementFee ?? "").trim(),
       floorplanAddressFiles: mergeFloorplanFiles(rememberedFiles),
       websiteUrl: withoutAgid(form.websiteUrl), updatedAt: todayStr(),
     };
@@ -694,6 +698,7 @@ export default function Properties() {
             agentInfo: String(r[14] || ""),
             websiteUrl: withoutAgid(String(r[15] || "")),
             notes: String(r[17] || ""),
+            ...managementFeeImportFields(rows[0], r),
             category: cat,
           });
         }
@@ -933,6 +938,7 @@ export default function Properties() {
         if (record.commonAreaPing != null) updates.commonAreaPing = Number(record.commonAreaPing);
         if (record.parkingPing != null) updates.parkingPing = Number(record.parkingPing);
         if (record.parkingDescription) updates.parkingDescription = String(record.parkingDescription).trim();
+        if (record.managementFee !== null && record.managementFee !== undefined && String(record.managementFee).trim() !== "") updates.managementFee = String(record.managementFee).trim();
 
         matches.forEach((item) => {
           ops.push({ ref: doc(db, "properties", item.id), data: updates });
@@ -978,7 +984,7 @@ export default function Properties() {
     const HEADER = [
       "店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向",
       "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名",
-      "官網點閱網址", "詳細資料表", "備註",
+      "官網點閱網址", "詳細資料表", "備註", "管理費",
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1025,6 +1031,7 @@ export default function Properties() {
           p.websiteUrl || "",
           "",
           p.notes || "",
+          getPropertyManagementFee(p),
         ]);
       });
       const sheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -1434,6 +1441,7 @@ export default function Properties() {
                   form.parkingPing && `車位 ${form.parkingPing} 坪`,
                 ].filter(Boolean).join("・")} />
                 <DetailValue label="車位編號" value={form.parkingNumber} />
+                <DetailValue label="管理費" value={formatPropertyManagementFee(form) || "未提供"} />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>案件掃描紀錄</div>
@@ -1636,6 +1644,11 @@ export default function Properties() {
                     儲存後會記錄：{originalTotalPrice} 萬 → {form.totalPrice} 萬
                   </div>
                 )}
+              </div>
+              <div className="form-field">
+                <label htmlFor="property-management-fee">管理費</label>
+                <input id="property-management-fee" value={form.managementFee ?? ""} onChange={(e) => setForm({ ...form, managementFee: e.target.value })} placeholder="例如：2000、60 元／坪／月、無管理費" />
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>單填數字以元／月顯示；也可填寫實際計費方式，未確認可留空。</div>
               </div>
               <div className="form-field">
                 <label>空／自</label>

@@ -1,4 +1,5 @@
 import { getPropertyParkingNumber } from "./propertyParkingNumber";
+import { formatPropertyManagementFee } from "./propertyManagementFee";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -39,7 +40,7 @@ export function buildPropertySummary(property, date = new Date()) {
       ["地坪", ping(property.landPing)],
       ["屋齡", valueOrMissing(property.age)],
       ["使用狀況", valueOrMissing(property.occupancy)],
-      ["案件狀態", status],
+      ["管理費", formatPropertyManagementFee(property) || "未提供"],
     ],
     location: [
       ["社區", valueOrMissing(property.communityName)],
