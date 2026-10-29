@@ -1,9 +1,12 @@
 import { parseAge } from "./age";
+import { propertyUnitPrice } from "./propertyUnitPrice";
 
 export const PROPERTY_SORT_OPTIONS = [
   { value: "newest", label: "新案件優先" },
   { value: "price-asc", label: "總價低 → 高" },
   { value: "price-desc", label: "總價高 → 低" },
+  { value: "unit-price-asc", label: "單價低 → 高" },
+  { value: "unit-price-desc", label: "單價高 → 低" },
   { value: "main-area-desc", label: "主建物坪數大 → 小" },
   { value: "age-asc", label: "屋齡新 → 舊" },
   { value: "price-drop", label: "最近降價優先" },
@@ -41,7 +44,7 @@ function compareKnown(a, b, direction = "desc") {
   return direction === "asc" ? a - b : b - a;
 }
 
-export function sortProperties(properties, sortBy = "newest") {
+export function sortProperties(properties, sortBy = "newest", { unitPriceBasis = "gross" } = {}) {
   return [...properties].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
@@ -50,6 +53,12 @@ export function sortProperties(properties, sortBy = "newest") {
         break;
       case "price-desc":
         comparison = compareKnown(positiveNumber(a.totalPrice), positiveNumber(b.totalPrice));
+        break;
+      case "unit-price-asc":
+        comparison = compareKnown(propertyUnitPrice(a, unitPriceBasis), propertyUnitPrice(b, unitPriceBasis), "asc");
+        break;
+      case "unit-price-desc":
+        comparison = compareKnown(propertyUnitPrice(a, unitPriceBasis), propertyUnitPrice(b, unitPriceBasis));
         break;
       case "main-area-desc":
         comparison = compareKnown(positiveNumber(a.mainBuildingPing), positiveNumber(b.mainBuildingPing));

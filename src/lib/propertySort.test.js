@@ -21,3 +21,14 @@ test("價錢、主建物與屋齡排序把缺資料的物件放最後", () => {
 test("最近降價只計算真正降價，不把漲價排在前面", () => {
   expect(sortProperties(properties, "price-drop").map((item) => item.id)).toEqual(["new", "old", "missing"]);
 });
+
+test("單價排序遵守選定車位口徑，缺資料放最後", () => {
+  const rows = [
+    { id: "b", totalPrice: 900, titlePing: 30, parkingPing: 10, parkingCount: 1 },
+    { id: "a", totalPrice: 1000, titlePing: 50, parkingPing: 10, parkingCount: 1, parkingPrice: 200 },
+    { id: "unknown", totalPrice: 800 },
+  ];
+  expect(sortProperties(rows, "unit-price-asc").map((p) => p.id)).toEqual(["a", "b", "unknown"]);
+  expect(sortProperties(rows, "unit-price-desc").map((p) => p.id)).toEqual(["b", "a", "unknown"]);
+  expect(sortProperties(rows, "unit-price-asc", { unitPriceBasis: "net" })[0].id).toBe("a");
+});

@@ -1,0 +1,71 @@
+import React, { useMemo, useState } from "react";
+import { assessPropertyPriority, comparableDeals } from "../lib/propertyMarketReference";
+import { formatUnitPrice } from "../lib/propertyUnitPrice";
+import { formatPropertyManagementFee } from "../lib/propertyManagementFee";
+import "./PropertyMarketReference.css";
+
+const money = (value, divisor = 1) => value === null || value === undefined || value === "" ? "未提供" : (Number(value) / divisor).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
+function dateTime(value) {
+  if (!value) return "未提供";
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short", hour12: false }).format(date) : "未提供";
+}
+
+export function PropertyPriorityBadge({ assessment }) {
+  if (!assessment || assessment.status === "inactive") return null;
+  return <span className={`property-priority-badge ${assessment.status}`} aria-label={`${assessment.label}：${assessment.reason}`} title={assessment.reason}>{assessment.label}</span>;
+}
+
+export default function PropertyMarketReference({ property, reference, loading, error, onRefresh, needs, onEdit }) {
+  const [tolerance, setTolerance] = useState(0.2);
+  const [sameRooms, setSameRooms] = useState(true);
+  const deals = useMemo(() => comparableDeals(property, reference, { tolerance, sameRooms }), [property, reference, tolerance, sameRooms]);
+  const assessment = useMemo(() => assessPropertyPriority(property, reference, needs, { error }), [property, reference, needs, error]);
+  const community = reference?.community;
+  const amenities = community?.amenities;
+  const ping = Number(property.titlePing);
+  const recent = deals.slice(0, 5);
+  return <section className="panel property-market-reference" style={{ gridColumn: "1 / -1" }} aria-label="物件行情與搶攻提醒">
+    <header className="property-market-heading"><div><span className="property-market-eyebrow">{property.title || "本件物件"}</span><h3>成交參考與業務提醒</h3></div><button type="button" className="btn ghost" onClick={onRefresh} disabled={loading}>{loading ? "讀取參考中…" : "更新參考"}</button></header>
+    <div className="property-market-unit-row"><span>含車簡算單價 <strong>{formatUnitPrice(property, "gross")}</strong></span><span>扣車位單價 <strong>{formatUnitPrice(property, "net")}</strong></span></div>
+    <div className={`property-priority-detail ${assessment.status}`}>
+      <div className="property-priority-detail-heading"><strong>業務搶攻提醒</strong><PropertyPriorityBadge assessment={assessment} /><span>內部參考</span></div>
+      <div>{assessment.reason}</div><div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
+      {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={onEdit}>補齊車位與價格資料</button>}
+      <details className="property-priority-method"><summary>查看判斷依據</summary><p>同社區完整門牌、相近建物總坪數 ±20%、同房數、同類型，取最近五筆；其中近一年且可拆分車位的成交至少 3 筆，才比較扣車單價中位數。不高於中位數、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
+    </div>
+    {error && <div className="property-market-error" role="alert">{error}</div>}
+    {loading && <div className="property-market-message" role="status">正在取得社區主檔與官方成交；不查電傳，也不啟動付費 AI。</div>}
+    {!loading && !error && !community && <div className="property-market-message">{reference?.reason === "ambiguous_community" ? "社區名稱有重複，請補齊完整門牌確認。" : "尚未配對到 A7／A8／A9 社區主檔。請核對地址及社區名稱，再更新參考。"}</div>}
+    {community && !error && <>
+      <div className="property-market-grid">
+        <section className="property-market-deals" aria-label="同社區相近成交">
+          <div className="property-market-section-heading"><h4>{community.name}・近五筆相近成交</h4><span>官方實價登錄</span></div>
+          <div className="property-market-controls"><label>坪數範圍<select value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))}><option value={0.1}>相近 ±10%</option><option value={0.2}>相近 ±20%</option><option value={0.3}>相近 ±30%</option></select></label><label className="property-market-checkbox"><input type="checkbox" checked={sameRooms} onChange={(e) => setSameRooms(e.target.checked)} />同房數</label></div>
+          <div className="property-market-caption" role="status">{ping > 0 ? `${(ping * (1 - tolerance)).toFixed(2)}～${(ping * (1 + tolerance)).toFixed(2)} 坪・` : "權狀坪數未提供・"}符合 {deals.length} 筆，顯示最近 {recent.length} 筆</div>
+          {reference.matchMethod === "exact-community-name" && <div className="property-market-caption warning">依唯一社區名稱／別名配對；請核對本件完整門牌。</div>}
+          <div className="property-market-table">
+            <div className="property-market-table-heading" aria-hidden="true"><span>日期／樓層</span><span>格局／坪數／地址</span><span>成交總價</span><span>官方揭露單價</span><span>車位／備註</span></div>
+            {recent.map((d) => <article key={d.id} className="property-market-trade" aria-label={`${d.date} ${d.address}`}>
+              <div><strong>{d.date}</strong><small>{d.floor || "樓層未提供"}</small></div>
+              <div><strong>{d.rooms ?? "?"}房{d.halls ?? "?"}廳{d.baths ?? "?"}衛・{money(d.area)} 坪</strong><small>{d.address}</small></div>
+              <div><span className="property-market-mobile-label">成交總價</span><strong>{money(d.price, 10000)} 萬</strong></div>
+              <div><span className="property-market-mobile-label">官方揭露單價</span><strong>{money(d.unit)}</strong><small>萬／坪</small></div>
+              <div><small>{d.parkingType || "未列車位"}{Number(d.parkingPrice) > 0 ? `／車價 ${money(d.parkingPrice, 10000)} 萬` : d.parkingType ? "／車價未分列" : ""}</small>{d.remark && <details><summary>交易備註</summary><small>{d.remark}</small></details>}</div>
+            </article>)}
+          </div>
+          {!recent.length && <div className="property-market-message">目前條件查無可比成交，不以其他社區補足。可調整坪數或取消同房數。</div>}
+          <div className="property-market-source">資料發布：{reference.publishedDate || "未提供"}；成交年度：{(reference.years || []).join("、")}。本社區本批最新成交：{reference.deals?.[0]?.date || "未提供"}。</div>
+          <details className="property-priority-method"><summary>面積與單價說明</summary><p>建物總坪數採官方建物移轉總面積，可能含車位、公設；表中的單價直接保留官方揭露數值，其車位拆分方式可能不同，不可直接與含車簡算單價混比。搶攻提醒另外使用可確認的扣車價格與面積計算，不估填車位價格。已排除特殊交易；增建等備註仍須核對。</p></details>
+        </section>
+        <aside className="property-market-community" aria-label="社區公設與管理">
+          <h4>社區公設與管理</h4><div className="property-market-caption">{community.name}・{community.zone}</div>
+          {community.households && <div className="property-market-caption">{money(community.households)} 戶</div>}
+          <div className="property-market-facilities">{amenities?.list?.length ? <div className="property-market-facility-tags">{amenities.list.map((a) => <span key={a}>{a}</span>)}</div> : <strong>來源尚未填寫公設資料</strong>}{amenities?.note && <p>{amenities.note}</p>}<small>公設更新：{dateTime(amenities?.updatedAt)}</small></div>
+          <dl><div><dt>本件管理費</dt><dd>{formatPropertyManagementFee(property) || "未提供"}</dd></div><div><dt>社區管理費單價</dt><dd>{community.fees?.perPing !== null && community.fees?.perPing !== undefined ? `${money(community.fees.perPing)} 元／坪・月` : "來源尚未提供"}</dd></div><div><dt>社區資料更新</dt><dd>{dateTime(community.updatedAt)}</dd></div><div><dt>本次讀取</dt><dd>{dateTime(reference.fetchedAt)}</dd></div></dl>
+          <a href={community.url} target="_blank" rel="noreferrer">查看來源社區資料</a><div className="property-market-caption">公設依來源更新；本件管理費保留原物件資料。</div>
+        </aside>
+      </div>
+    </>}
+  </section>;
+}

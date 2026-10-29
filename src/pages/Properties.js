@@ -37,6 +37,10 @@ import { getPropertyManagementFee, formatPropertyManagementFee, managementFeeImp
 import floorplanAddress from "../lib/floorplanAddress";
 import commonArea from "../lib/propertyCommonArea";
 import { formatPropertyAreaWithoutParking } from "../lib/propertyAreaWithoutParking";
+import { useMarketReference } from "../hooks/useMarketReference";
+import { matchesUnitPrice, formatUnitPrice } from "../lib/propertyUnitPrice";
+import { assessPropertyPriority } from "../lib/propertyMarketReference";
+import PropertyMarketReference, { PropertyPriorityBadge } from "./PropertyMarketReference";
 
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
 const { companyCommonAreaFields, EXCLUDING_PARKING } = commonArea;
@@ -94,6 +98,9 @@ const emptyForm = {
   parkingPing: "",
   parkingNumber: "",
   parkingDescription: "",
+  parkingPrice: "",
+  viewingStatus: "unknown",
+  viewingConfirmedAt: "",
   floor: "",
   orientation: "",
   age: "",
@@ -217,6 +224,10 @@ export default function Properties() {
   const [keyword, setKeyword] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  const [unitPriceBasis, setUnitPriceBasis] = useState("gross");
+  const [minUnitPrice, setMinUnitPrice] = useState("");
+  const [maxUnitPrice, setMaxUnitPrice] = useState("");
+  const [marketReferences, setMarketReferences] = useState({});
   const [minMainBuildingPing, setMinMainBuildingPing] = useState("");
   const [maxMainBuildingPing, setMaxMainBuildingPing] = useState("");
   const [minTitlePing, setMinTitlePing] = useState("");
@@ -256,6 +267,16 @@ export default function Properties() {
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [sharingFloorplanFile, setSharingFloorplanFile] = useState(null);
   const [applyingFloorplan, setApplyingFloorplan] = useState(false);
+  const marketReference = useMarketReference(form, Boolean(editingId && showForm && !editMode));
+  useEffect(() => {
+    if (!editingId || !showForm || editMode) return;
+    if (marketReference.data || marketReference.error) {
+      setMarketReferences((current) => ({ ...current, [editingId]: { data: marketReference.data, error: marketReference.error } }));
+    }
+  }, [editingId, showForm, editMode, marketReference.data, marketReference.error]);
+  const priorities = useMemo(() => new Map(items.filter((p) =>
+    /a[789]/i.test([p.area, p.title].join(" ")) || A7_COMMUNITY_NAMES.includes(p.communityName) || marketReferences[p.id]
+  ).map((p) => [p.id, assessPropertyPriority(p, marketReferences[p.id]?.data, needs, { error: marketReferences[p.id]?.error })])), [items, marketReferences, needs]);
 
   const copyUrl = async (url) => {
     try {
@@ -356,6 +377,9 @@ export default function Properties() {
       : mergeFloorplanFiles(form.floorplanAddressFiles, floorplansByAddress.get(addressKey));
     const formToSave = {
       ...withKnownFloorplans(form),
+      viewingConfirmedAt: form.viewingStatus === "available"
+        ? (items.find((p) => p.id === editingId)?.viewingStatus === "available" && form.viewingConfirmedAt
+          ? form.viewingConfirmedAt : new Date().toISOString()) : "",
       managementFee: String(form.managementFee ?? "").trim(),
       ...(!editingId || String(form.commonAreaPing) !== String(items.find((item) => item.id === editingId)?.commonAreaPing)
         ? { commonAreaBasis: EXCLUDING_PARKING } : {}),
@@ -607,6 +631,7 @@ export default function Properties() {
     if (!ignoreCategory && activeCategory !== "全部" && (p.category || "未分類") !== activeCategory) return false;
     if (minPrice && Number(p.totalPrice || 0) < Number(minPrice)) return false;
     if (maxPrice && Number(p.totalPrice || 0) > Number(maxPrice)) return false;
+    if (!matchesUnitPrice(p, minUnitPrice, maxUnitPrice, unitPriceBasis)) return false;
     if (!matchRange(p.mainBuildingPing, minMainBuildingPing, maxMainBuildingPing)) return false;
     if (!matchRange(p.titlePing, minTitlePing, maxTitlePing)) return false;
     if (!matchRange(p.landPing, minLandPing, maxLandPing)) return false;
@@ -626,7 +651,7 @@ export default function Properties() {
     return matchesPropertyKeyword(p, keyword);
   };
 
-  const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy);
+  const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy, { unitPriceBasis });
   const selectedProperties = Array.from(selectedIds, (id) => items.find((item) => item.id === id)).filter(Boolean);
   const hasKeyword = Boolean(keyword.trim());
   const categoryPool = pool.filter((p) => matchesPropertyFilters(p, true));
@@ -644,12 +669,17 @@ export default function Properties() {
   const advancedFilterCount = [
     minMainBuildingPing, maxMainBuildingPing, minTitlePing, maxTitlePing,
     minLandPing, maxLandPing, minAge, maxAge, parkingFilter === "all" ? "" : parkingFilter,
+    minUnitPrice, maxUnitPrice,
+    unitPriceBasis === "net" ? "net" : "",
   ].filter((value) => value !== "").length;
 
   const clearAllFilters = () => {
     setKeyword("");
     setMinPrice("");
     setMaxPrice("");
+    setMinUnitPrice("");
+    setMaxUnitPrice("");
+    setUnitPriceBasis("gross");
     setLayoutKeyword("");
     setFloorFilter("");
     setTopFloorOnly(false);
@@ -1335,6 +1365,14 @@ export default function Properties() {
         </div>
       )}
 
+      {(!isMobile || showAdvancedFilters) && <div className="property-unit-filters" aria-label="物件單價篩選">
+        <label>單價計算方式<select value={unitPriceBasis} onChange={(e) => setUnitPriceBasis(e.target.value)}><option value="gross">含車簡算單價</option><option value="net">扣車位單價</option></select></label>
+        <label>最低單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={minUnitPrice} onChange={(e) => setMinUnitPrice(e.target.value)} placeholder="不限" /></label>
+        <label>最高單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={maxUnitPrice} onChange={(e) => setMaxUnitPrice(e.target.value)} placeholder="不限" /></label>
+        <small>{unitPriceBasis === "net" ? "扣車篩選需要車位價格與坪數；資料不齊的案件不列入。" : "總價 ÷ 權狀坪數。沒有權狀坪數的案件不列入單價篩選。"}</small>
+      </div>}
+      {minUnitPrice !== "" && maxUnitPrice !== "" && Number(minUnitPrice) > Number(maxUnitPrice) && <div className="property-unit-filter-error" role="alert">最低單價不能大於最高單價，請調整範圍。</div>}
+
       {showAdvancedFilters && (
         <div className="panel" style={{ padding: 14, marginBottom: 14, background: "var(--panel-soft, #FAFAF8)" }}>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "end" }}>
@@ -1427,6 +1465,7 @@ export default function Properties() {
             alignItems: "start",
           }}
         >
+          {editingId && !editMode && <PropertyMarketReference property={{ ...form, id: editingId }} reference={marketReference.data} loading={marketReference.loading} error={marketReference.error} onRefresh={marketReference.refresh} needs={needs} onEdit={() => setEditMode(true)} />}
           <div className="panel">
           {editingId && !editMode && (
             <div>
@@ -1470,6 +1509,8 @@ export default function Properties() {
                 ].filter(Boolean).join("・")} />
                 <DetailValue label="車位編號" value={form.parkingNumber} />
                 <DetailValue label="管理費" value={formatPropertyManagementFee(form) || "未提供"} />
+                <DetailValue label="車位價格" value={form.parkingPrice !== "" && form.parkingPrice != null ? `${form.parkingPrice} 萬` : "未提供"} />
+                <DetailValue label="帶看確認" value={({ available: "已確認可帶看", appointment: "需先預約確認", unavailable: "目前無法帶看" })[form.viewingStatus] || "尚未確認"} />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>案件掃描紀錄</div>
@@ -1640,6 +1681,18 @@ export default function Properties() {
               <div className="form-field">
                 <label htmlFor="property-parking-ping">車位（坪）</label>
                 <input id="property-parking-ping" value={form.parkingPing} onChange={(e) => setForm({ ...form, parkingPing: e.target.value })} />
+              </div>
+              <div className="form-field">
+                <label htmlFor="property-parking-price">車位價格（萬）</label>
+                <input id="property-parking-price" type="number" min="0" step="0.1" value={form.parkingPrice ?? ""} onChange={(e) => setForm({ ...form, parkingPrice: e.target.value })} placeholder="實際拆分價格；未確認請留空" />
+              </div>
+              <div className="form-field">
+                <label htmlFor="property-viewing-status">帶看確認</label>
+                <select id="property-viewing-status" value={form.viewingStatus || "unknown"} onChange={(e) => setForm({ ...form, viewingStatus: e.target.value, viewingConfirmedAt: "" })}>
+                  <option value="unknown">尚未確認</option><option value="available">已確認可帶看</option><option value="appointment">需先預約確認</option><option value="unavailable">目前無法帶看</option>
+                </select>
+                <small style={{ color: "var(--muted)" }}>選擇可帶看並儲存後記錄確認時間，30 天後需重新確認。</small>
+                {form.viewingStatus === "available" && <button type="button" className="btn ghost" onClick={() => setForm({ ...form, viewingConfirmedAt: "" })}>重新確認可帶看（儲存後生效）</button>}
               </div>
               <div className="form-field">
                 <label>樓別</label>
@@ -1859,6 +1912,7 @@ export default function Properties() {
               <div>
               <div className="name">
                 {p.title} <span className="tag">{p.category}</span>
+                <PropertyPriorityBadge assessment={priorities.get(p.id)} />
                 {(p.sheetFiles || []).length > 0 && <span title="已上傳資料表"> 📄</span>}
               </div>
               <div className="meta">
@@ -1881,6 +1935,7 @@ export default function Properties() {
                   <span>總價</span><strong>{p.totalPrice}</strong><span>萬</span>
                 </div>
               )}
+              {formatUnitPrice(p, unitPriceBasis) !== "未提供" && <div className="meta">{unitPriceBasis === "net" ? "扣車位單價" : "含車簡算單價"}：{formatUnitPrice(p, unitPriceBasis)}</div>}
               {(p.mainBuildingPing != null || p.auxiliaryBuildingPing != null || p.commonAreaPing != null || p.parkingPing != null) && (
                 <div className="meta">
                   {p.mainBuildingPing != null && <>主建 {p.mainBuildingPing} 坪　</>}

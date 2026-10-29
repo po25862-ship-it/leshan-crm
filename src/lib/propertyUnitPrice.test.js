@@ -1,0 +1,29 @@
+import { propertyUnitPrice, matchesUnitPrice, officialNetUnit, propertyParkingState } from "./propertyUnitPrice";
+
+const p = { totalPrice: 1758, titlePing: 54.59, parkingPing: 11.01, parkingCount: 1 };
+test("gross and parking-exclusive asking prices remain distinct", () => {
+  expect(propertyUnitPrice(p)).toBeCloseTo(32.2037);
+  expect(propertyUnitPrice(p, "net")).toBeNull();
+  expect(propertyUnitPrice({ ...p, parkingPrice: 200 }, "net")).toBeCloseTo(35.7503);
+});
+test("missing car information, zero car price and contradictory values do not become confirmed net prices", () => {
+  expect(propertyUnitPrice({ totalPrice: 1000, titlePing: 30 }, "net")).toBeNull();
+  expect(propertyUnitPrice({ ...p, parkingPrice: 0 }, "net")).toBeNull();
+  expect(propertyUnitPrice({ ...p, parkingPrice: 200, parkingPing: 0 }, "net")).toBeNull();
+  expect(propertyParkingState({ ...p, parkingDescription: "無" })).toBe("unknown");
+  expect(propertyUnitPrice({ totalPrice: 1000, titlePing: 25, parkingDescription: "無" }, "net")).toBe(40);
+});
+test("filter ranges handle inclusive boundaries, unknown values and invalid ranges", () => {
+  expect(matchesUnitPrice(p, "32", "33")).toBe(true);
+  expect(matchesUnitPrice(p, "", "30")).toBe(false);
+  expect(matchesUnitPrice(p, "30", "40", "net")).toBe(false);
+  expect(matchesUnitPrice(p, "40", "30")).toBe(false);
+  expect(matchesUnitPrice({}, "", "")).toBe(true);
+  expect(matchesUnitPrice({}, "", "", "net")).toBe(false);
+});
+test("official net comparison needs actual parking split and never replaces the disclosed unit", () => {
+  const d = { price: 16300000, area: 54.59, unit: 32.81, parkingPrice: 2000000, parkingArea: 11.01, parkingType: "坡道平面" };
+  expect(officialNetUnit(d)).toBeCloseTo(32.8132);
+  expect(officialNetUnit({ ...d, parkingPrice: 0 })).toBeNull();
+  expect(d.unit).toBe(32.81);
+});
