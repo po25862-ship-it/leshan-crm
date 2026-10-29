@@ -30,7 +30,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
     <div className={`property-priority-detail ${assessment.status}`}>
       <div className="property-priority-detail-heading"><strong>業務搶攻提醒</strong><PropertyPriorityBadge assessment={assessment} /><span>內部參考</span></div>
       <div>{assessment.reason}</div><div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
-      {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>前往補齊{assessment.missingFields?.map((field) => field.label).join("、") || "單價資料"}</button>}
+      {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>去補資料</button>}
       <details className="property-priority-method"><summary>查看判斷依據</summary><p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數，取最近五筆；其中近一年且可拆分車位的成交至少 3 筆，才比較扣車單價中位數。不高於中位數、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
     </div>
     {error && <div className="property-market-error" role="alert">{error}</div>}

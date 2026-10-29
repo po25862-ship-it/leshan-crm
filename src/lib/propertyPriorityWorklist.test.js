@@ -16,7 +16,7 @@ test("work categories use the same current assessment as badges, with unchecked 
     expect(properties.filter((p) => matchesPriorityFilter(assessments.get(p.id), group))).toHaveLength(1);
   }
   expect(priorityGroup(assessments.get("outside"))).toBe("other");
-  expect(assessments.get("unchecked").label).toBe("待查行情");
+  expect(assessments.get("unchecked").label).toBe("還沒查過附近成交");
 });
 
 test("cache invalidates changed addresses, type or comparable area and reassesses current price and needs", () => {

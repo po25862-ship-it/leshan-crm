@@ -4,9 +4,13 @@ export const PRIORITY_FILTERS = [
   { value: "all", label: "全部案件" },
   { value: "priority", label: "優先推案" },
   { value: "negotiate", label: "議價追蹤" },
-  { value: "pending", label: "待補資料" },
-  { value: "unassessed", label: "待查行情" },
+  { value: "pending", label: "先把資料補齊" },
+  { value: "unassessed", label: "還沒查過附近成交" },
 ];
+
+export function priorityActionLabel(assessment) {
+  return assessment?.code === "missing_unit" ? "去補資料" : "看價格比較";
+}
 
 export const REFERENCE_MAX_AGE = 86400000;
 const STORAGE_PREFIX = "leshan-crm.priority-reference.v1:";

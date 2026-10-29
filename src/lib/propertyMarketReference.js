@@ -61,31 +61,32 @@ function time(value) {
 function median(values) { const s = [...values].sort((a, b) => a - b); const i = Math.floor(s.length / 2); return s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2; }
 
 export function assessPropertyPriority(property = {}, reference = null, needs = [], { now = Date.now(), error = "" } = {}) {
-  const pending = (reason, next, extra = {}) => ({ status: "pending", label: ["missing_reference", "source_unavailable", "stale_reference"].includes(extra.code) ? "待查行情" : "待補資料", reason, next, ...extra });
+  const pending = (reason, next, extra = {}) => ({ status: "pending", label: ["missing_reference", "source_unavailable", "stale_reference"].includes(extra.code) ? "還沒查過附近成交" : "先把資料補齊", reason, next, ...extra });
   if ((property.status || "active") !== "active") return { status: "inactive", label: "非在售", reason: "此案件目前非在售，不列為優先推案。", next: "確認案件狀態後再評估。" };
   const unit = propertyUnitPrice(property, "net");
   if (unit === null) {
     const missingFields = missingUnitPriceFields(property);
     const names = missingFields.map((field) => field.label).join("、") || "單價計算資料";
-    return pending(`${names}尚未確認，無法計算扣車位單價。`, `請確認並填寫${names}；其餘已填資料可正常使用。`, {
-      code: "missing_unit", missingFields, label: missingFields.length === 1 ? `待補${names}` : "待補單價資料",
+    const fieldValues = { "總價": property.totalPrice, "權狀坪數": property.titlePing, "車位價格": property.parkingPrice, "車位坪數": property.parkingPing, "車位狀況": property.parkingDescription };
+    const empty = missingFields.every((field) => fieldValues[field.label] === "" || fieldValues[field.label] == null);
+    return pending(`${empty ? `這間還沒填${names}` : `這間的${names}還沒確認好`}，暫時沒辦法比較房子的每坪價格。`, `確認${names}後填進去，系統就會重新判斷。`, {
+      code: "missing_unit", missingFields,
     });
   }
   if (error) return pending("市場參考暫時無法更新。", "確認市場開發程式在線後，重新更新參考。", { code: "source_unavailable" });
   if (reference?.fetchedAt && now - Number(reference.fetchedAt) > 86400000) return pending("上次讀取的市場參考已超過一天。", "更新成交參考後重新評估。", { code: "stale_reference" });
-  if (!reference) return pending(error || "尚未取得同社區成交參考。", "查看資料並更新成交參考。", { code: "missing_reference" });
+  if (!reference) return pending("這間還沒查過附近成交。", "按一下更新案件判斷，就會查同社區、大小差不多的房子最近賣多少。", { code: "missing_reference" });
   if (!reference.community) return pending("尚未配對到 A7／A8／A9 的唯一社區。", "核對完整門牌及社區名稱。", { code: "unmatched_community" });
   if (reference.matchMethod !== "exact-doorplate") return pending("目前只依社區名稱配對，完整門牌仍需核對。", "核對本件門牌是否屬於該社區。", { code: "unconfirmed_community" });
   const matches = comparableDeals(property, reference, { now, sameRooms: false });
   const cutoff = new Date(now - 365 * 86400000).toISOString().slice(0, 10);
   const samples = matches.slice(0, 5).filter((d) => d.date >= cutoff && officialNetUnit(d) !== null);
-  if (samples.length < 3) return pending(`最近五筆中，近一年可比較的扣車成交僅 ${samples.length} 筆。`, "可調整坪數範圍查看其他參考；可比成交不足時，暫不判定為優先推案。", { code: "insufficient_comps", sampleCount: samples.length, label: "可比成交不足" });
+  if (samples.length < 3) return pending(`找到的相近成交太少，還不能判斷。最近五筆中，近一年能把車位分開算的成交只有 ${samples.length} 筆，需要至少 3 筆。`, "可以調整坪數範圍，多看幾筆參考。資料還不夠時，系統先不判斷是否優先推薦。", { code: "insufficient_comps", sampleCount: samples.length, label: "找到的相近成交太少，還不能判斷" });
   const referenceUnit = median(samples.map(officialNetUnit));
   const buyers = activeMatches(property, needs);
   const detail = { unit, referenceUnit, sampleCount: samples.length, matchedNeeds: buyers.strict, possibleNeeds: buyers.possible };
-  if (unit > referenceUnit && buyers.possible > 0) return { ...detail, status: "negotiate", label: "議價追蹤", reason: `扣車開價 ${unit.toFixed(2)} 萬／坪，高於相近成交中位數 ${referenceUnit.toFixed(2)}；有 ${buyers.possible} 組可追蹤客需。`, next: "先向負責業務確認屋況與議價空間，再決定是否推薦。" };
-  if (unit > referenceUnit) return pending("扣車開價高於相近成交中位數，且尚無適合的客需。", "確認價格彈性並配對現有買方需求。", detail);
-  if (buyers.strict === 0) return pending("扣車開價不高於相近成交中位數，但目前沒有完全符合的現有客需。", "確認屋況、樓層差異，並配對買方需求。", detail);
+  if (unit > referenceUnit) return { ...detail, status: "negotiate", label: "議價追蹤", reason: `扣車開價 ${unit.toFixed(2)} 萬／坪，高於相近成交中位數 ${referenceUnit.toFixed(2)}；${buyers.possible > 0 ? `有 ${buyers.possible} 組客人的需求可能適合` : "目前還沒找到合適的客人"}。`, next: "先問負責業務，屋主的價格還能不能談，再看看適合推薦給誰。" };
+  if (buyers.strict === 0) return pending("目前還沒找到合適的客人。", "先看看現有客人的需求，有合適的再安排介紹。", { ...detail, label: "目前還沒找到合適的客人" });
   const confirmed = time(property.viewingConfirmedAt);
   const ready = property.viewingStatus === "available" && confirmed !== null && confirmed <= now && now - confirmed <= 30 * 86400000;
   if (!ready) return pending(`符合 ${buyers.strict} 組現有客需，尚待近期帶看確認。`, "向負責業務確認可帶看，並在編輯資料更新帶看狀態。", detail);

@@ -39,7 +39,7 @@ import commonArea from "../lib/propertyCommonArea";
 import { formatPropertyAreaWithoutParking } from "../lib/propertyAreaWithoutParking";
 import { useMarketReference, loadMarketReference } from "../hooks/useMarketReference";
 import { usePriorityReferenceCache } from "../hooks/usePriorityReferenceCache";
-import { PRIORITY_FILTERS, buildPriorityAssessments, countPriorityGroups, matchesPriorityFilter, refreshPriorityReferences } from "../lib/propertyPriorityWorklist";
+import { PRIORITY_FILTERS, buildPriorityAssessments, countPriorityGroups, matchesPriorityFilter, priorityActionLabel, refreshPriorityReferences } from "../lib/propertyPriorityWorklist";
 import { matchesUnitPrice, formatUnitPrice, propertyUnitPrice } from "../lib/propertyUnitPrice";
 import "./PropertyDetailWorkspace.css";
 import PropertyMarketReference, { PropertyPriorityBadge } from "./PropertyMarketReference";
@@ -1398,7 +1398,7 @@ export default function Properties() {
           </button>)}
         </div>
         <p>範圍：A7／A8／A9 在售案件。可更新行情：{priorityTargets.length} 筆。</p>
-        <details className="property-priority-method"><summary>分類與更新說明</summary><p>筆數跟隨搜尋條件。待補資料包含車位、可比成交及帶看等待確認事項；尚未查過行情的案件另列「待查行情」。單價資料不足的案件可先補齊資料，再更新行情。每位同事的行情快取在目前裝置保留一天，分類依目前的物件、客需及帶看確認重算。</p></details>
+        <details className="property-priority-method"><summary>分類與更新說明</summary><p>筆數會跟著搜尋條件改變。「先把資料補齊」會列出還需要補資料或再確認的案件，例如車位價格、成交參考或能不能帶看。「還沒查過附近成交」也包含需要重新查詢的案件；這裡查的是同社區、大小差不多的房子。查過的成交在目前裝置保留一天，系統會搭配目前的物件資料、客人需求與帶看確認，重新整理分類。</p></details>
         <div className="property-priority-progress" role="status">{priorityRefresh.running ? `正在檢查本次範圍 ${priorityRefresh.total} 筆，已完成 ${priorityRefresh.completed} 筆。` : priorityRefresh.message || "按「更新案件判斷」，一次檢查目前範圍，不用逐筆開啟。"}</div>
       </section>
 
@@ -2020,7 +2020,7 @@ export default function Properties() {
                   const assessment = priorities.get(p.id);
                   if (assessment.code === "missing_unit") openPropertyEditor(assessment.missingFields?.[0]?.fieldId);
                   else setDetailTab("market");
-                }}>前往處理</button>
+                }}>{priorityActionLabel(priorities.get(p.id))}</button>
               </div>}
               <div className="meta">
                 {Boolean(p.floor) && <>{p.floor}　</>}

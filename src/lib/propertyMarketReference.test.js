@@ -13,9 +13,11 @@ test("comparables include different room counts while excluding special, wrong-t
 test("missing parking price never earns a positive opportunity label", () => {
   const result = assessPropertyPriority({ ...property, titlePing: 34.43, totalPrice: 1750, parkingPing: 7.77, parkingPrice: "" }, reference, needs, { now });
   expect(result.code).toBe("missing_unit");
-  expect(result.label).toBe("待補車位價格");
+  expect(result.label).toBe("先把資料補齊");
   expect(result.missingFields).toEqual([{ label: "車位價格", fieldId: "property-parking-price" }]);
   expect(result.reason).not.toContain("車位坪數");
+  expect(result.reason).toBe("這間還沒填車位價格，暫時沒辦法比較房子的每坪價格。");
+  expect(result.next).toBe("確認車位價格後填進去，系統就會重新判斷。");
 });
 test("priority needs actual clients, recent comparable evidence, exact community and recent manual viewing confirmation", () => {
   expect(assessPropertyPriority(property, reference, needs, { now }).status).toBe("priority");
@@ -30,7 +32,7 @@ test("old and incomplete parking transactions cannot supply confident comparison
   const old = { ...reference, deals: reference.deals.map((d) => ({ ...d, date: "2024-01-01" })) };
   const result = assessPropertyPriority(property, old, needs, { now });
   expect(result.code).toBe("insufficient_comps");
-  expect(result.label).toBe("可比成交不足");
+  expect(result.label).toBe("找到的相近成交太少，還不能判斷");
 });
 test("offline or stale responses never keep an old positive priority label", () => {
   expect(assessPropertyPriority(property, reference, needs, { now, error: "offline" }).code).toBe("source_unavailable");
@@ -42,4 +44,12 @@ test("opportunity assessment uses eligible same-community sales across room coun
   const result = assessPropertyPriority(property, mixed, needs, { now });
   expect(result.status).toBe("priority");
   expect(result.sampleCount).toBe(3);
+});
+
+test("an above-reference asking price belongs to negotiation even without a matched customer", () => {
+  const result = assessPropertyPriority({ ...property, totalPrice: 1700 }, reference, [], { now });
+  expect(result.status).toBe("negotiate");
+  expect(result.label).toBe("議價追蹤");
+  expect(result.reason).toContain("目前還沒找到合適的客人");
+  expect(result.missingFields).toBeUndefined();
 });
