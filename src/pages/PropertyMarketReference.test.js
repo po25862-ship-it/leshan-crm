@@ -11,12 +11,14 @@ beforeEach(() => { host = document.createElement("div"); document.body.appendChi
 afterEach(() => { act(() => root.unmount()); host.remove(); });
 function render(props = {}) { act(() => root.render(<PropertyMarketReference property={property} reference={reference} needs={[]} onRefresh={() => {}} onEdit={() => {}} {...props} />)); }
 test("real source facilities and newest comparables render with their date and price basis", () => {
-  render();
+  render({ property: { ...property, parkingPrice: 200 } });
   expect(host.textContent).toContain("閱覽室");
   expect(host.textContent).toContain("需預約");
   expect(host.textContent).toContain("2026-10-21");
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(2);
   expect(host.textContent).toContain("不限房數");
+  expect(host.textContent).toContain("本次判斷採用 2 筆成交");
+  expect(host.textContent).toContain("沒有車位的成交也可納入");
   expect(host.querySelector('input[type="checkbox"]')).toBeNull();
   expect(host.querySelector("a")).toBeNull();
 });

@@ -60,3 +60,24 @@ test("priority assessment uses the requested car preset and clearly identifies t
   expect(result.unit).toBe(33);
   expect(result.reason).toContain("平面每個 180 萬預設試算");
 });
+
+test("Huangxiang's two no-parking sales count alongside two fully split car sales, excluding the preset-only sale", () => {
+  const subject = { ...property, titlePing: 42.15, totalPrice: 1598, parkingPing: 11.01, parkingPrice: "", parkingDescription: "坡道平面", layout: "2/2/1" };
+  const raw = [
+    { date: "2026-06-11", area: 40.67, price: 14300000, parkingType: "坡道平面", parkingPrice: 1800000, parkingArea: 9.53 },
+    { date: "2026-04-12", area: 34.61, price: 13700000, parkingType: "", parkingPrice: 0, parkingArea: null },
+    { date: "2026-04-09", area: 42.15, price: 14160000, parkingType: "坡道平面", parkingPrice: 1900000, parkingArea: 11.01 },
+    { date: "2025-12-20", area: 45.97, price: 15750000, parkingType: "", parkingPrice: 0, parkingArea: null },
+    { date: "2025-12-04", area: 42.15, price: 14150000, parkingType: "坡道平面", parkingPrice: 0, parkingArea: 11.01 },
+  ];
+  const actual = { ...reference, deals: raw.map((row, index) => ({ ...deal, id: String(index), ...row })) };
+  const result = assessPropertyPriority(subject, actual, [], { now });
+  expect(result.status).toBe("negotiate");
+  expect(result.sampleCount).toBe(4);
+  expect(result.referenceUnit.toFixed(2)).toBe("39.48");
+  expect(result.unit.toFixed(2)).toBe("45.54");
+  expect(result.reason).toContain("預設試算");
+  const onlyTwo = { ...actual, deals: actual.deals.filter((row) => row.parkingType) };
+  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).sampleCount).toBe(2);
+  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).code).toBe("insufficient_comps");
+});

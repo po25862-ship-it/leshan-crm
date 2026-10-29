@@ -49,7 +49,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
       <div className="property-priority-detail-heading"><strong>業務搶攻提醒</strong><PropertyPriorityBadge assessment={assessment} /><span>內部參考</span></div>
       <div>{assessment.reason}</div><div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
       {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>去補資料</button>}
-      <details className="property-priority-method"><summary>查看判斷依據</summary><p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數，取最近五筆；其中近一年且可拆分車位的成交至少 3 筆，才比較扣車單價中位數。不高於中位數、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
+      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價試算的成交不計入。</p>}<p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數，取最近五筆；其中近一年、無車位或官方車位價與坪數完整的成交至少 3 筆，才比較房屋每坪價格的中位數。不高於中位數、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
     </div>
     {error && <div className="property-market-error" role="alert">{error}</div>}
     {loading && <div className="property-market-message" role="status">正在取得社區主檔與官方成交；不查電傳，也不啟動付費 AI。</div>}

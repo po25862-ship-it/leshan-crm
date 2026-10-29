@@ -28,6 +28,16 @@ test("official net comparison needs actual parking split and never replaces the 
   expect(d.unit).toBe(32.81);
 });
 
+test("official no-parking sales accept blank inapplicable areas without accepting incomplete parking sales", () => {
+  const sale = { price: 13700000, area: 34.61, parkingType: "", parkingPrice: 0 };
+  for (const parkingArea of [null, undefined, "", 0]) {
+    expect(officialNetUnit({ ...sale, parkingArea })).toBeCloseTo(39.5839);
+  }
+  for (const patch of [{ parkingArea: "bad" }, { parkingArea: -1 }, { parkingArea: 8 }, { parkingType: "坡道平面", parkingArea: null }, { parkingType: "坡道平面", parkingArea: 8 }, { parkingPrice: null }]) {
+    expect(officialNetUnit({ ...sale, ...patch })).toBeNull();
+  }
+});
+
 test("flat and mechanical presets apply consistently to net calculations, filters and missing fields", () => {
   const flat = { ...p, parkingDescription: "坡道平面", parkingPrice: "" };
   const mechanical = { ...p, parkingDescription: "升降機械" };

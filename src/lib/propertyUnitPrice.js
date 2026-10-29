@@ -98,6 +98,9 @@ export function officialNetUnit(deal = {}) {
   const parkingArea = nonNegativeNumber(deal.parkingArea);
   if (!(price > 0) || !(area > 0)) return null;
   if (parkingPrice > 0 && parkingArea > 0 && parkingPrice < price && parkingArea < area) return (price - parkingPrice) / (area - parkingArea) / 10000;
-  if (!deal.parkingType && parkingPrice === 0 && parkingArea === 0) return price / area / 10000;
+  // Official no-parking sales leave the inapplicable parking area blank/null.
+  // Zero car price alone is not enough: reject parking types or invalid areas.
+  const noParkingArea = parkingArea === 0 || deal.parkingArea == null || deal.parkingArea === "";
+  if (!String(deal.parkingType || "").trim() && parkingPrice === 0 && noParkingArea) return price / area / 10000;
   return null;
 }
