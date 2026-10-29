@@ -10,7 +10,11 @@ test("comparables exclude special, wrong-type, different rooms and future record
   expect(comparableDeals(property, source, { now, sameRooms: false })).toHaveLength(4);
 });
 test("missing parking price never earns a positive opportunity label", () => {
-  expect(assessPropertyPriority({ ...property, parkingPrice: "" }, reference, needs, { now }).code).toBe("missing_unit");
+  const result = assessPropertyPriority({ ...property, titlePing: 34.43, totalPrice: 1750, parkingPing: 7.77, parkingPrice: "" }, reference, needs, { now });
+  expect(result.code).toBe("missing_unit");
+  expect(result.label).toBe("待補車位價格");
+  expect(result.missingFields).toEqual([{ label: "車位價格", fieldId: "property-parking-price" }]);
+  expect(result.reason).not.toContain("車位坪數");
 });
 test("priority needs actual clients, recent comparable evidence, exact community and recent manual viewing confirmation", () => {
   expect(assessPropertyPriority(property, reference, needs, { now }).status).toBe("priority");

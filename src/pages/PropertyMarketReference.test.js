@@ -23,10 +23,10 @@ test("real source facilities and newest comparables render with their date and p
 test("missing parking is actionable and does not produce an opportunity label", () => {
   const onEdit = jest.fn();
   render({ onEdit });
-  expect(host.querySelector(".property-priority-badge").textContent).toBe("待補資料");
-  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "補齊車位與價格資料");
+  expect(host.querySelector(".property-priority-badge").textContent).toBe("待補車位價格");
+  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "前往補齊車位價格");
   act(() => button.click());
-  expect(onEdit).toHaveBeenCalledTimes(1);
+  expect(onEdit).toHaveBeenCalledWith("property-parking-price");
 });
 test("offline errors do not leave old trades or positive opportunity labels visible", () => {
   render({ error: "來源離線，請更新參考。" });

@@ -1,5 +1,5 @@
 import { reverseMatchProperty } from "./needsMatch";
-import { propertyUnitPrice, propertyParkingState, officialNetUnit, nonNegativeNumber } from "./propertyUnitPrice";
+import { propertyUnitPrice, missingUnitPriceFields, officialNetUnit, nonNegativeNumber } from "./propertyUnitPrice";
 import { normalizeNeedRanges, toNum } from "./needsFields";
 
 export function referenceLookup(property = {}) {
@@ -66,7 +66,13 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
   if (error) return pending("市場參考暫時無法更新。", "確認市場開發程式在線後，重新更新參考。", { code: "source_unavailable" });
   if (reference?.fetchedAt && now - Number(reference.fetchedAt) > 86400000) return pending("上次讀取的市場參考已超過一天。", "更新成交參考後重新評估。", { code: "stale_reference" });
   const unit = propertyUnitPrice(property, "net");
-  if (unit === null) return pending(propertyParkingState(property) === "yes" ? "車位價格或坪數未齊，尚不能比較扣車單價。" : "價格、坪數或車位狀況尚待確認。", "補齊價格、權狀坪數與實際車位資料。", { code: "missing_unit" });
+  if (unit === null) {
+    const missingFields = missingUnitPriceFields(property);
+    const names = missingFields.map((field) => field.label).join("、") || "單價計算資料";
+    return pending(`${names}尚未確認，無法計算扣車位單價。`, `請確認並填寫${names}；其餘已填資料可正常使用。`, {
+      code: "missing_unit", missingFields, label: missingFields.length === 1 ? `待補${names}` : "待補單價資料",
+    });
+  }
   if (!reference) return pending(error || "尚未取得同社區成交參考。", "查看資料並更新成交參考。", { code: "missing_reference" });
   if (!reference.community) return pending("尚未配對到 A7／A8／A9 的唯一社區。", "核對完整門牌及社區名稱。", { code: "unmatched_community" });
   if (reference.matchMethod !== "exact-doorplate") return pending("目前只依社區名稱配對，完整門牌仍需核對。", "核對本件門牌是否屬於該社區。", { code: "unconfirmed_community" });

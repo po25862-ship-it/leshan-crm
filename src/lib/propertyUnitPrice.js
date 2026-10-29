@@ -41,6 +41,23 @@ export function formatUnitPrice(property, basis = "gross") {
   return unit === null ? "未提供" : `${unit.toFixed(2)} 萬／坪`;
 }
 
+export function missingUnitPriceFields(property = {}) {
+  const missing = [];
+  const price = nonNegativeNumber(property.totalPrice);
+  const area = nonNegativeNumber(property.titlePing);
+  if (!(price > 0)) missing.push({ label: "總價", fieldId: "property-total-price" });
+  if (!(area > 0)) missing.push({ label: "權狀坪數", fieldId: "property-title-ping" });
+  const parking = propertyParkingState(property);
+  if (parking === "unknown") missing.push({ label: "車位狀況", fieldId: "property-parking-description" });
+  if (parking === "yes") {
+    const carPrice = nonNegativeNumber(property.parkingPrice);
+    const carArea = nonNegativeNumber(property.parkingPing);
+    if (!(carPrice > 0) || (price > 0 && carPrice >= price)) missing.push({ label: "車位價格", fieldId: "property-parking-price" });
+    if (!(carArea > 0) || (area > 0 && carArea >= area)) missing.push({ label: "車位坪數", fieldId: "property-parking-ping" });
+  }
+  return missing;
+}
+
 export function officialNetUnit(deal = {}) {
   const price = nonNegativeNumber(deal.price);
   const area = nonNegativeNumber(deal.area);

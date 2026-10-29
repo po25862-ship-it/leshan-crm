@@ -40,6 +40,7 @@ import { formatPropertyAreaWithoutParking } from "../lib/propertyAreaWithoutPark
 import { useMarketReference } from "../hooks/useMarketReference";
 import { matchesUnitPrice, formatUnitPrice } from "../lib/propertyUnitPrice";
 import { assessPropertyPriority } from "../lib/propertyMarketReference";
+import "./PropertyDetailWorkspace.css";
 import PropertyMarketReference, { PropertyPriorityBadge } from "./PropertyMarketReference";
 
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
@@ -219,6 +220,10 @@ export default function Properties() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [detailTab, setDetailTab] = useState("overview");
+  const [editFocus, setEditFocus] = useState("");
+  const [savingProperty, setSavingProperty] = useState(false);
+  const [propertySaveError, setPropertySaveError] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [originalTotalPrice, setOriginalTotalPrice] = useState(null);
   const [keyword, setKeyword] = useState("");
@@ -313,6 +318,8 @@ export default function Properties() {
 
   const openNew = () => {
     setSharingFloorplanFile(null);
+    setDetailTab("overview");
+    setPropertySaveError("");
     setForm(emptyForm);
     setEditingId(null);
     setOriginalTotalPrice(null);
@@ -322,12 +329,32 @@ export default function Properties() {
 
   const openEdit = (item) => {
     setSharingFloorplanFile(null);
+    setDetailTab("overview");
+    setPropertySaveError("");
     setForm({ ...emptyForm, ...withKnownFloorplans(item), parkingNumber: getPropertyParkingNumber(item), customFields: item.customFields || [] });
     setEditingId(item.id);
     setOriginalTotalPrice(item.totalPrice);
     setEditMode(false);
     setShowForm(true);
   };
+
+  const openPropertyEditor = (fieldId = "") => {
+    setPropertySaveError("");
+    setEditFocus(typeof fieldId === "string" ? fieldId : "");
+    setEditMode(true);
+  };
+
+  useEffect(() => {
+    const workspace = document.getElementById("property-detail-workspace");
+    if (workspace) workspace.scrollTop = 0;
+  }, [editingId, editMode, detailTab, showForm]);
+
+  useEffect(() => {
+    if (!editMode || !showForm) return;
+    const target = document.getElementById(editFocus || "property-edit-form");
+    target?.scrollIntoView?.({ block: editFocus ? "center" : "start" });
+    if (editFocus) target?.focus?.({ preventScroll: true });
+  }, [editMode, showForm, editFocus]);
 
   const togglePropertyDetail = (item) => {
     if (showForm && editingId === item.id && !editMode) setShowForm(false);
@@ -368,7 +395,10 @@ export default function Properties() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!form.title.trim() || savingProperty) return;
+    setSavingProperty(true);
+    setPropertySaveError("");
+    try {
 
     const addressKey = floorplanAddressKey(form.address);
     const previousAddressKey = floorplanAddressKey(items.find((item) => item.id === editingId)?.address);
@@ -418,8 +448,13 @@ export default function Properties() {
         createdAt: serverTimestamp(),
       });
     }
-    if (editingId) setEditMode(false);
+    if (editingId) { setEditMode(false); setDetailTab("overview"); }
     else setShowForm(false);
+    } catch {
+      setPropertySaveError("儲存失敗，請確認網路後再試一次。你輸入的內容仍保留在這裡。");
+    } finally {
+      setSavingProperty(false);
+    }
   };
 
   const changeStatus = async (item, newStatus) => {
@@ -1455,38 +1490,39 @@ export default function Properties() {
       </div>
 
       {showForm && (() => {
+        const tabs = [["overview", "基本資料"], ["market", "行情公設"], ["files", "資料表／格局圖"], ["matches", "配對客需"], ["history", "歷程紀錄"]];
         const detail = (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : editingId ? "minmax(320px, 720px) minmax(0, 1fr)" : "minmax(320px, 720px)",
-            gap: 24,
-            marginBottom: 24,
-            alignItems: "start",
-          }}
-        >
-          {editingId && !editMode && <PropertyMarketReference property={{ ...form, id: editingId }} reference={marketReference.data} loading={marketReference.loading} error={marketReference.error} onRefresh={marketReference.refresh} needs={needs} onEdit={() => setEditMode(true)} />}
-          <div className="panel">
-          {editingId && !editMode && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
+        <section id="property-detail-workspace" className="property-detail-workspace" aria-label="物件資料工作區">
+          <div className="panel property-detail-panel">
+          {editingId && !editMode && <>
+            <div className="property-detail-toolbar">
+              <div className="property-detail-title-row">
                 <div>
                   <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>{form.listingNo || "未填委託書編號"}・{form.store || "未填店名"}</div>
                   <div className="section-title" style={{ fontSize: 22, marginBottom: 6 }}>{form.title || "未命名物件"}</div>
                   <span className="tag">{form.category || "未分類"}</span>
                   <span className="tag" style={{ marginLeft: 6 }}>{STATUS_LABELS[form.status || "active"]}</span>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <div className="property-detail-actions">
                   {form.websiteUrl && form.websitePublished === true && <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟網頁</a>}
                   {form.websiteUrl && form.websitePublished === true && <button type="button" className="btn ghost" onClick={() => copyUrl(form.websiteUrl)}>複製網址</button>}
                   {form.websiteUrl && form.websitePublished !== true && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>}
-                  <label htmlFor="property-floorplan-upload" className="btn ghost" style={{ cursor: uploadingFloorplan ? "wait" : "pointer" }}>
+                  <label htmlFor="property-floorplan-upload" onClick={() => setDetailTab("files")} className="btn ghost" style={{ cursor: uploadingFloorplan ? "wait" : "pointer" }}>
                     {uploadingFloorplan ? "格局圖上傳中…" : "＋ 上傳格局圖"}
                   </label>
-                  <button type="button" className="btn" onClick={() => setEditMode(true)}>編輯資料</button>
+                  <button type="button" className="btn" onClick={() => openPropertyEditor()}>編輯資料</button>
                   <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>關閉</button>
                 </div>
               </div>
+              <div className="property-detail-tabs" role="tablist" aria-label="物件資料分類">
+                {tabs.map(([id, label], index) => <button key={id} type="button" role="tab" id={`property-tab-${id}`} aria-controls="property-tab-panel" aria-selected={detailTab === id} tabIndex={detailTab === id ? 0 : -1} onClick={() => setDetailTab(id)} onKeyDown={(event) => {
+                  const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+                  if (next !== null) { event.preventDefault(); setDetailTab(tabs[next][0]); document.getElementById(`property-tab-${tabs[next][0]}`)?.focus(); }
+                }}>{label}{id === "files" ? `（${(form.sheetFiles || []).length + (form.floorplanFiles || []).length}）` : ""}</button>)}
+              </div>
+            </div>
+            <div className="property-detail-tab-content" id="property-tab-panel" role="tabpanel" aria-labelledby={`property-tab-${detailTab}`}>
+              {detailTab === "overview" && <>
               <div className="property-key-stats">
                 <DetailValue label="總價" value={form.totalPrice ? `${form.totalPrice} 萬` : "—"} accent />
                 <DetailValue label="格局" value={form.layout} />
@@ -1512,26 +1548,15 @@ export default function Properties() {
                 <DetailValue label="車位價格" value={form.parkingPrice !== "" && form.parkingPrice != null ? `${form.parkingPrice} 萬` : "未提供"} />
                 <DetailValue label="帶看確認" value={({ available: "已確認可帶看", appointment: "需先預約確認", unavailable: "目前無法帶看" })[form.viewingStatus] || "尚未確認"} />
               </div>
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>案件掃描紀錄</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-                  <DetailValue label="首次掃描出現" value={formatScanTime(form.firstSeenAt)} />
-                  <DetailValue label="最近掃描出現" value={formatScanTime(form.lastSeenAt)} />
-                  <DetailValue label="首次掃描未見" value={formatScanTime(form.firstMissingAt)} />
-                  <DetailValue label="首次自動暫時關閉" value={formatScanTime(form.firstOnHoldAt)} />
-                </div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 7, lineHeight: 1.5 }}>
-                  {form.firstSeenAtSource === "tracking-start" || form.firstMissingAtSource === "tracking-start"
-                    ? "舊案件的首次歷史無法精確回溯；顯示的是新功能開始追蹤後，第一次確認的時間。"
-                    : "第一次未見只作紀錄；連續兩次完整同步都未見，才會自動改為暫時不賣。空白代表尚無可靠紀錄。"}
-                </div>
-              </div>
               {(form.notes || form.agentInfo) && (
                 <div style={{ background: "var(--accent-soft)", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, lineHeight: 1.65 }}>
                   {form.agentInfo && <div><strong>負責業務：</strong>{displayPropertyAgent(form.agentInfo)}</div>}
                   {form.notes && <div><strong>備註：</strong>{form.notes}</div>}
                 </div>
               )}
+              </>}
+              {detailTab === "market" && <PropertyMarketReference property={{ ...form, id: editingId }} reference={marketReference.data} loading={marketReference.loading} error={marketReference.error} onRefresh={marketReference.refresh} needs={needs} onEdit={openPropertyEditor} />}
+              {detailTab === "files" && <>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
                 {(form.sheetFiles || []).length === 0 ? (
@@ -1578,9 +1603,38 @@ export default function Properties() {
                   />
                 )}
               </div>
+                <details className="property-optional-market"><summary>市場競品資料（選用）</summary><MarketIntelligence propertyId={editingId} defaultUrl={form.websiteUrl} /></details>
+              </>}
+              {detailTab === "matches" && <ReverseMatchesPanel property={{ ...form, id: editingId }} needs={needs} updateNeed={updateNeed} />}
+              {detailTab === "history" && <>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>案件掃描紀錄</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                  <DetailValue label="首次掃描出現" value={formatScanTime(form.firstSeenAt)} />
+                  <DetailValue label="最近掃描出現" value={formatScanTime(form.lastSeenAt)} />
+                  <DetailValue label="首次掃描未見" value={formatScanTime(form.firstMissingAt)} />
+                  <DetailValue label="首次自動暫時關閉" value={formatScanTime(form.firstOnHoldAt)} />
+                </div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 7, lineHeight: 1.5 }}>
+                  {form.firstSeenAtSource === "tracking-start" || form.firstMissingAtSource === "tracking-start"
+                    ? "舊案件的首次歷史無法精確回溯；顯示的是新功能開始追蹤後，第一次確認的時間。"
+                    : "第一次未見只作紀錄；連續兩次完整同步都未見，才會自動改為暫時不賣。空白代表尚無可靠紀錄。"}
+                </div>
+              </div>
+                <PropertyHistory propertyId={editingId} createdAt={form.createdAt} updatedAt={form.updatedAt} />
+                {linkedCases.filter((item) => item.propertyId === editingId).length > 0 && <div className="property-linked-cases"><h4>使用於成交案件</h4>{linkedCases.filter((item) => item.propertyId === editingId).map((item) => <div key={item.id}>{item.title}{item.contactName && `　客戶：${item.contactName}`}</div>)}</div>}
+              </>}
             </div>
-          )}
-          <form className="form-grid" onSubmit={onSubmit} style={{ display: !editingId || editMode ? "grid" : "none" }}>
+          </>}
+          {(!editingId || editMode) && <div className="property-detail-toolbar property-edit-toolbar">
+            <div><small>{editingId ? "編輯物件" : "新增物件"} · {form.listingNo || "尚未編號"}</small><strong>{form.title || "新物件"}</strong></div>
+            <div className="property-detail-actions">
+              <button className="btn" type="submit" form="property-edit-form" disabled={savingProperty}>{savingProperty ? "儲存中…" : editingId ? "儲存變更" : "新增物件"}</button>
+              <button className="btn ghost" type="button" disabled={savingProperty} onClick={() => editingId ? openEdit(items.find((item) => item.id === editingId) || form) : setShowForm(false)}>{editingId ? "返回瀏覽" : "取消"}</button>
+            </div>
+            {propertySaveError && <div role="alert" className="property-save-error">{propertySaveError}</div>}
+          </div>}
+          <form id="property-edit-form" className="form-grid property-edit-fields" onSubmit={onSubmit} style={{ display: !editingId || editMode ? "grid" : "none" }}>
             <div style={fieldStyle3}>
               <div className="form-field">
                 <label>店名</label>
@@ -1719,12 +1773,12 @@ export default function Properties() {
                 <input value={form.parkingNumber || ""} onChange={(e) => setForm({ ...form, parkingNumber: e.target.value })} placeholder="例如：B2-123；多個請用頓號分隔" />
               </div>
               <div className="form-field">
-                <label>車位說明</label>
-                <input value={form.parkingDescription} onChange={(e) => setForm({ ...form, parkingDescription: e.target.value })} />
+                <label htmlFor="property-parking-description">車位說明</label>
+                <input id="property-parking-description" value={form.parkingDescription} onChange={(e) => setForm({ ...form, parkingDescription: e.target.value })} />
               </div>
               <div className="form-field">
-                <label>總價（萬）</label>
-                <input value={form.totalPrice} onChange={(e) => setForm({ ...form, totalPrice: e.target.value })} />
+                <label htmlFor="property-total-price">總價（萬）</label>
+                <input id="property-total-price" value={form.totalPrice} onChange={(e) => setForm({ ...form, totalPrice: e.target.value })} />
                 {editingId && originalTotalPrice !== null && String(originalTotalPrice) !== String(form.totalPrice) && form.totalPrice !== "" && (
                   <div style={{ fontSize: 11, color: "var(--brass)", marginTop: 4 }}>
                     儲存後會記錄：{originalTotalPrice} 萬 → {form.totalPrice} 萬
@@ -1839,50 +1893,12 @@ export default function Properties() {
               <button type="button" className="btn ghost" onClick={addCustomField}>＋ 新增自訂欄位</button>
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn" type="submit">
-                {editingId ? "儲存變更" : "新增物件"}
-              </button>
-              <button className="btn ghost" type="button" onClick={() => editingId ? setEditMode(false) : setShowForm(false)}>{editingId ? "返回瀏覽" : "取消"}</button>
-              {editingId && (
-                <button className="btn danger" type="button" onClick={async () => { await deleteForever({ id: editingId, title: form.title }); setShowForm(false); }}>
-                  永久刪除
-                </button>
-              )}
-            </div>
+            {editingId && <details className="property-delete-section"><summary>進階操作</summary>
+              <button className="btn danger" type="button" disabled={savingProperty} onClick={async () => { await deleteForever({ id: editingId, title: form.title }); setShowForm(false); }}>永久刪除</button>
+            </details>}
           </form>
           </div>
-
-          {editingId && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <MarketIntelligence propertyId={editingId} defaultUrl={form.websiteUrl} />
-              <ReverseMatchesPanel property={{ ...form, id: editingId }} needs={needs} updateNeed={updateNeed} />
-              {(() => {
-                const usedIn = linkedCases.filter((c) => c.propertyId === editingId);
-                if (usedIn.length === 0) return null;
-                return (
-                  <div className="panel">
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-                      使用於成交案件（{usedIn.length}）
-                    </div>
-                    {usedIn.map((c) => (
-                      <div key={c.id} style={{ fontSize: 13, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                        {c.title}
-                        {c.contactName && <span style={{ color: "var(--muted)" }}>　客戶：{c.contactName}</span>}
-                      </div>
-                    ))}
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
-                      前往「成交案件」頁面可以編輯
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="panel">
-                <PropertyHistory propertyId={editingId} createdAt={form.createdAt} updatedAt={form.updatedAt} />
-              </div>
-            </div>
-          )}
-        </div>
+        </section>
         );
         const target = editingId && filtered.some((item) => item.id === editingId) &&
           typeof document !== "undefined" ? document.getElementById(`property-detail-${editingId}`) : null;
