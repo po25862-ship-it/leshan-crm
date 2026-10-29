@@ -762,7 +762,13 @@ export default function Properties() {
     floorFilter, livingFilter, bathFilter, layoutKeyword.trim(), topFloorOnly ? "top" : "",
   ].filter((value) => value !== "").length;
 
+  // Starting another search closes browsing details, while leaving an unsaved edit intact.
+  const closeBrowsingDetail = () => {
+    if (!editMode) setShowForm(false);
+  };
+
   const clearAllFilters = () => {
+    closeBrowsingDetail();
     setKeyword("");
     setPriorityFilter("all");
     setMinPrice("");
@@ -1421,7 +1427,7 @@ export default function Properties() {
         </details>
       </section>
 
-      <section className="property-search-panel" aria-label="物件搜尋條件">
+      <section className="property-search-panel" aria-label="物件搜尋條件" onChangeCapture={closeBrowsingDetail}>
         <div className="property-search-heading">
           <div><strong>物件搜尋</strong><span role="status">找到 {filtered.length} 筆</span></div>
           <div className="property-search-actions">
@@ -1947,7 +1953,7 @@ export default function Properties() {
         );
         const target = editingId && displayedProperties.some((item) => item.id === editingId) &&
           typeof document !== "undefined" ? document.getElementById(`property-detail-${editingId}`) : null;
-        return target ? createPortal(detail, target) : detail;
+        return target ? createPortal(detail, target) : !editingId || editMode ? detail : null;
       })()}
 
       <div className="panel properties-list">
