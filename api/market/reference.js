@@ -1,4 +1,5 @@
 const { referenceQuery, readMarketReference } = require("../_lib/market-reference");
+const { verifyCrmReferenceUser } = require("../_lib/crm-reference-auth");
 
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "private, no-store");
@@ -7,7 +8,10 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "method_not_allowed" });
   }
   const authorization = String(req.headers.authorization || "");
-  if (!authorization.startsWith("Bearer ") || authorization.length < 20 || authorization.length > 9000) {
+  try {
+    await verifyCrmReferenceUser(req);
+  } catch {
+    console.warn("market_reference_auth_failed", { code: "firebase_identity_or_account_rejected" });
     return res.status(401).json({ error: "authentication_required" });
   }
   if (Number(req.headers["content-length"] || 0) > 4096) return res.status(413).json({ error: "request_too_large" });
@@ -16,8 +20,8 @@ module.exports = async function handler(req, res) {
   const query = referenceQuery(body);
   if (!query) return res.status(400).json({ error: "invalid_request" });
   try {
-    // The source verifies Google's signature, audience, issuer, subject and
-    // expiry for this existing CRM login on every request. No admin key needed.
+    // The source additionally verifies the token; main API verification above
+    // must always succeed first, including revocation and disabled accounts.
     const token = authorization.slice(7);
     return res.status(200).json(await readMarketReference(query, token));
   } catch (error) {

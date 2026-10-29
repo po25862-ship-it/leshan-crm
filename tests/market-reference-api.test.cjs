@@ -13,7 +13,7 @@ test("the API rejects anonymous and malformed requests before any source request
   assert.equal(wrongMethod.code, 405);
   const malformed = response();
   await handler({ method: "POST", headers: { authorization: "Bearer long-enough-but-not-real-token" }, body: { address: ["bad"] } }, malformed);
-  assert.equal(malformed.code, 400);
+  assert.equal(malformed.code, 401);
 });
 
 test("reference queries whitelist fields and never forward contacts or arbitrary destinations", () => {
