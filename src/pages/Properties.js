@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -37,9 +37,10 @@ import { getPropertyManagementFee, formatPropertyManagementFee, managementFeeImp
 import floorplanAddress from "../lib/floorplanAddress";
 import commonArea from "../lib/propertyCommonArea";
 import { formatPropertyAreaWithoutParking } from "../lib/propertyAreaWithoutParking";
-import { useMarketReference } from "../hooks/useMarketReference";
-import { matchesUnitPrice, formatUnitPrice } from "../lib/propertyUnitPrice";
-import { assessPropertyPriority } from "../lib/propertyMarketReference";
+import { useMarketReference, loadMarketReference } from "../hooks/useMarketReference";
+import { usePriorityReferenceCache } from "../hooks/usePriorityReferenceCache";
+import { PRIORITY_FILTERS, buildPriorityAssessments, countPriorityGroups, matchesPriorityFilter, refreshPriorityReferences } from "../lib/propertyPriorityWorklist";
+import { matchesUnitPrice, formatUnitPrice, propertyUnitPrice } from "../lib/propertyUnitPrice";
 import "./PropertyDetailWorkspace.css";
 import PropertyMarketReference, { PropertyPriorityBadge } from "./PropertyMarketReference";
 
@@ -221,6 +222,7 @@ export default function Properties() {
   const [editingId, setEditingId] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [detailTab, setDetailTab] = useState("overview");
+  const [detailRowPosition, setDetailRowPosition] = useState(0);
   const [editFocus, setEditFocus] = useState("");
   const [savingProperty, setSavingProperty] = useState(false);
   const [propertySaveError, setPropertySaveError] = useState("");
@@ -232,7 +234,21 @@ export default function Properties() {
   const [unitPriceBasis, setUnitPriceBasis] = useState("gross");
   const [minUnitPrice, setMinUnitPrice] = useState("");
   const [maxUnitPrice, setMaxUnitPrice] = useState("");
-  const [marketReferences, setMarketReferences] = useState({});
+  const { records: marketReferences, recordReference } = usePriorityReferenceCache(user.uid);
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [assessmentNow, setAssessmentNow] = useState(Date.now);
+  const [priorityRefresh, setPriorityRefresh] = useState({ running: false, completed: 0, total: 0, message: "" });
+  const priorityRun = useRef(0);
+  const priorityUser = useRef(user);
+  priorityUser.current = user;
+  useEffect(() => {
+    const timer = setInterval(() => setAssessmentNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    setPriorityRefresh({ running: false, completed: 0, total: 0, message: "" });
+    return () => { priorityRun.current++; };
+  }, [user.uid]);
   const [minMainBuildingPing, setMinMainBuildingPing] = useState("");
   const [maxMainBuildingPing, setMaxMainBuildingPing] = useState("");
   const [minTitlePing, setMinTitlePing] = useState("");
@@ -276,12 +292,10 @@ export default function Properties() {
   useEffect(() => {
     if (!editingId || !showForm || editMode) return;
     if (marketReference.data || marketReference.error) {
-      setMarketReferences((current) => ({ ...current, [editingId]: { data: marketReference.data, error: marketReference.error } }));
+      recordReference({ ...form, id: editingId }, marketReference.data, marketReference.error);
     }
-  }, [editingId, showForm, editMode, marketReference.data, marketReference.error]);
-  const priorities = useMemo(() => new Map(items.filter((p) =>
-    /a[789]/i.test([p.area, p.title].join(" ")) || A7_COMMUNITY_NAMES.includes(p.communityName) || marketReferences[p.id]
-  ).map((p) => [p.id, assessPropertyPriority(p, marketReferences[p.id]?.data, needs, { error: marketReferences[p.id]?.error })])), [items, marketReferences, needs]);
+  }, [editingId, showForm, editMode, form, marketReference.data, marketReference.error, recordReference]);
+  const priorities = useMemo(() => buildPriorityAssessments(items, marketReferences, needs, A7_COMMUNITY_NAMES, assessmentNow), [items, marketReferences, needs, assessmentNow]);
 
   const copyUrl = async (url) => {
     try {
@@ -331,6 +345,8 @@ export default function Properties() {
     setSharingFloorplanFile(null);
     setDetailTab("overview");
     setPropertySaveError("");
+    const rowPosition = displayedProperties.findIndex((property) => property.id === item.id);
+    if (rowPosition >= 0) setDetailRowPosition(rowPosition);
     setForm({ ...emptyForm, ...withKnownFloorplans(item), parkingNumber: getPropertyParkingNumber(item), customFields: item.customFields || [] });
     setEditingId(item.id);
     setOriginalTotalPrice(item.totalPrice);
@@ -662,7 +678,8 @@ export default function Properties() {
   const soldItems = byStatus("sold");
   const pool = viewMode === "active" ? activeItems : viewMode === "onHold" ? onHoldItems : soldItems;
 
-  const matchesPropertyFilters = (p, ignoreCategory = false) => {
+  const matchesPropertyFilters = (p, ignoreCategory = false, ignorePriority = false) => {
+    if (!ignorePriority && !matchesPriorityFilter(priorities.get(p.id), priorityFilter)) return false;
     if (!ignoreCategory && activeCategory !== "全部" && (p.category || "未分類") !== activeCategory) return false;
     if (minPrice && Number(p.totalPrice || 0) < Number(minPrice)) return false;
     if (maxPrice && Number(p.totalPrice || 0) > Number(maxPrice)) return false;
@@ -686,7 +703,39 @@ export default function Properties() {
     return matchesPropertyKeyword(p, keyword);
   };
 
+  const priorityPool = pool.filter((p) => matchesPropertyFilters(p, false, true));
+  const priorityCounts = countPriorityGroups(priorityPool, priorities);
+  const priorityTargets = priorityPool.filter((p) => (p.status || "active") === "active" && priorities.has(p.id) && propertyUnitPrice(p, "net") !== null);
+
+  const updatePriorityWorklist = async () => {
+    if (priorityRefresh.running || !priorityTargets.length) return;
+    const run = ++priorityRun.current;
+    const targets = [...priorityTargets];
+    const runUser = priorityUser.current;
+    setPriorityRefresh({ running: true, completed: 0, total: targets.length, message: "" });
+    const result = await refreshPriorityReferences(targets, {
+      load: (property) => loadMarketReference(runUser, property, true),
+      shouldStop: () => run !== priorityRun.current || priorityUser.current?.uid !== runUser.uid,
+      onResult: recordReference,
+      onProgress: (completed) => setPriorityRefresh((current) => ({ ...current, completed })),
+    });
+    if (run !== priorityRun.current) return;
+    setAssessmentNow(Date.now());
+    setPriorityRefresh({ running: false, completed: result.completed, total: targets.length, message: result.failed
+      ? `已完成 ${result.completed} 筆，市場來源暫時無法連線，已停止檢查。尚未完成的案件未重新判斷，可稍後重試。`
+      : `已完成 ${result.completed} 筆判斷；分類會依你目前的客需與物件資料更新。` });
+  };
+  const stopPriorityRefresh = () => {
+    priorityRun.current++;
+    setPriorityRefresh((current) => ({ ...current, running: false, message: `已停止；完成 ${current.completed} 筆，其餘可稍後繼續更新。` }));
+  };
+
   const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy, { unitPriceBasis });
+  const displayedProperties = [...filtered];
+  const openProperty = showForm && editingId && priorityFilter !== "all" && items.find((item) => item.id === editingId);
+  const retainOpenProperty = openProperty && (openProperty.status || "active") === viewMode
+    && matchesPropertyFilters(openProperty, false, true) && !filtered.some((item) => item.id === editingId);
+  if (retainOpenProperty) displayedProperties.splice(Math.min(detailRowPosition, displayedProperties.length), 0, openProperty);
   const selectedProperties = Array.from(selectedIds, (id) => items.find((item) => item.id === id)).filter(Boolean);
   const hasKeyword = Boolean(keyword.trim());
   const categoryPool = pool.filter((p) => matchesPropertyFilters(p, true));
@@ -710,6 +759,7 @@ export default function Properties() {
 
   const clearAllFilters = () => {
     setKeyword("");
+    setPriorityFilter("all");
     setMinPrice("");
     setMaxPrice("");
     setMinUnitPrice("");
@@ -1332,6 +1382,26 @@ export default function Properties() {
         ))}
       </div>
 
+      <section className="property-priority-worklist" aria-label="案件處理分類">
+        <div className="property-priority-worklist-heading">
+          <strong>案件處理</strong>
+          <div>
+            <button type="button" className="btn ghost" onClick={updatePriorityWorklist} disabled={priorityRefresh.running || !priorityTargets.length}>
+              {priorityRefresh.running ? `更新中 ${priorityRefresh.completed}／${priorityRefresh.total}` : "更新案件判斷"}
+            </button>
+            {priorityRefresh.running && <button type="button" className="btn ghost" onClick={stopPriorityRefresh}>停止檢查</button>}
+          </div>
+        </div>
+        <div className="property-priority-filter-buttons" role="group" aria-label="案件處理篩選">
+          {PRIORITY_FILTERS.map((filter) => <button key={filter.value} type="button" className={`property-priority-filter ${filter.value}`} aria-pressed={priorityFilter === filter.value} onClick={() => { setPriorityFilter(filter.value); setShowForm(false); }}>
+            {filter.label}（{priorityCounts[filter.value]}）
+          </button>)}
+        </div>
+        <p>範圍：A7／A8／A9 在售案件。可更新行情：{priorityTargets.length} 筆。</p>
+        <details className="property-priority-method"><summary>分類與更新說明</summary><p>筆數跟隨搜尋條件。待補資料包含車位、可比成交及帶看等待確認事項；尚未查過行情的案件另列「待查行情」。單價資料不足的案件可先補齊資料，再更新行情。每位同事的行情快取在目前裝置保留一天，分類依目前的物件、客需及帶看確認重算。</p></details>
+        <div className="property-priority-progress" role="status">{priorityRefresh.running ? `正在檢查本次範圍 ${priorityRefresh.total} 筆，已完成 ${priorityRefresh.completed} 筆。` : priorityRefresh.message || "按「更新案件判斷」，一次檢查目前範圍，不用逐筆開啟。"}</div>
+      </section>
+
       {/* 搜尋與篩選 */}
       <div className="property-search-bar" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <input
@@ -1900,19 +1970,19 @@ export default function Properties() {
           </div>
         </section>
         );
-        const target = editingId && filtered.some((item) => item.id === editingId) &&
+        const target = editingId && displayedProperties.some((item) => item.id === editingId) &&
           typeof document !== "undefined" ? document.getElementById(`property-detail-${editingId}`) : null;
         return target ? createPortal(detail, target) : detail;
       })()}
 
       <div className="panel properties-list">
-        {filtered.length === 0 && (
+        {displayedProperties.length === 0 && (
           <div className="empty-state">
             <div className="big">{items.length === 0 ? "還沒有物件資料" : "找不到符合的物件"}</div>
             {items.length === 0 && "點右上角「＋ 新增物件」開始建檔，或用「匯入 Excel」批次匯入"}
           </div>
         )}
-        {filtered.map((p) => (
+        {displayedProperties.map((p) => (
           <React.Fragment key={p.id}>
           <div className="list-row" onClick={() => selectionMode ? toggleSelect(p.id) : togglePropertyDetail(p)} style={{ cursor: "pointer", background: selectedIds.has(p.id) ? "var(--accent-soft)" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -1940,6 +2010,18 @@ export default function Properties() {
                 <span>負責業務</span>
                 <strong>{displayPropertyAgent(p.agentInfo)}</strong>
               </div>
+              {retainOpenProperty && p.id === editingId && <div className="property-priority-progress">這筆案件的分類已更新；關閉資料後會從目前分類隱藏。</div>}
+              {priorityFilter !== "all" && priorities.get(p.id) && <div className="property-priority-task">
+                <strong>{priorities.get(p.id).reason}</strong>
+                <span>{priorities.get(p.id).next}</span>
+                <button type="button" className="btn ghost" onClick={(event) => {
+                  event.stopPropagation();
+                  openEdit(p);
+                  const assessment = priorities.get(p.id);
+                  if (assessment.code === "missing_unit") openPropertyEditor(assessment.missingFields?.[0]?.fieldId);
+                  else setDetailTab("market");
+                }}>前往處理</button>
+              </div>}
               <div className="meta">
                 {Boolean(p.floor) && <>{p.floor}　</>}
                 {Boolean(p.layout) && <>{p.layout}　</>}

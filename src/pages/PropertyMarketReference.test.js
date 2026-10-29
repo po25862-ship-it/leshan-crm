@@ -31,5 +31,5 @@ test("offline errors do not leave old trades or positive opportunity labels visi
   render({ error: "來源離線，請更新參考。" });
   expect(host.querySelector('[role="alert"]').textContent).toContain("來源離線");
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(0);
-  expect(host.querySelector(".property-priority-badge").textContent).toBe("待補資料");
+  expect(host.querySelector(".property-priority-badge").textContent).toBe("待補車位價格");
 });

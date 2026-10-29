@@ -7,7 +7,8 @@ const cache = new Map();
 const TTL = 5 * 60 * 1000;
 
 async function requestReference(user, key, force) {
-  const current = cache.get(key);
+  const cacheKey = `${user.uid}:${key}`;
+  const current = cache.get(cacheKey);
   if (!force && current && Date.now() - current.at < TTL) return current.promise;
   const promise = (async () => {
     const token = await getIdToken(user);
@@ -24,8 +25,12 @@ async function requestReference(user, key, force) {
     } finally { clearTimeout(timer); }
   })();
   if (cache.size > 128) cache.clear();
-  cache.set(key, { promise, at: Date.now() });
-  try { return await promise; } catch (e) { if (cache.get(key)?.promise === promise) cache.delete(key); throw e; }
+  cache.set(cacheKey, { promise, at: Date.now() });
+  try { return await promise; } catch (e) { if (cache.get(cacheKey)?.promise === promise) cache.delete(cacheKey); throw e; }
+}
+
+export function loadMarketReference(user, property, force = false) {
+  return requestReference(user, referenceKey(property), force);
 }
 
 export function useMarketReference(property, enabled = true) {

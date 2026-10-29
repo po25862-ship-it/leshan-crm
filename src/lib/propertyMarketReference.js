@@ -63,8 +63,6 @@ function median(values) { const s = [...values].sort((a, b) => a - b); const i =
 export function assessPropertyPriority(property = {}, reference = null, needs = [], { now = Date.now(), error = "" } = {}) {
   const pending = (reason, next, extra = {}) => ({ status: "pending", label: "待補資料", reason, next, ...extra });
   if ((property.status || "active") !== "active") return { status: "inactive", label: "非在售", reason: "此案件目前非在售，不列為優先推案。", next: "確認案件狀態後再評估。" };
-  if (error) return pending("市場參考暫時無法更新。", "確認市場開發程式在線後，重新更新參考。", { code: "source_unavailable" });
-  if (reference?.fetchedAt && now - Number(reference.fetchedAt) > 86400000) return pending("上次讀取的市場參考已超過一天。", "更新成交參考後重新評估。", { code: "stale_reference" });
   const unit = propertyUnitPrice(property, "net");
   if (unit === null) {
     const missingFields = missingUnitPriceFields(property);
@@ -73,6 +71,8 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
       code: "missing_unit", missingFields, label: missingFields.length === 1 ? `待補${names}` : "待補單價資料",
     });
   }
+  if (error) return pending("市場參考暫時無法更新。", "確認市場開發程式在線後，重新更新參考。", { code: "source_unavailable" });
+  if (reference?.fetchedAt && now - Number(reference.fetchedAt) > 86400000) return pending("上次讀取的市場參考已超過一天。", "更新成交參考後重新評估。", { code: "stale_reference" });
   if (!reference) return pending(error || "尚未取得同社區成交參考。", "查看資料並更新成交參考。", { code: "missing_reference" });
   if (!reference.community) return pending("尚未配對到 A7／A8／A9 的唯一社區。", "核對完整門牌及社區名稱。", { code: "unmatched_community" });
   if (reference.matchMethod !== "exact-doorplate") return pending("目前只依社區名稱配對，完整門牌仍需核對。", "核對本件門牌是否屬於該社區。", { code: "unconfirmed_community" });
