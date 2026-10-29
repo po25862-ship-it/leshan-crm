@@ -27,7 +27,9 @@ test("a higher asking price may trigger negotiation but never priority", () => {
 });
 test("old and incomplete parking transactions cannot supply confident comparison samples", () => {
   const old = { ...reference, deals: reference.deals.map((d) => ({ ...d, date: "2024-01-01" })) };
-  expect(assessPropertyPriority(property, old, needs, { now }).code).toBe("insufficient_comps");
+  const result = assessPropertyPriority(property, old, needs, { now });
+  expect(result.code).toBe("insufficient_comps");
+  expect(result.label).toBe("可比成交不足");
 });
 test("offline or stale responses never keep an old positive priority label", () => {
   expect(assessPropertyPriority(property, reference, needs, { now, error: "offline" }).code).toBe("source_unavailable");

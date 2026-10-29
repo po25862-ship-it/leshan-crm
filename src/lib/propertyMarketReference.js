@@ -79,7 +79,7 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
   const matches = comparableDeals(property, reference, { now });
   const cutoff = new Date(now - 365 * 86400000).toISOString().slice(0, 10);
   const samples = matches.slice(0, 5).filter((d) => d.date >= cutoff && officialNetUnit(d) !== null);
-  if (samples.length < 3) return pending(`最近五筆中，近一年可比較的扣車成交僅 ${samples.length} 筆。`, "補充同社區近期成交，並核對車位拆分資料。", { code: "insufficient_comps", sampleCount: samples.length });
+  if (samples.length < 3) return pending(`最近五筆中，近一年可比較的扣車成交僅 ${samples.length} 筆。`, "可調整坪數範圍或取消同房數查看參考；可比成交不足時，暫不判定為優先推案。", { code: "insufficient_comps", sampleCount: samples.length, label: "可比成交不足" });
   const referenceUnit = median(samples.map(officialNetUnit));
   const buyers = activeMatches(property, needs);
   const detail = { unit, referenceUnit, sampleCount: samples.length, matchedNeeds: buyers.strict, possibleNeeds: buyers.possible };
