@@ -13,6 +13,8 @@ import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import BuyerRecipientPicker from "./BuyerRecipientPicker";
 import PropertyViewingPdf from "./PropertyViewingPdf";
+import PropertyPdfLibrary from "./PropertyPdfLibrary";
+import { usePropertyPdfLibrary } from "../hooks/usePropertyPdfLibrary";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
 import { TAIWAN_REGIONS, TAIWAN_CITIES, normalizeRegionText } from "../lib/taiwanRegions";
 import { parseFloor, isTopFloor } from "../lib/floor";
@@ -249,6 +251,8 @@ export default function Properties() {
   const [showShare, setShowShare] = useState(false);
   const [selectedBuyerId, setSelectedBuyerId] = useState("");
   const [showViewingPdf, setShowViewingPdf] = useState(false);
+  const [pdfLoadVersion, setPdfLoadVersion] = useState(0);
+  const pdfLibrary = usePropertyPdfLibrary(user.uid);
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [sharingFloorplanFile, setSharingFloorplanFile] = useState(null);
   const [applyingFloorplan, setApplyingFloorplan] = useState(false);
@@ -1126,6 +1130,23 @@ export default function Properties() {
         </div>
       )}
 
+      <PropertyPdfLibrary
+        key={user.uid}
+        library={pdfLibrary}
+        properties={items}
+        selectedProperties={selectedProperties}
+        buyerId={selectedBuyerId}
+        onLoad={(savedProperties, savedBuyerId) => {
+          setSelectedIds(new Set(savedProperties.map((property) => property.id)));
+          setSelectedBuyerId(savedBuyerId);
+          setSelectionMode(true);
+          setShowShare(false);
+          setShowForm(false);
+          setPdfLoadVersion((value) => value + 1);
+          setShowViewingPdf(true);
+        }}
+      />
+
       {selectedIds.size > 0 && (
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
           <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>已選 {selectedIds.size} 筆物件</span>
@@ -1138,9 +1159,10 @@ export default function Properties() {
 
       {showViewingPdf && selectedProperties.length > 0 && (
         <PropertyViewingPdf
-          key={Array.from(selectedIds).join("|")}
+          key={`${Array.from(selectedIds).join("|")}:${pdfLoadVersion}`}
           properties={selectedProperties}
           buyerId={selectedBuyerId}
+          onGenerated={pdfLibrary.saveGenerated}
           onClose={() => setShowViewingPdf(false)}
         />
       )}

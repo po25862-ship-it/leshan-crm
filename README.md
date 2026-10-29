@@ -138,3 +138,12 @@ firebase deploy --only firestore:rules
 `.github/workflows/market-cover-backfill.yml` 會在這台 Mac 的按需 Runner 上讀取 Firestore 物件，針對有台灣房屋 `websiteUrl`、但尚無 `imageUrl`／`photoUrl`／`coverImageUrl` 的物件，擷取官網第一張以委託編號命名的主圖並寫入 `coverImageUrl`。既有人工照片不覆蓋，也不下載照片到 CRM 或 Mac；畫面直接使用台灣房屋公開圖片網址。
 
 執行方式：先啟動 `run-once.command`，再到 GitHub Actions 手動執行 `Leshan Property Cover Backfill`。工作完成後 Runner 自動停止。
+
+
+## 帶看 PDF 暫存與常用紀錄
+
+物件頁新增「帶看 PDF 暫存／常用」。每個登入帳號在目前瀏覽器各有 5 份 PDF 暫存與 5 組常用物件；使用 IndexedDB 保存在裝置內，不新增 Firebase 文件、Storage 檔案或背景輪詢。主、副系統因網域不同而分開保存，換裝置、無痕模式或清除瀏覽資料後不能沿用原裝置的紀錄。
+
+製作合併 PDF 成功後，自動保留完整檔案、製作時間、介紹對象及勾選順序。相同客戶與物件順序會更新原格；其他組合填入空格，滿 5 格才更新最早製作的一份。可重新讀取、開啟列印、下載、改名稱或刪除紀錄。暫存失敗時仍保留本次產出的下載按鈕，並提示使用者另行下載。
+
+勾選物件後開啟紀錄，輸入名稱即可存為常用；預設放入空格，覆蓋已有常用格須再次確認。載入會依原順序取得現有物件資料，並核對買方仍在可選名單中；缺少物件時不會靜默漏印。重新製作使用最新價格與每間最新一份資料表，直接讀取暫存 PDF 則保留原製作版本。

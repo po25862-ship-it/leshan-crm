@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { todayStr } from "../lib/dates";
 import { getPropertySheetPlan, mergePropertySheets } from "../lib/propertyViewingPdf";
 import { downloadPropertySheet } from "../lib/propertySheetDownload";
 import { useAuth } from "../AuthContext";
 import { useSharedCollection } from "../hooks/useSharedCollection";
+import { pdfLibraryError } from "../lib/propertyPdfLibrary";
 
-export default function PropertyViewingPdf({ properties, buyerId, onClose }) {
+export default function PropertyViewingPdf({ properties, buyerId, onClose, onGenerated }) {
   const { user } = useAuth();
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyerName = contacts.find((contact) => contact.id === buyerId)?.name || "";
@@ -13,6 +14,9 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [storageNotice, setStorageNotice] = useState("");
+  const [storageWarning, setStorageWarning] = useState("");
+  const requestId = useRef(0);
   const plan = getPropertySheetPlan(properties);
   const unavailable = plan.filter((entry) => entry.invalid);
   const summaryCount = plan.filter((entry) => entry.missing).length;
@@ -23,27 +27,46 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose }) {
   }, [result]);
 
   useEffect(() => {
+    requestId.current += 1;
     setResult(null);
+    setBusy(false);
+    setStorageNotice("");
+    setStorageWarning("");
+    return () => { requestId.current += 1; };
   }, [buyerId]);
 
   const createPdf = async () => {
     if (busy || unavailable.length > 0) return;
+    const request = ++requestId.current;
     setBusy(true);
     setError("");
+    setStorageNotice("");
+    setStorageWarning("");
     setResult(null);
     try {
       const merged = await mergePropertySheets(properties, (url) => downloadPropertySheet(url, user));
+      if (request !== requestId.current) return;
       const url = URL.createObjectURL(new Blob([merged.bytes], { type: "application/pdf" }));
+      const filename = `帶看物件資料表_${safeBuyerName ? `${safeBuyerName}_` : ""}${todayStr()}_${properties.length}間.pdf`;
       setResult({
         ...merged,
+        bytes: undefined,
         url,
-        filename: `帶看物件資料表_${safeBuyerName ? `${safeBuyerName}_` : ""}${todayStr()}_${properties.length}間.pdf`,
+        filename,
       });
+      if (onGenerated) {
+        try {
+          const record = await onGenerated({ properties, buyerId, buyerName }, { ...merged, filename });
+          if (request === requestId.current) setStorageNotice(`已自動保留在「暫存 ${record.slot + 1}」。離開頁面後，可從「帶看 PDF 暫存／常用」再次讀取。`);
+        } catch (saveError) {
+          if (request === requestId.current) setStorageWarning(`PDF 已製作完成，但沒有存入暫存。${pdfLibraryError(saveError)}`);
+        }
+      }
     } catch (err) {
       console.error(err);
-      setError(err.message || "PDF 製作失敗，請確認每份資料表可以正常開啟後再試一次。");
+      if (request === requestId.current) setError(err.message || "PDF 製作失敗，請確認每份資料表可以正常開啟後再試一次。");
     } finally {
-      setBusy(false);
+      if (request === requestId.current) setBusy(false);
     }
   };
 
@@ -53,7 +76,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose }) {
         <div>
           <h2>合併帶看資料表 PDF</h2>
           {buyerName && <p>準備介紹給：{buyerName}</p>}
-          <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留，不會另外上傳合併檔。</p>
+          <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留；完成後自動暫存在這台裝置，不會上傳合併檔。</p>
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>關閉</button>
       </div>
@@ -92,6 +115,8 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose }) {
         )}
       </div>
       {result && <p className="property-viewing-pdf-ready" role="status">已整理 {result.fileCount} 份原始資料表、{result.summaryCount} 頁系統摘要，共 {result.pageCount} 頁。開啟後可一次列印全部頁面。</p>}
+      {storageNotice && <p className="property-viewing-pdf-ready" role="status">{storageNotice}</p>}
+      {storageWarning && <p className="property-viewing-pdf-warning" role="alert">{storageWarning} 仍可使用上方的下載按鈕保留檔案。</p>}
     </section>
   );
 }
