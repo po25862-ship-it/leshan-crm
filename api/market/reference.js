@@ -10,6 +10,8 @@ module.exports = async function handler(req, res) {
   try {
     await requireFirebaseUser(req);
   } catch (error) {
+    const code = /^(?:auth|app)\/[a-z-]+$/.test(String(error.code || "")) ? error.code : "auth_initialization_failed";
+    console.warn("market_reference_auth_failed", { code });
     return res.status(error.statusCode || 401).json({ error: "authentication_required" });
   }
   if (Number(req.headers["content-length"] || 0) > 4096) return res.status(413).json({ error: "request_too_large" });
@@ -20,7 +22,8 @@ module.exports = async function handler(req, res) {
   try {
     const token = String(req.headers.authorization).slice(7);
     return res.status(200).json(await readMarketReference(query, token, { refresh: body.refresh === true }));
-  } catch {
+  } catch (error) {
+    console.warn("market_reference_source_failed", { status: Number(error.upstreamStatus) || 0, type: error.name === "TimeoutError" ? "timeout" : "unavailable" });
     return res.status(503).json({ error: "market_reference_unavailable", message: "市場參考暫時無法更新，請確認 Mac 的市場開發程式與網路通道正在運作，再按更新參考。" });
   }
 };

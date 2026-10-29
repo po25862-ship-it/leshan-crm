@@ -19,12 +19,16 @@ async function readMarketReference(query, token, { refresh = false, fetcher = fe
   if (!refresh && previous && now - previous.at < CACHE_MS) return previous.data;
   const response = await fetcher(REFERENCE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": "LeshanCRM-Reference/1.0 (+https://leshan-crm.vercel.app)", Authorization: `Bearer ${token}` },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "LeshanCRM-Reference/1.0 (+https://leshan-crm.vercel.app)", Authorization: `Bearer ${token}` },
     body: JSON.stringify(query),
     signal: AbortSignal.timeout(12_000),
     redirect: "error",
   });
-  if (!response.ok) throw new Error("market_reference_unavailable");
+  if (!response.ok) {
+    const error = new Error("market_reference_unavailable");
+    error.upstreamStatus = response.status;
+    throw error;
+  }
   const text = await response.text();
   if (text.length > 2_000_000) throw new Error("invalid_reference_response");
   const data = JSON.parse(text);
