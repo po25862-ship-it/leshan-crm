@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { assessPropertyPriority, comparableDeals } from "../lib/propertyMarketReference";
 import { formatUnitPrice, parkingPricePresetNote } from "../lib/propertyUnitPrice";
 import { formatPropertyManagementFee } from "../lib/propertyManagementFee";
+import { dealParkingComparison } from "../lib/propertyDealParking";
 import "./PropertyMarketReference.css";
 
 const money = (value, divisor = 1) => value === null || value === undefined || value === "" ? "未提供" : (Number(value) / divisor).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
@@ -14,6 +15,21 @@ function dateTime(value) {
 export function PropertyPriorityBadge({ assessment }) {
   if (!assessment || assessment.status === "inactive") return null;
   return <span className={`property-priority-badge ${assessment.status}`} aria-label={`${assessment.label}：${assessment.reason}`} title={assessment.reason}>{assessment.label}</span>;
+}
+
+function DealParkingUnit({ deal }) {
+  const comparison = dealParkingComparison(deal);
+  return <div className={`property-market-net-unit${comparison.source === "preset" ? " is-estimated" : ""}`}>
+    <span className="property-market-mobile-label">扣車單價</span>
+    {comparison.unit === null ? <small>{comparison.reason}</small> : <>
+      <strong>{comparison.unit.toFixed(2)}</strong><small>萬／坪</small>
+      <small>{comparison.source === "preset" ? "預設試算" : comparison.source === "official" ? "官方拆分計算" : "無車位"}</small>
+      {comparison.source !== "no-parking" && <small>
+        {comparison.source === "preset" ? `預設車價 ${money(comparison.priceWan)} 萬` : `車價 ${money(comparison.priceWan)} 萬`}<br />車位 {money(comparison.area)} 坪
+      </small>}
+      {comparison.source === "preset" && <small>{Number(deal.parkingCount) > 0 ? `${comparison.count} 個車位合計` : "先按 1 個車位試算"}</small>}
+    </>}
+  </div>;
 }
 
 export default function PropertyMarketReference({ property, reference, loading, error, onRefresh, needs, onEdit }) {
@@ -45,18 +61,19 @@ export default function PropertyMarketReference({ property, reference, loading, 
           <div className="property-market-caption" role="status">{ping > 0 ? `${(ping * (1 - tolerance)).toFixed(2)}～${(ping * (1 + tolerance)).toFixed(2)} 坪・` : "權狀坪數未提供・"}符合 {deals.length} 筆，顯示最近 {recent.length} 筆</div>
           {reference.matchMethod === "exact-community-name" && <div className="property-market-caption warning">依唯一社區名稱／別名配對；請核對本件完整門牌。</div>}
           <div className="property-market-table">
-            <div className="property-market-table-heading" aria-hidden="true"><span>日期／樓層</span><span>格局／坪數／地址</span><span>成交總價</span><span>官方揭露單價</span><span>車位／備註</span></div>
+            <div className="property-market-table-heading" aria-hidden="true"><span>日期／樓層</span><span>格局／坪數／地址</span><span>成交總價</span><span>官方揭露單價</span><span>扣車單價</span><span>車位／備註</span></div>
             {recent.map((d) => <article key={d.id} className="property-market-trade" aria-label={`${d.date} ${d.address}`}>
               <div><strong>{d.date}</strong><small>{d.floor || "樓層未提供"}</small></div>
               <div><strong>{d.rooms ?? "?"}房{d.halls ?? "?"}廳{d.baths ?? "?"}衛・{money(d.area)} 坪</strong><small>{d.address}</small></div>
               <div><span className="property-market-mobile-label">成交總價</span><strong>{money(d.price, 10000)} 萬</strong></div>
               <div><span className="property-market-mobile-label">官方揭露單價</span><strong>{money(d.unit)}</strong><small>萬／坪</small></div>
+              <DealParkingUnit deal={d} />
               <div><small>{d.parkingType || "未列車位"}{Number(d.parkingPrice) > 0 ? `／車價 ${money(d.parkingPrice, 10000)} 萬` : d.parkingType ? "／車價未分列" : ""}</small>{d.remark && <details><summary>交易備註</summary><small>{d.remark}</small></details>}</div>
             </article>)}
           </div>
           {!recent.length && <div className="property-market-message">目前條件查無可比成交，不以其他社區補足。可調整坪數範圍。</div>}
           <div className="property-market-source">資料發布：{reference.publishedDate || "未提供"}；成交年度：{(reference.years || []).join("、")}。本社區本批最新成交：{reference.deals?.[0]?.date || "未提供"}。</div>
-          <details className="property-priority-method"><summary>面積與單價說明</summary><p>建物總坪數採官方建物移轉總面積，可能含車位、公設；表中的單價直接保留官方揭露數值，其車位拆分方式可能不同，不可直接與含車簡算單價混比。本件未填車位價格時，平面每個以 180 萬、機械每個以 150 萬預設試算，並依數量合計；可自行修改。官方成交未分列的車位價格仍保留原樣，缺少拆分資料的成交不列入扣車比較。已排除特殊交易；增建等備註仍須核對。</p></details>
+          <details className="property-priority-method"><summary>面積與單價說明</summary><p>官方揭露單價保留原數字；扣車單價另以（成交總價－車位價）÷（建物總坪數－車位坪數）計算。有官方車位價就優先使用；未分列時，平面每個預設 180 萬、機械每個預設 150 萬，標示「預設試算」。官方未提供車位數量時先按 1 個試算；未提供車位坪數、類型不明或數字不合理時不計算。預設試算供業務參考，自動案件判斷仍只採官方拆分完整的成交。已排除特殊交易；車位數量、屋況與備註仍須核對。</p></details>
         </section>
         <aside className="property-market-community" aria-label="社區公設與管理">
           <h4>社區公設與管理</h4><div className="property-market-caption">{community.name}・{community.zone}</div>

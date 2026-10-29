@@ -41,3 +41,17 @@ test("the requested parking preset is identified without replacing missing offic
   expect(host.textContent).toContain("機械每個 150 萬預設試算");
   expect(host.querySelector(".property-market-trade").textContent).toContain("車價未分列");
 });
+
+test("each comparable shows official and car-exclusive prices with a clear calculation basis", () => {
+  render({ reference: { ...reference, deals: [row, { ...row, id: "estimated", parkingType: "坡道機械", parkingPrice: 0 }, { ...row, id: "missing-area", parkingArea: null, parkingPrice: 0 }] } });
+  const trades = host.querySelectorAll(".property-market-trade");
+  expect(host.querySelector(".property-market-table-heading").textContent).toContain("扣車單價");
+  expect(trades[0].querySelector(".property-market-net-unit").textContent).toContain("35.00");
+  expect(trades[0].querySelector(".property-market-net-unit").textContent).toContain("官方拆分計算");
+  expect(trades[1].querySelector(".property-market-net-unit").textContent).toContain("36.25");
+  expect(trades[1].textContent).toContain("預設車價 150 萬");
+  expect(trades[1].textContent).toContain("車價未分列");
+  expect(trades[2].querySelector(".property-market-net-unit").textContent).toContain("需補車位坪數");
+  expect(trades[1].children[3].textContent).toContain("35");
+  expect(host.querySelector("a")).toBeNull();
+});
