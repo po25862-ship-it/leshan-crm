@@ -1,0 +1,66 @@
+.property-search-panel {
+  padding: 18px;
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.property-search-heading,
+.property-search-heading > div,
+.property-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.property-search-heading { justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; }
+.property-search-heading strong { font-size: 16px; }
+.property-search-heading [role="status"] { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.property-search-actions .btn { min-height: 40px; padding: 8px 14px; }
+.property-search-basic { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.property-search-wide { grid-column: span 2; }
+.property-search-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.property-search-panel .property-search-field input,
+.property-search-panel .property-search-field select {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text, #1c2924);
+  font-size: 14px;
+  font-weight: 400;
+}
+.property-search-panel input:focus-visible,
+.property-search-panel select:focus-visible,
+.property-search-panel button:focus-visible { outline: 2px solid var(--accent, #dc581c); outline-offset: 2px; }
+.property-search-pair { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.property-search-pair > input,
+.property-search-pair > select { flex: 1; }
+.property-search-pair > span { flex: 0 0 auto; font-weight: 400; }
+.property-search-advanced { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.property-search-subheading { font-size: 14px; font-weight: 700; margin: 0 0 12px; }
+.property-search-advanced-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.property-search-help { margin: 10px 0 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.property-search-help:last-child { margin-bottom: 0; }
+.property-search-top-floor { display: flex; gap: 8px; align-items: center; align-self: end; min-height: 44px; color: var(--muted); font-size: 14px; }
+.property-search-top-floor input { width: 18px; height: 18px; accent-color: var(--accent, #dc581c); }
+.property-search-error { color: #b42318; margin: 12px 0 0; font-size: 13px; }
+@media (max-width: 1100px) {
+  .property-search-basic { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .property-search-advanced-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .property-search-panel { padding: 14px; margin: 12px 0; }
+  .property-search-heading { gap: 10px; }
+  .property-search-heading > div { gap: 8px; }
+  .property-search-actions { width: 100%; }
+  .property-search-actions .btn { flex: 1; min-height: 44px; }
+  .property-search-basic,
+  .property-search-advanced-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .property-search-panel .property-search-field input,
+  .property-search-panel .property-search-field select { font-size: 16px; }
+}

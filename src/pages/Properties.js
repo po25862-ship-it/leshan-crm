@@ -42,6 +42,8 @@ import { usePriorityReferenceCache } from "../hooks/usePriorityReferenceCache";
 import { PRIORITY_FILTERS, buildPriorityAssessments, countPriorityGroups, matchesPriorityFilter, priorityActionLabel, refreshPriorityReferences } from "../lib/propertyPriorityWorklist";
 import { matchesUnitPrice, formatUnitPrice, propertyUnitPrice } from "../lib/propertyUnitPrice";
 import "./PropertyDetailWorkspace.css";
+import "./PropertySearchFilters.css";
+import { matchesPropertyBusinessArea, propertyBusinessAreaOptions } from "../lib/propertyBusinessArea";
 import PropertyMarketReference, { PropertyPriorityBadge } from "./PropertyMarketReference";
 
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = floorplanAddress;
@@ -257,6 +259,8 @@ export default function Properties() {
   const [maxLandPing, setMaxLandPing] = useState("");
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
+  const [businessAreaFilter, setBusinessAreaFilter] = useState("");
+  const businessAreaOptions = useMemo(() => propertyBusinessAreaOptions(items), [items]);
   const [cityFilter, setCityFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [websiteFilter, setWebsiteFilter] = useState("all");
@@ -690,6 +694,7 @@ export default function Properties() {
     if (!matchRange(parseAge(p.age), minAge, maxAge)) return false;
     if (cityFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(cityFilter))) return false;
     if (districtFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(districtFilter))) return false;
+    if (!matchesPropertyBusinessArea(p, businessAreaFilter)) return false;
     if (!matchesWebsiteFilter(p, websiteFilter)) return false;
     if (parkingFilter === "yes" && !propertyHasParking(p)) return false;
     if (parkingFilter === "no" && propertyHasParking(p)) return false;
@@ -737,7 +742,6 @@ export default function Properties() {
     && matchesPropertyFilters(openProperty, false, true) && !filtered.some((item) => item.id === editingId);
   if (retainOpenProperty) displayedProperties.splice(Math.min(detailRowPosition, displayedProperties.length), 0, openProperty);
   const selectedProperties = Array.from(selectedIds, (id) => items.find((item) => item.id === id)).filter(Boolean);
-  const hasKeyword = Boolean(keyword.trim());
   const categoryPool = pool.filter((p) => matchesPropertyFilters(p, true));
   const categoryCounts = {};
   categoryPool.forEach((p) => {
@@ -755,6 +759,7 @@ export default function Properties() {
     minLandPing, maxLandPing, minAge, maxAge, parkingFilter === "all" ? "" : parkingFilter,
     minUnitPrice, maxUnitPrice,
     unitPriceBasis === "net" ? "net" : "",
+    floorFilter, livingFilter, bathFilter, layoutKeyword.trim(), topFloorOnly ? "top" : "",
   ].filter((value) => value !== "").length;
 
   const clearAllFilters = () => {
@@ -779,8 +784,13 @@ export default function Properties() {
     setMaxLandPing("");
     setMinAge("");
     setMaxAge("");
+    setBusinessAreaFilter("");
     setCityFilter("");
     setDistrictFilter("");
+    setFloorMode("eq");
+    setRoomMode("eq");
+    setLivingMode("eq");
+    setBathMode("eq");
     setWebsiteFilter("all");
     setParkingFilter("all");
     setActiveCategory("全部");
@@ -1411,162 +1421,118 @@ export default function Properties() {
         </details>
       </section>
 
-      {/* 搜尋與篩選 */}
-      <div className="property-search-bar" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <input
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          placeholder="輸入關鍵字，例如 a7；搜尋案名、商圈、社區、地址…"
-          style={{ flex: 1, minWidth: 220, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
-        />
-        <select
-          value={cityFilter}
-          onChange={(e) => { setCityFilter(e.target.value); setDistrictFilter(""); }}
-          style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
-        >
-          <option value="">全部縣市</option>
-          {TAIWAN_CITIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          value={districtFilter}
-          onChange={(e) => setDistrictFilter(e.target.value)}
-          disabled={!cityFilter}
-          style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
-        >
-          <option value="">{cityFilter ? "全部鄉鎮市區" : "先選縣市"}</option>
-          {(TAIWAN_REGIONS[cityFilter] || []).map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-        <select
-          value={websiteFilter}
-          onChange={(e) => setWebsiteFilter(e.target.value)}
-          aria-label="官網篩選"
-          style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
-        >
-          <option value="all">官網：全部</option>
-          <option value="published">有官網</option>
-          <option value="unpublished">沒官網</option>
-        </select>
-        <input
-          value={minPrice}
-          onChange={(e) => setMinPrice(e.target.value)}
-          placeholder="最低總價(萬)"
-          type="number"
-          style={{ width: 130, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
-        />
-        <input
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(e.target.value)}
-          placeholder="最高總價(萬)"
-          type="number"
-          style={{ width: 130, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
-        />
-        <button
-          type="button"
-          className={showAdvancedFilters || advancedFilterCount > 0 ? "btn" : "btn ghost"}
-          onClick={() => setShowAdvancedFilters((value) => !value)}
-        >
-          進階篩選{advancedFilterCount > 0 ? `（${advancedFilterCount}）` : ""}
-        </button>
-        <button type="button" className="btn ghost" onClick={clearAllFilters}>清除條件</button>
-      </div>
-      {hasKeyword && (
-        <div className="property-search-summary" role="status">
-          符合條件的物件：{filtered.length} 個
+      <section className="property-search-panel" aria-label="物件搜尋條件">
+        <div className="property-search-heading">
+          <div><strong>物件搜尋</strong><span role="status">找到 {filtered.length} 筆</span></div>
+          <div className="property-search-actions">
+            <button type="button" className={showAdvancedFilters || advancedFilterCount > 0 ? "btn" : "btn ghost"} aria-expanded={showAdvancedFilters} aria-controls="property-advanced-filters" onClick={() => setShowAdvancedFilters((value) => !value)}>
+              {showAdvancedFilters ? "收起進階" : "進階篩選"}{advancedFilterCount > 0 ? `（${advancedFilterCount}）` : ""}
+            </button>
+            <button type="button" className="btn ghost" onClick={clearAllFilters}>清除條件</button>
+          </div>
         </div>
-      )}
-
-      {(!isMobile || showAdvancedFilters) && <div className="property-unit-filters" aria-label="物件單價篩選">
-        <label>單價計算方式<select value={unitPriceBasis} onChange={(e) => setUnitPriceBasis(e.target.value)}><option value="gross">含車簡算單價</option><option value="net">扣車位單價</option></select></label>
-        <label>最低單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={minUnitPrice} onChange={(e) => setMinUnitPrice(e.target.value)} placeholder="不限" /></label>
-        <label>最高單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={maxUnitPrice} onChange={(e) => setMaxUnitPrice(e.target.value)} placeholder="不限" /></label>
-        <small>{unitPriceBasis === "net" ? "扣車篩選需要車位價格與坪數；資料不齊的案件不列入。" : "總價 ÷ 權狀坪數。沒有權狀坪數的案件不列入單價篩選。"}</small>
-      </div>}
-      {minUnitPrice !== "" && maxUnitPrice !== "" && Number(minUnitPrice) > Number(maxUnitPrice) && <div className="property-unit-filter-error" role="alert">最低單價不能大於最高單價，請調整範圍。</div>}
-
-      {showAdvancedFilters && (
-        <div className="panel" style={{ padding: 14, marginBottom: 14, background: "var(--panel-soft, #FAFAF8)" }}>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "end" }}>
+        <div className="property-search-basic">
+          <label className="property-search-field property-search-wide">關鍵字
+            <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="輸入關鍵字，例如 a7；搜尋案名、商圈、社區、地址…" />
+          </label>
+          <label className="property-search-field">商圈／區域
+            <select value={businessAreaFilter} onChange={(e) => setBusinessAreaFilter(e.target.value)}>
+              <option value="">全部商圈／區域</option>
+              <optgroup label="捷運生活圈">
+                <option value="zone:A7">A7 全區</option><option value="zone:A8">A8 全區</option><option value="zone:A9">A9 全區</option>
+              </optgroup>
+              <optgroup label="物件現有商圈">{businessAreaOptions.map((area) => <option key={area.value} value={area.value}>{area.label}</option>)}</optgroup>
+              <option value="missing">未填商圈／區域</option>
+            </select>
+          </label>
+          <label className="property-search-field">縣市
+            <select value={cityFilter} onChange={(e) => { setCityFilter(e.target.value); setDistrictFilter(""); }}>
+              <option value="">全部縣市</option>
+              {TAIWAN_CITIES.map((city) => <option key={city} value={city}>{city}</option>)}
+            </select>
+          </label>
+          <label className="property-search-field">行政區
+            <select value={districtFilter ? `${cityFilter}::${districtFilter}` : ""} onChange={(e) => {
+              if (!e.target.value) { setDistrictFilter(""); return; }
+              const [city, district] = e.target.value.split("::");
+              setCityFilter(city); setDistrictFilter(district);
+            }}>
+              <option value="">全部行政區</option>
+              {(cityFilter ? [cityFilter] : TAIWAN_CITIES).map((city) => <optgroup key={city} label={city}>
+                {TAIWAN_REGIONS[city].map((district) => <option key={district} value={`${city}::${district}`}>{district}</option>)}
+              </optgroup>)}
+            </select>
+          </label>
+          <label className="property-search-field">官網
+            <select aria-label="官網篩選" value={websiteFilter} onChange={(e) => setWebsiteFilter(e.target.value)}>
+              <option value="all">全部</option><option value="published">有官網</option><option value="unpublished">沒官網</option>
+            </select>
+          </label>
+          <div className="property-search-field property-search-wide"><span>總價（萬）</span>
+            <div className="property-search-pair">
+              <input aria-label="最低總價（萬）" type="number" min="0" inputMode="decimal" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="最低" />
+              <span>～</span>
+              <input aria-label="最高總價（萬）" type="number" min="0" inputMode="decimal" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="最高" />
+            </div>
+          </div>
+          <div className="property-search-field property-search-wide"><span>房數</span>
+            <div className="property-search-pair">
+              <input aria-label="房數" type="number" min="0" inputMode="numeric" value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} placeholder="不限" />
+              <select aria-label="房數比較方式" value={roomMode} onChange={(e) => setRoomMode(e.target.value)}><option value="eq">房（剛好）</option><option value="gte">房以上</option></select>
+            </div>
+          </div>
+          <label className="property-search-field property-search-wide" htmlFor="property-sort">排序方式
+            <select id="property-sort" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              {PROPERTY_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}{option.value.startsWith("unit-price") ? `（${unitPriceBasis === "net" ? "扣車位" : "含車簡算"}）` : ""}</option>)}
+            </select>
+          </label>
+        </div>
+        {showAdvancedFilters && <div id="property-advanced-filters" className="property-search-advanced">
+          <div className="property-search-subheading">單價篩選</div>
+          <div className="property-search-advanced-grid" aria-label="物件單價篩選">
+            <label className="property-search-field">單價計算方式
+              <select value={unitPriceBasis} onChange={(e) => setUnitPriceBasis(e.target.value)}><option value="gross">含車簡算單價</option><option value="net">扣車位單價</option></select>
+            </label>
+            <label className="property-search-field">最低單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={minUnitPrice} onChange={(e) => setMinUnitPrice(e.target.value)} placeholder="不限" /></label>
+            <label className="property-search-field">最高單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={maxUnitPrice} onChange={(e) => setMaxUnitPrice(e.target.value)} placeholder="不限" /></label>
+          </div>
+          <p className="property-search-help">{unitPriceBasis === "net" ? "扣車篩選需要車位價格與坪數；資料不齊的案件不列入。" : "含車簡算＝總價 ÷ 權狀坪數。沒有權狀坪數的案件不列入單價篩選。"}</p>
+          <div className="property-search-subheading">坪數、屋齡與格局</div>
+          <div className="property-search-advanced-grid">
             {[
               { label: "主建物坪數", min: minMainBuildingPing, setMin: setMinMainBuildingPing, max: maxMainBuildingPing, setMax: setMaxMainBuildingPing },
               { label: "權狀坪數", min: minTitlePing, setMin: setMinTitlePing, max: maxTitlePing, setMax: setMaxTitlePing },
               { label: "地坪", min: minLandPing, setMin: setMinLandPing, max: maxLandPing, setMax: setMaxLandPing },
               { label: "屋齡（年）", min: minAge, setMin: setMinAge, max: maxAge, setMax: setMaxAge },
-            ].map((range) => (
-              <div key={range.label} style={{ minWidth: 230 }}>
-                <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, marginBottom: 6 }}>{range.label}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input type="number" min="0" step="0.1" value={range.min} onChange={(e) => range.setMin(e.target.value)} placeholder="最低" style={{ width: 96, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7 }} />
-                  <span style={{ color: "var(--muted)" }}>～</span>
-                  <input type="number" min="0" step="0.1" value={range.max} onChange={(e) => range.setMax(e.target.value)} placeholder="最高" style={{ width: 96, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7 }} />
-                </div>
+            ].map((range) => <div key={range.label} className="property-search-field"><span>{range.label}</span>
+              <div className="property-search-pair">
+                <input aria-label={`最低${range.label}`} type="number" min="0" step="0.1" inputMode="decimal" value={range.min} onChange={(e) => range.setMin(e.target.value)} placeholder="最低" />
+                <span>～</span>
+                <input aria-label={`最高${range.label}`} type="number" min="0" step="0.1" inputMode="decimal" value={range.max} onChange={(e) => range.setMax(e.target.value)} placeholder="最高" />
               </div>
-            ))}
-            <div style={{ minWidth: 150 }}>
-              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, marginBottom: 6 }}>車位</div>
-              <select value={parkingFilter} onChange={(e) => setParkingFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 7 }}>
-                <option value="all">全部</option>
-                <option value="yes">有車位</option>
-                <option value="no">無車位</option>
-              </select>
-            </div>
+            </div>)}
+            {[
+              { label: "樓層", value: floorFilter, setValue: setFloorFilter, mode: floorMode, setMode: setFloorMode },
+              { label: "廳數", value: livingFilter, setValue: setLivingFilter, mode: livingMode, setMode: setLivingMode },
+              { label: "衛浴數", value: bathFilter, setValue: setBathFilter, mode: bathMode, setMode: setBathMode },
+            ].map((field) => <div key={field.label} className="property-search-field"><span>{field.label}</span>
+              <div className="property-search-pair">
+                <input aria-label={field.label} type="number" min="0" inputMode="numeric" value={field.value} onChange={(e) => field.setValue(e.target.value)} placeholder="不限" />
+                <select aria-label={`${field.label}比較方式`} value={field.mode} onChange={(e) => field.setMode(e.target.value)}><option value="eq">剛好</option><option value="gte">以上</option></select>
+              </div>
+            </div>)}
+            <label className="property-search-field">車位
+              <select value={parkingFilter} onChange={(e) => setParkingFilter(e.target.value)}><option value="all">全部</option><option value="yes">有車位</option><option value="no">無車位</option></select>
+            </label>
+            <label className="property-search-field property-search-wide">格局關鍵字
+              <input value={layoutKeyword} onChange={(e) => setLayoutKeyword(e.target.value)} placeholder="例如挑高、開放式格局" />
+            </label>
+            <label className="property-search-top-floor"><input type="checkbox" checked={topFloorOnly} onChange={(e) => setTopFloorOnly(e.target.checked)} />只看頂樓</label>
           </div>
-          <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted)" }}>
-            主建物坪數、屋齡這類條件只會搜尋已補入詳細資料的物件；沒有填寫的物件不會列入結果。
-          </div>
-        </div>
-      )}
-
-      {/* 房／廳／衛／樓層 結構化搜尋 */}
-      {(!isMobile || showAdvancedFilters) && <div className="property-structured-filters" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 18 }}>
-        {[
-          { label: "樓層", value: floorFilter, setValue: setFloorFilter, mode: floorMode, setMode: setFloorMode },
-          { label: "房", value: roomFilter, setValue: setRoomFilter, mode: roomMode, setMode: setRoomMode },
-          { label: "廳", value: livingFilter, setValue: setLivingFilter, mode: livingMode, setMode: setLivingMode },
-          { label: "衛", value: bathFilter, setValue: setBathFilter, mode: bathMode, setMode: setBathMode },
-        ].map((f) => (
-          <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>{f.label}</span>
-            <input
-              type="number"
-              min="0"
-              value={f.value}
-              onChange={(e) => f.setValue(e.target.value)}
-              style={{ width: 56, padding: "8px 8px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
-            />
-            <select
-              value={f.mode}
-              onChange={(e) => f.setMode(e.target.value)}
-              style={{ padding: "8px 6px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 12 }}
-            >
-              <option value="eq">＝</option>
-              <option value="gte">以上</option>
-            </select>
-          </div>
-        ))}
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>
-          <input type="checkbox" checked={topFloorOnly} onChange={(e) => setTopFloorOnly(e.target.checked)} />
-          只看頂樓
-        </label>
-        <input
-          value={layoutKeyword}
-          onChange={(e) => setLayoutKeyword(e.target.value)}
-          placeholder="格局關鍵字（備用，例如非標準格局的物件）"
-          style={{ width: 220, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13 }}
-        />
-      </div>}
-
-      <div className="property-sort-bar">
-        <label htmlFor="property-sort">排序方式</label>
-        <select id="property-sort" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-          {PROPERTY_SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </div>
+          <p className="property-search-help">坪數、屋齡等條件只會列出已填寫相關資料的物件。</p>
+        </div>}
+        {minUnitPrice !== "" && maxUnitPrice !== "" && Number(minUnitPrice) > Number(maxUnitPrice) && <p className="property-search-error" role="alert">最低單價不能大於最高單價，請調整範圍。</p>}
+      </section>
 
       {showForm && (() => {
         const tabs = [["overview", "基本資料"], ["market", "行情公設"], ["files", "資料表／格局圖"], ["matches", "配對客需"], ["history", "歷程紀錄"]];
