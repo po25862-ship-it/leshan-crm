@@ -61,7 +61,7 @@ function time(value) {
 function median(values) { const s = [...values].sort((a, b) => a - b); const i = Math.floor(s.length / 2); return s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2; }
 
 export function assessPropertyPriority(property = {}, reference = null, needs = [], { now = Date.now(), error = "" } = {}) {
-  const pending = (reason, next, extra = {}) => ({ status: "pending", label: "待補資料", reason, next, ...extra });
+  const pending = (reason, next, extra = {}) => ({ status: "pending", label: ["missing_reference", "source_unavailable", "stale_reference"].includes(extra.code) ? "待查行情" : "待補資料", reason, next, ...extra });
   if ((property.status || "active") !== "active") return { status: "inactive", label: "非在售", reason: "此案件目前非在售，不列為優先推案。", next: "確認案件狀態後再評估。" };
   const unit = propertyUnitPrice(property, "net");
   if (unit === null) {
