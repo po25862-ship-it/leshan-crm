@@ -69,7 +69,7 @@ test("batch refresh reports progress, waits between calls and stops immediately 
   expect(pause).toHaveBeenCalledWith(1500);
   expect(onProgress).toHaveBeenCalledWith(1);
   expect(result).toEqual({ completed: 1, failed: true });
-  expect(onResult.mock.calls[1][2]).toContain("無法更新");
+  expect(onResult.mock.calls[1][2]).toContain("雲端行情資料暫時無法讀取");
 });
 
 test("stopping a refresh ignores an in-flight result and does not continue to another case", async () => {

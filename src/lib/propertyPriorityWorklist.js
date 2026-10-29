@@ -112,8 +112,8 @@ export async function refreshPriorityReferences(properties, { load, onResult, on
       completed++;
       onProgress(completed);
     } catch {
-      if (!shouldStop()) onResult(property, null, "市場參考暫時無法更新，請確認市場開發程式在線後重試。");
-      // Do not retry all remaining properties when the Mac/source is offline.
+      if (!shouldStop()) onResult(property, null, "雲端行情資料暫時無法讀取，請確認網路連線後重試。");
+      // Do not repeat a failing request for every remaining property.
       return { completed, failed: true };
     }
     if (completed < properties.length) await pause(Math.max(0, interval - (now() - started)));

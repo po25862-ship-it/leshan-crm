@@ -74,7 +74,7 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
       code: "missing_unit", missingFields,
     });
   }
-  if (error) return pending("市場參考暫時無法更新。", "確認市場開發程式在線後，重新更新參考。", { code: "source_unavailable" });
+  if (error) return pending("雲端行情資料暫時無法讀取。", "確認網路連線後，重新更新參考。", { code: "source_unavailable" });
   if (reference?.fetchedAt && now - Number(reference.fetchedAt) > 86400000) return pending("上次讀取的市場參考已超過一天。", "更新成交參考後重新評估。", { code: "stale_reference" });
   if (!reference) return pending("這間還沒查過附近成交。", "按一下更新案件判斷，就會查同社區、大小差不多的房子最近賣多少。", { code: "missing_reference" });
   if (!reference.community) return pending("尚未配對到 A7／A8／A9 的唯一社區。", "核對完整門牌及社區名稱。", { code: "unmatched_community" });

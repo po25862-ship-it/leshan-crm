@@ -49,7 +49,7 @@ export function useMarketReference(property, enabled = true) {
       const data = await requestReference(userRef.current, key, force);
       if (request === sequence.current) setState({ key, data, loading: false, error: "" });
     } catch {
-      if (request === sequence.current) setState({ key, data: null, loading: false, error: "市場參考暫時無法更新。請確認 Mac 的市場開發程式與網路通道正在運作，再按「更新參考」。" });
+      if (request === sequence.current) setState({ key, data: null, loading: false, error: "雲端行情資料暫時無法讀取。請確認網路連線，稍後再按「更新參考」。" });
     }
   }, [uid, enabled, key]);
   useEffect(() => {

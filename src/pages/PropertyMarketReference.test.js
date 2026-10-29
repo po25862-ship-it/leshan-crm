@@ -55,3 +55,11 @@ test("each comparable shows official and car-exclusive prices with a clear calcu
   expect(trades[1].children[3].textContent).toContain("35");
   expect(host.querySelector("a")).toBeNull();
 });
+
+test("cloud reference identifies the sync time separately from the current read time", () => {
+  render({ reference: { ...reference, sourceMode: "cloud-snapshot", snapshotAt: 1793315106854 } });
+  expect(host.textContent).toContain("雲端資料・最後同步");
+  expect(host.textContent).toContain("無須開啟本機程式");
+  expect(host.textContent).toContain("雲端最後同步");
+  expect(host.querySelector("a")).toBeNull();
+});

@@ -42,6 +42,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
   const recent = deals.slice(0, 5);
   return <section className="panel property-market-reference" style={{ gridColumn: "1 / -1" }} aria-label="物件行情與搶攻提醒">
     <header className="property-market-heading"><div><span className="property-market-eyebrow">{property.title || "本件物件"}</span><h3>成交參考與業務提醒</h3></div><button type="button" className="btn ghost" onClick={onRefresh} disabled={loading}>{loading ? "讀取參考中…" : "更新參考"}</button></header>
+    {reference?.sourceMode === "cloud-snapshot" && !error && <p className="property-market-caption" role="status">雲端資料・最後同步：{dateTime(reference.snapshotAt)}。手機、電腦皆可查詢，無須開啟本機程式。「更新參考」會重新讀取最新雲端資料。</p>}
     <div className="property-market-unit-row"><span>含車簡算單價 <strong>{formatUnitPrice(property, "gross")}</strong></span><span>扣車位單價 <strong>{formatUnitPrice(property, "net")}</strong></span></div>
     {parkingPricePresetNote(property) && <p className="property-market-caption">{parkingPricePresetNote(property)}可在「編輯資料」修改。</p>}
     <div className={`property-priority-detail ${assessment.status}`}>
@@ -79,7 +80,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
           <h4>社區公設與管理</h4><div className="property-market-caption">{community.name}・{community.zone}</div>
           {community.households && <div className="property-market-caption">{money(community.households)} 戶</div>}
           <div className="property-market-facilities">{amenities?.list?.length ? <div className="property-market-facility-tags">{amenities.list.map((a) => <span key={a}>{a}</span>)}</div> : <strong>來源尚未填寫公設資料</strong>}{amenities?.note && <p>{amenities.note}</p>}<small>公設更新：{dateTime(amenities?.updatedAt)}</small></div>
-          <dl><div><dt>本件管理費</dt><dd>{formatPropertyManagementFee(property) || "未提供"}</dd></div><div><dt>社區管理費單價</dt><dd>{community.fees?.perPing !== null && community.fees?.perPing !== undefined ? `${money(community.fees.perPing)} 元／坪・月` : "來源尚未提供"}</dd></div><div><dt>社區資料更新</dt><dd>{dateTime(community.updatedAt)}</dd></div><div><dt>本次讀取</dt><dd>{dateTime(reference.fetchedAt)}</dd></div></dl>
+          <dl><div><dt>本件管理費</dt><dd>{formatPropertyManagementFee(property) || "未提供"}</dd></div><div><dt>社區管理費單價</dt><dd>{community.fees?.perPing !== null && community.fees?.perPing !== undefined ? `${money(community.fees.perPing)} 元／坪・月` : "來源尚未提供"}</dd></div><div><dt>社區資料更新</dt><dd>{dateTime(community.updatedAt)}</dd></div>{reference.snapshotAt && <div><dt>雲端最後同步</dt><dd>{dateTime(reference.snapshotAt)}</dd></div>}<div><dt>本次讀取</dt><dd>{dateTime(reference.fetchedAt)}</dd></div></dl>
           <div className="property-market-caption">公設依來源更新；本件管理費保留原物件資料。</div>
         </aside>
       </div>
