@@ -1383,8 +1383,15 @@ export default function Properties() {
       </div>
 
       <section className="property-priority-worklist" aria-label="案件處理分類">
+        <details className="property-priority-disclosure">
+          <summary>
+            <strong>案件處理</strong>
+            {(priorityRefresh.running || priorityFilter !== "all") && <span className="property-priority-summary-context">
+              {priorityRefresh.running ? `更新中 ${priorityRefresh.completed}／${priorityRefresh.total}` : `目前篩選：${PRIORITY_FILTERS.find((filter) => filter.value === priorityFilter)?.label}（${priorityCounts[priorityFilter]}）`}
+            </span>}
+          </summary>
+          <div className="property-priority-disclosure-body">
         <div className="property-priority-worklist-heading">
-          <strong>案件處理</strong>
           <div>
             <button type="button" className="btn ghost" onClick={updatePriorityWorklist} disabled={priorityRefresh.running || !priorityTargets.length}>
               {priorityRefresh.running ? `更新中 ${priorityRefresh.completed}／${priorityRefresh.total}` : "更新案件判斷"}
@@ -1400,6 +1407,8 @@ export default function Properties() {
         <p>範圍：A7／A8／A9 在售案件。可更新行情：{priorityTargets.length} 筆。</p>
         <details className="property-priority-method"><summary>分類與更新說明</summary><p>筆數會跟著搜尋條件改變。「先把資料補齊」會列出還需要補資料或再確認的案件，例如車位價格、成交參考或能不能帶看。「還沒查過附近成交」也包含需要重新查詢的案件；這裡查的是同社區、大小差不多的房子。查過的成交在目前裝置保留一天，系統會搭配目前的物件資料、客人需求與帶看確認，重新整理分類。</p></details>
         <div className="property-priority-progress" role="status">{priorityRefresh.running ? `正在檢查本次範圍 ${priorityRefresh.total} 筆，已完成 ${priorityRefresh.completed} 筆。` : priorityRefresh.message || "按「更新案件判斷」，一次檢查目前範圍，不用逐筆開啟。"}</div>
+          </div>
+        </details>
       </section>
 
       {/* 搜尋與篩選 */}
