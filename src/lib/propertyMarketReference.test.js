@@ -53,3 +53,10 @@ test("an above-reference asking price belongs to negotiation even without a matc
   expect(result.reason).toContain("目前還沒找到合適的客人");
   expect(result.missingFields).toBeUndefined();
 });
+
+test("priority assessment uses the requested car preset and clearly identifies the estimated basis", () => {
+  const result = assessPropertyPriority({ ...property, parkingPrice: "", parkingDescription: "坡道平面" }, reference, needs, { now });
+  expect(result.status).toBe("priority");
+  expect(result.unit).toBe(33);
+  expect(result.reason).toContain("平面每個 180 萬預設試算");
+});

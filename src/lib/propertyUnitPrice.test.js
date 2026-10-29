@@ -1,4 +1,4 @@
-import { propertyUnitPrice, matchesUnitPrice, officialNetUnit, propertyParkingState } from "./propertyUnitPrice";
+import { propertyUnitPrice, matchesUnitPrice, officialNetUnit, propertyParkingState, resolvePropertyParkingPrice, formatPropertyParkingPrice, missingUnitPriceFields, formatUnitPrice } from "./propertyUnitPrice";
 
 const p = { totalPrice: 1758, titlePing: 54.59, parkingPing: 11.01, parkingCount: 1 };
 test("gross and parking-exclusive asking prices remain distinct", () => {
@@ -26,4 +26,34 @@ test("official net comparison needs actual parking split and never replaces the 
   expect(officialNetUnit(d)).toBeCloseTo(32.8132);
   expect(officialNetUnit({ ...d, parkingPrice: 0 })).toBeNull();
   expect(d.unit).toBe(32.81);
+});
+
+test("flat and mechanical presets apply consistently to net calculations, filters and missing fields", () => {
+  const flat = { ...p, parkingDescription: "坡道平面", parkingPrice: "" };
+  const mechanical = { ...p, parkingDescription: "升降機械" };
+  expect(resolvePropertyParkingPrice(flat).price).toBe(180);
+  expect(resolvePropertyParkingPrice(mechanical).price).toBe(150);
+  expect(propertyUnitPrice(flat, "net")).toBeCloseTo((1758 - 180) / (54.59 - 11.01));
+  expect(matchesUnitPrice(flat, "36", "37", "net")).toBe(true);
+  expect(missingUnitPriceFields(flat)).toEqual([]);
+  expect(formatUnitPrice(flat, "net")).toContain("預設試算");
+  expect(formatPropertyParkingPrice(flat)).toBe("180 萬（平面預設）");
+  expect(flat.parkingPrice).toBe("");
+});
+
+test("multiple spaces use a total preset but explicitly entered values always take precedence", () => {
+  const flat = { ...p, parkingDescription: "升降平面", parkingCount: 2 };
+  expect(resolvePropertyParkingPrice(flat).price).toBe(360);
+  expect(resolvePropertyParkingPrice({ ...flat, parkingPrice: "250" })).toEqual({ price: 250, source: "entered" });
+  expect(resolvePropertyParkingPrice({ ...flat, parkingPrice: 0 })).toEqual({ price: 0, source: "entered" });
+  expect(resolvePropertyParkingPrice({ ...flat, parkingPrice: "bad" }).price).toBeNull();
+  expect(resolvePropertyParkingPrice({ ...flat, parkingCount: "" }).price).toBe(180);
+});
+
+test("unknown or mixed types are not guessed and official sales never receive asking-price presets", () => {
+  for (const parkingDescription of ["無", "有", "", "平面及機械", "機車位"]) {
+    expect(resolvePropertyParkingPrice({ ...p, parkingDescription }).price).toBeNull();
+  }
+  expect(resolvePropertyParkingPrice({ ...p, parkingDescription: "坡道平面", parkingCount: 1.5 }).price).toBeNull();
+  expect(officialNetUnit({ price: 16000000, area: 50, parkingArea: 10, parkingType: "坡道平面" })).toBeNull();
 });

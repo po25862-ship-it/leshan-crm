@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { assessPropertyPriority, comparableDeals } from "../lib/propertyMarketReference";
-import { formatUnitPrice } from "../lib/propertyUnitPrice";
+import { formatUnitPrice, parkingPricePresetNote } from "../lib/propertyUnitPrice";
 import { formatPropertyManagementFee } from "../lib/propertyManagementFee";
 import "./PropertyMarketReference.css";
 
@@ -27,6 +27,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
   return <section className="panel property-market-reference" style={{ gridColumn: "1 / -1" }} aria-label="物件行情與搶攻提醒">
     <header className="property-market-heading"><div><span className="property-market-eyebrow">{property.title || "本件物件"}</span><h3>成交參考與業務提醒</h3></div><button type="button" className="btn ghost" onClick={onRefresh} disabled={loading}>{loading ? "讀取參考中…" : "更新參考"}</button></header>
     <div className="property-market-unit-row"><span>含車簡算單價 <strong>{formatUnitPrice(property, "gross")}</strong></span><span>扣車位單價 <strong>{formatUnitPrice(property, "net")}</strong></span></div>
+    {parkingPricePresetNote(property) && <p className="property-market-caption">{parkingPricePresetNote(property)}可在「編輯資料」修改。</p>}
     <div className={`property-priority-detail ${assessment.status}`}>
       <div className="property-priority-detail-heading"><strong>業務搶攻提醒</strong><PropertyPriorityBadge assessment={assessment} /><span>內部參考</span></div>
       <div>{assessment.reason}</div><div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
@@ -55,7 +56,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
           </div>
           {!recent.length && <div className="property-market-message">目前條件查無可比成交，不以其他社區補足。可調整坪數範圍。</div>}
           <div className="property-market-source">資料發布：{reference.publishedDate || "未提供"}；成交年度：{(reference.years || []).join("、")}。本社區本批最新成交：{reference.deals?.[0]?.date || "未提供"}。</div>
-          <details className="property-priority-method"><summary>面積與單價說明</summary><p>建物總坪數採官方建物移轉總面積，可能含車位、公設；表中的單價直接保留官方揭露數值，其車位拆分方式可能不同，不可直接與含車簡算單價混比。搶攻提醒另外使用可確認的扣車價格與面積計算，不估填車位價格。已排除特殊交易；增建等備註仍須核對。</p></details>
+          <details className="property-priority-method"><summary>面積與單價說明</summary><p>建物總坪數採官方建物移轉總面積，可能含車位、公設；表中的單價直接保留官方揭露數值，其車位拆分方式可能不同，不可直接與含車簡算單價混比。本件未填車位價格時，平面每個以 180 萬、機械每個以 150 萬預設試算，並依數量合計；可自行修改。官方成交未分列的車位價格仍保留原樣，缺少拆分資料的成交不列入扣車比較。已排除特殊交易；增建等備註仍須核對。</p></details>
         </section>
         <aside className="property-market-community" aria-label="社區公設與管理">
           <h4>社區公設與管理</h4><div className="property-market-caption">{community.name}・{community.zone}</div>

@@ -1,5 +1,5 @@
 import { reverseMatchProperty } from "./needsMatch";
-import { propertyUnitPrice, missingUnitPriceFields, officialNetUnit, nonNegativeNumber } from "./propertyUnitPrice";
+import { propertyUnitPrice, missingUnitPriceFields, officialNetUnit, nonNegativeNumber, parkingPricePresetNote } from "./propertyUnitPrice";
 import { normalizeNeedRanges, toNum } from "./needsFields";
 
 export function referenceLookup(property = {}) {
@@ -61,7 +61,8 @@ function time(value) {
 function median(values) { const s = [...values].sort((a, b) => a - b); const i = Math.floor(s.length / 2); return s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2; }
 
 export function assessPropertyPriority(property = {}, reference = null, needs = [], { now = Date.now(), error = "" } = {}) {
-  const pending = (reason, next, extra = {}) => ({ status: "pending", label: ["missing_reference", "source_unavailable", "stale_reference"].includes(extra.code) ? "還沒查過附近成交" : "先把資料補齊", reason, next, ...extra });
+  const parkingNote = parkingPricePresetNote(property);
+  const pending = (reason, next, extra = {}) => ({ status: "pending", label: ["missing_reference", "source_unavailable", "stale_reference"].includes(extra.code) ? "還沒查過附近成交" : "先把資料補齊", reason: reason + parkingNote, next, ...extra });
   if ((property.status || "active") !== "active") return { status: "inactive", label: "非在售", reason: "此案件目前非在售，不列為優先推案。", next: "確認案件狀態後再評估。" };
   const unit = propertyUnitPrice(property, "net");
   if (unit === null) {
@@ -85,10 +86,10 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
   const referenceUnit = median(samples.map(officialNetUnit));
   const buyers = activeMatches(property, needs);
   const detail = { unit, referenceUnit, sampleCount: samples.length, matchedNeeds: buyers.strict, possibleNeeds: buyers.possible };
-  if (unit > referenceUnit) return { ...detail, status: "negotiate", label: "議價追蹤", reason: `扣車開價 ${unit.toFixed(2)} 萬／坪，高於相近成交中位數 ${referenceUnit.toFixed(2)}；${buyers.possible > 0 ? `有 ${buyers.possible} 組客人的需求可能適合` : "目前還沒找到合適的客人"}。`, next: "先問負責業務，屋主的價格還能不能談，再看看適合推薦給誰。" };
+  if (unit > referenceUnit) return { ...detail, status: "negotiate", label: "議價追蹤", reason: `扣車開價 ${unit.toFixed(2)} 萬／坪，高於相近成交中位數 ${referenceUnit.toFixed(2)}；${buyers.possible > 0 ? `有 ${buyers.possible} 組客人的需求可能適合` : "目前還沒找到合適的客人"}。${parkingNote}`, next: "先問負責業務，屋主的價格還能不能談，再看看適合推薦給誰。" };
   if (buyers.strict === 0) return pending("目前還沒找到合適的客人。", "先看看現有客人的需求，有合適的再安排介紹。", { ...detail, label: "目前還沒找到合適的客人" });
   const confirmed = time(property.viewingConfirmedAt);
   const ready = property.viewingStatus === "available" && confirmed !== null && confirmed <= now && now - confirmed <= 30 * 86400000;
   if (!ready) return pending(`符合 ${buyers.strict} 組現有客需，尚待近期帶看確認。`, "向負責業務確認可帶看，並在編輯資料更新帶看狀態。", detail);
-  return { ...detail, status: "priority", label: "優先推案", reason: `扣車開價不高於相近成交中位數，符合 ${buyers.strict} 組現有客需，且近 30 天已確認可帶看。`, next: "核對樓層、屋況與交易條件後，聯繫符合需求的買方安排帶看。" };
+  return { ...detail, status: "priority", label: "優先推案", reason: `扣車開價不高於相近成交中位數，符合 ${buyers.strict} 組現有客需，且近 30 天已確認可帶看。${parkingNote}`, next: "核對樓層、屋況與交易條件後，聯繫符合需求的買方安排帶看。" };
 }

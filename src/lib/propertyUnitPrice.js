@@ -4,6 +4,39 @@ export function nonNegativeNumber(value) {
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
+export function resolvePropertyParkingPrice(property = {}) {
+  const entered = property.parkingPrice;
+  if (entered != null && String(entered).trim() !== "") {
+    return { price: nonNegativeNumber(entered), source: "entered" };
+  }
+  const description = String(property.parkingDescription || property.parkingType || "").normalize("NFKC");
+  const flat = /平面|平車|坡平/.test(description);
+  const mechanical = /機械|塔式|[升昇]降橫移/.test(description);
+  // Mixed types need a total entered by the user; a space number is not a quantity.
+  if (flat === mechanical || /^(無|無車位|沒有車位|不含車位)$/.test(description.trim())) {
+    return { price: null, source: "unavailable" };
+  }
+  const quantity = nonNegativeNumber(property.parkingCount);
+  if (quantity > 0 && !Number.isInteger(quantity)) return { price: null, source: "unavailable" };
+  const count = quantity > 0 ? quantity : 1;
+  const kind = flat ? "平面" : "機械";
+  const perSpace = flat ? 180 : 150;
+  return { price: perSpace * count, source: "preset", kind, perSpace, count };
+}
+
+export function formatPropertyParkingPrice(property) {
+  const resolved = resolvePropertyParkingPrice(property);
+  if (resolved.price === null) return "未提供";
+  return `${resolved.price} 萬${resolved.source === "preset" ? `（${resolved.kind}${resolved.count > 1 ? ` ${resolved.count} 個` : ""}預設）` : ""}`;
+}
+
+export function parkingPricePresetNote(property) {
+  const resolved = resolvePropertyParkingPrice(property);
+  return resolved.source === "preset"
+    ? `車位價格採${resolved.kind}每個 ${resolved.perSpace} 萬預設試算${resolved.count > 1 ? `，${resolved.count} 個合計 ${resolved.price} 萬` : ""}。`
+    : "";
+}
+
 export function propertyParkingState(property = {}) {
   const description = String(property.parkingDescription || "").trim();
   const area = nonNegativeNumber(property.parkingPing);
@@ -22,7 +55,7 @@ export function propertyUnitPrice(property = {}, basis = "gross") {
   if (basis === "gross") return price / area;
   const parking = propertyParkingState(property);
   if (parking === "no") return price / area;
-  const parkingPrice = nonNegativeNumber(property.parkingPrice);
+  const parkingPrice = resolvePropertyParkingPrice(property).price;
   const parkingArea = nonNegativeNumber(property.parkingPing);
   if (parking !== "yes" || !(parkingPrice > 0) || !(parkingArea > 0) || parkingPrice >= price || parkingArea >= area) return null;
   return (price - parkingPrice) / (area - parkingArea);
@@ -38,7 +71,7 @@ export function matchesUnitPrice(property, minimum, maximum, basis = "gross") {
 
 export function formatUnitPrice(property, basis = "gross") {
   const unit = propertyUnitPrice(property, basis);
-  return unit === null ? "未提供" : `${unit.toFixed(2)} 萬／坪`;
+  return unit === null ? "未提供" : `${unit.toFixed(2)} 萬／坪${basis === "net" && resolvePropertyParkingPrice(property).source === "preset" ? "（預設試算）" : ""}`;
 }
 
 export function missingUnitPriceFields(property = {}) {
@@ -50,7 +83,7 @@ export function missingUnitPriceFields(property = {}) {
   const parking = propertyParkingState(property);
   if (parking === "unknown") missing.push({ label: "車位狀況", fieldId: "property-parking-description" });
   if (parking === "yes") {
-    const carPrice = nonNegativeNumber(property.parkingPrice);
+    const carPrice = resolvePropertyParkingPrice(property).price;
     const carArea = nonNegativeNumber(property.parkingPing);
     if (!(carPrice > 0) || (price > 0 && carPrice >= price)) missing.push({ label: "車位價格", fieldId: "property-parking-price" });
     if (!(carArea > 0) || (area > 0 && carArea >= area)) missing.push({ label: "車位坪數", fieldId: "property-parking-ping" });

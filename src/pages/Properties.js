@@ -40,7 +40,7 @@ import { formatPropertyAreaWithoutParking } from "../lib/propertyAreaWithoutPark
 import { useMarketReference, loadMarketReference } from "../hooks/useMarketReference";
 import { usePriorityReferenceCache } from "../hooks/usePriorityReferenceCache";
 import { PRIORITY_FILTERS, buildPriorityAssessments, countPriorityGroups, matchesPriorityFilter, priorityActionLabel, refreshPriorityReferences } from "../lib/propertyPriorityWorklist";
-import { matchesUnitPrice, formatUnitPrice, propertyUnitPrice } from "../lib/propertyUnitPrice";
+import { matchesUnitPrice, formatUnitPrice, propertyUnitPrice, resolvePropertyParkingPrice, formatPropertyParkingPrice } from "../lib/propertyUnitPrice";
 import "./PropertyDetailWorkspace.css";
 import "./PropertySearchFilters.css";
 import { matchesPropertyBusinessArea, propertyBusinessAreaOptions } from "../lib/propertyBusinessArea";
@@ -293,6 +293,7 @@ export default function Properties() {
   const [sharingFloorplanFile, setSharingFloorplanFile] = useState(null);
   const [applyingFloorplan, setApplyingFloorplan] = useState(false);
   const marketReference = useMarketReference(form, Boolean(editingId && showForm && !editMode));
+  const formParkingPrice = resolvePropertyParkingPrice(form);
   useEffect(() => {
     if (!editingId || !showForm || editMode) return;
     if (marketReference.data || marketReference.error) {
@@ -1502,7 +1503,7 @@ export default function Properties() {
             <label className="property-search-field">最低單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={minUnitPrice} onChange={(e) => setMinUnitPrice(e.target.value)} placeholder="不限" /></label>
             <label className="property-search-field">最高單價（萬／坪）<input type="number" min="0" step="0.1" inputMode="decimal" value={maxUnitPrice} onChange={(e) => setMaxUnitPrice(e.target.value)} placeholder="不限" /></label>
           </div>
-          <p className="property-search-help">{unitPriceBasis === "net" ? "扣車篩選需要車位價格與坪數；資料不齊的案件不列入。" : "含車簡算＝總價 ÷ 權狀坪數。沒有權狀坪數的案件不列入單價篩選。"}</p>
+          <p className="property-search-help">{unitPriceBasis === "net" ? "車位價格空白時，平面每個預設 180 萬、機械每個預設 150 萬；車位類型或坪數不齊的案件不列入。" : "含車簡算＝總價 ÷ 權狀坪數。沒有權狀坪數的案件不列入單價篩選。"}</p>
           <div className="property-search-subheading">坪數、屋齡與格局</div>
           <div className="property-search-advanced-grid">
             {[
@@ -1596,7 +1597,7 @@ export default function Properties() {
                 ].filter(Boolean).join("・")} />
                 <DetailValue label="車位編號" value={form.parkingNumber} />
                 <DetailValue label="管理費" value={formatPropertyManagementFee(form) || "未提供"} />
-                <DetailValue label="車位價格" value={form.parkingPrice !== "" && form.parkingPrice != null ? `${form.parkingPrice} 萬` : "未提供"} />
+                <DetailValue label="車位價格" value={formatPropertyParkingPrice(form)} />
                 <DetailValue label="帶看確認" value={({ available: "已確認可帶看", appointment: "需先預約確認", unavailable: "目前無法帶看" })[form.viewingStatus] || "尚未確認"} />
               </div>
               {(form.notes || form.agentInfo) && (
@@ -1789,7 +1790,8 @@ export default function Properties() {
               </div>
               <div className="form-field">
                 <label htmlFor="property-parking-price">車位價格（萬）</label>
-                <input id="property-parking-price" type="number" min="0" step="0.1" value={form.parkingPrice ?? ""} onChange={(e) => setForm({ ...form, parkingPrice: e.target.value })} placeholder="實際拆分價格；未確認請留空" />
+                <input id="property-parking-price" type="number" min="0" step="0.1" value={formParkingPrice.source === "preset" ? formParkingPrice.price : form.parkingPrice ?? ""} onChange={(e) => setForm({ ...form, parkingPrice: e.target.value })} placeholder="填寫全部車位的合計價格" aria-describedby="property-parking-price-help" />
+                <small id="property-parking-price-help" style={{ color: "var(--muted)" }}>{formParkingPrice.source === "preset" ? `目前使用${formParkingPrice.kind}預設：每個 ${formParkingPrice.perSpace} 萬，${formParkingPrice.count} 個共 ${formParkingPrice.price} 萬。可直接修改。` : "已有價格優先；留空時，平面每個預設 180 萬、機械每個預設 150 萬，依車位數量合計。"}</small>
               </div>
               <div className="form-field">
                 <label htmlFor="property-viewing-status">帶看確認</label>
@@ -1816,8 +1818,8 @@ export default function Properties() {
                 <input value={form.layout} onChange={(e) => setForm({ ...form, layout: e.target.value })} placeholder="房/廳/衛，例如：3/2/2" />
               </div>
               <div className="form-field">
-                <label>車位（數量）</label>
-                <input value={form.parkingCount} onChange={(e) => setForm({ ...form, parkingCount: e.target.value })} />
+                <label htmlFor="property-parking-count">車位（數量）</label>
+                <input id="property-parking-count" value={form.parkingCount} onChange={(e) => setForm({ ...form, parkingCount: e.target.value })} />
               </div>
               <div className="form-field">
                 <label>車位編號</label>

@@ -34,3 +34,10 @@ test("offline errors do not leave old trades or positive opportunity labels visi
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(0);
   expect(host.querySelector(".property-priority-badge").textContent).toBe("先把資料補齊");
 });
+
+test("the requested parking preset is identified without replacing missing official car prices", () => {
+  render({ property: { ...property, parkingDescription: "機械" }, reference: { ...reference, deals: [{ ...row, parkingPrice: 0 }] } });
+  expect(host.textContent).toContain("33.75 萬／坪（預設試算）");
+  expect(host.textContent).toContain("機械每個 150 萬預設試算");
+  expect(host.querySelector(".property-market-trade").textContent).toContain("車價未分列");
+});
