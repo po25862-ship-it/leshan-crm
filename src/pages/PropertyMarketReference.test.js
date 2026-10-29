@@ -18,6 +18,7 @@ test("real source facilities and newest comparables render with their date and p
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(2);
   expect(host.textContent).toContain("不限房數");
   expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+  expect(host.querySelector("a")).toBeNull();
 });
 test("missing parking is actionable and does not produce an opportunity label", () => {
   const onEdit = jest.fn();

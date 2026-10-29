@@ -62,7 +62,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
           {community.households && <div className="property-market-caption">{money(community.households)} 戶</div>}
           <div className="property-market-facilities">{amenities?.list?.length ? <div className="property-market-facility-tags">{amenities.list.map((a) => <span key={a}>{a}</span>)}</div> : <strong>來源尚未填寫公設資料</strong>}{amenities?.note && <p>{amenities.note}</p>}<small>公設更新：{dateTime(amenities?.updatedAt)}</small></div>
           <dl><div><dt>本件管理費</dt><dd>{formatPropertyManagementFee(property) || "未提供"}</dd></div><div><dt>社區管理費單價</dt><dd>{community.fees?.perPing !== null && community.fees?.perPing !== undefined ? `${money(community.fees.perPing)} 元／坪・月` : "來源尚未提供"}</dd></div><div><dt>社區資料更新</dt><dd>{dateTime(community.updatedAt)}</dd></div><div><dt>本次讀取</dt><dd>{dateTime(reference.fetchedAt)}</dd></div></dl>
-          <a href={community.url} target="_blank" rel="noreferrer">查看來源社區資料</a><div className="property-market-caption">公設依來源更新；本件管理費保留原物件資料。</div>
+          <div className="property-market-caption">公設依來源更新；本件管理費保留原物件資料。</div>
         </aside>
       </div>
     </>}
