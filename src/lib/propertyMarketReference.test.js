@@ -4,10 +4,11 @@ const property = { id: "p", category: "電梯大樓", totalPrice: 1500, titlePin
 const deal = { id: "a", date: "2026-09-01", kind: "sale", type: "住宅大樓(11層含以上有電梯)", use: "住家用", area: 50, price: 16000000, unit: 35, rooms: 3, parkingPrice: 2000000, parkingArea: 10, parkingType: "坡道平面", special: false };
 const reference = { community: { id: "c" }, matchMethod: "exact-doorplate", deals: [deal, { ...deal, id: "b", date: "2026-08-01" }, { ...deal, id: "c", date: "2026-07-01" }] };
 const needs = [{ id: "n", contactId: "buyer", statusTag: "正在找", budgetMax: 1600, areas: [{ city: "桃園市", district: "龜山區" }] }];
-test("comparables exclude special, wrong-type, different rooms and future records without mixing communities", () => {
+test("comparables include different room counts while excluding special, wrong-type and future records", () => {
   const source = { ...reference, deals: [...reference.deals, { ...deal, id: "special", special: true }, { ...deal, id: "future", date: "2027-01-01" }, { ...deal, id: "wrong-type", type: "店面" }, { ...deal, id: "two-room", rooms: 2 }, { ...deal, id: "far", area: 90 }] };
-  expect(comparableDeals(property, source, { now })).toHaveLength(3);
-  expect(comparableDeals(property, source, { now, sameRooms: false })).toHaveLength(4);
+  expect(comparableDeals(property, source, { now })).toHaveLength(4);
+  expect(comparableDeals(property, source, { now, sameRooms: true })).toHaveLength(3);
+  expect(comparableDeals({ ...property, layout: "" }, source, { now })).toHaveLength(4);
 });
 test("missing parking price never earns a positive opportunity label", () => {
   const result = assessPropertyPriority({ ...property, titlePing: 34.43, totalPrice: 1750, parkingPing: 7.77, parkingPrice: "" }, reference, needs, { now });
@@ -34,4 +35,11 @@ test("old and incomplete parking transactions cannot supply confident comparison
 test("offline or stale responses never keep an old positive priority label", () => {
   expect(assessPropertyPriority(property, reference, needs, { now, error: "offline" }).code).toBe("source_unavailable");
   expect(assessPropertyPriority(property, { ...reference, fetchedAt: now - 2 * 86400000 }, needs, { now }).code).toBe("stale_reference");
+});
+
+test("opportunity assessment uses eligible same-community sales across room counts", () => {
+  const mixed = { ...reference, deals: reference.deals.map((row, index) => ({ ...row, rooms: index + 1 })) };
+  const result = assessPropertyPriority(property, mixed, needs, { now });
+  expect(result.status).toBe("priority");
+  expect(result.sampleCount).toBe(3);
 });

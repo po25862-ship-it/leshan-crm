@@ -15,10 +15,9 @@ test("real source facilities and newest comparables render with their date and p
   expect(host.textContent).toContain("閱覽室");
   expect(host.textContent).toContain("需預約");
   expect(host.textContent).toContain("2026-10-21");
-  expect(host.querySelectorAll(".property-market-trade")).toHaveLength(1);
-  const toggle = host.querySelector('input[type="checkbox"]');
-  act(() => toggle.click());
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(2);
+  expect(host.textContent).toContain("不限房數");
+  expect(host.querySelector('input[type="checkbox"]')).toBeNull();
 });
 test("missing parking is actionable and does not produce an opportunity label", () => {
   const onEdit = jest.fn();

@@ -22,7 +22,7 @@ function sameType(property, deal) {
   }
 }
 
-export function comparableDeals(property, reference, { tolerance = 0.2, sameRooms = true, now = Date.now() } = {}) {
+export function comparableDeals(property, reference, { tolerance = 0.2, sameRooms = false, now = Date.now() } = {}) {
   const area = nonNegativeNumber(property?.titlePing);
   const rooms = roomsOf(property || {});
   if (!(area > 0) || !reference?.community || (sameRooms && rooms === null)) return [];
@@ -76,10 +76,10 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
   if (!reference) return pending(error || "尚未取得同社區成交參考。", "查看資料並更新成交參考。", { code: "missing_reference" });
   if (!reference.community) return pending("尚未配對到 A7／A8／A9 的唯一社區。", "核對完整門牌及社區名稱。", { code: "unmatched_community" });
   if (reference.matchMethod !== "exact-doorplate") return pending("目前只依社區名稱配對，完整門牌仍需核對。", "核對本件門牌是否屬於該社區。", { code: "unconfirmed_community" });
-  const matches = comparableDeals(property, reference, { now });
+  const matches = comparableDeals(property, reference, { now, sameRooms: false });
   const cutoff = new Date(now - 365 * 86400000).toISOString().slice(0, 10);
   const samples = matches.slice(0, 5).filter((d) => d.date >= cutoff && officialNetUnit(d) !== null);
-  if (samples.length < 3) return pending(`最近五筆中，近一年可比較的扣車成交僅 ${samples.length} 筆。`, "可調整坪數範圍或取消同房數查看參考；可比成交不足時，暫不判定為優先推案。", { code: "insufficient_comps", sampleCount: samples.length, label: "可比成交不足" });
+  if (samples.length < 3) return pending(`最近五筆中，近一年可比較的扣車成交僅 ${samples.length} 筆。`, "可調整坪數範圍查看其他參考；可比成交不足時，暫不判定為優先推案。", { code: "insufficient_comps", sampleCount: samples.length, label: "可比成交不足" });
   const referenceUnit = median(samples.map(officialNetUnit));
   const buyers = activeMatches(property, needs);
   const detail = { unit, referenceUnit, sampleCount: samples.length, matchedNeeds: buyers.strict, possibleNeeds: buyers.possible };
