@@ -1,4 +1,4 @@
-import { RENTAL_FORM_DEFAULTS, buildCompanyRentalShare, rentalMonthlyCost, rentalSavePayload, validateCompanyRental, rentalSearchRows, canEditCompanyRental, companyRentalUrl, companyRentalForm, companyRentalColleagues, rentalAgentKey, normalizeRentalFurniture, addRentalFurniture, RENTAL_FURNITURE } from "./companyRental";
+import { RENTAL_FORM_DEFAULTS, buildCompanyRentalShare, rentalMonthlyCost, rentalSavePayload, validateCompanyRental, rentalSearchRows, canEditCompanyRental, companyRentalUrl, companyRentalForm, companyRentalColleagues, rentalAgentKey, normalizeRentalFurniture, addRentalFurniture, rentalEquipmentChoices, RENTAL_FURNITURE } from "./companyRental";
 import { mergeRentalPhotos } from "./companyRentalPhotos";
 const form = { ...RENTAL_FORM_DEFAULTS, agentName: "小林", agentUid: "staff", title: "金捷市租賃", street: "樂善二路", doorAddress: "秘密門牌", landlordPhone: "0912345678", keyInfo: "秘密鑰匙", viewingInstructions: "請先預約", rent: "28000", mgmtMode: "另計", mgmt: 2000, parking: "坡道平面", parkMode: "另計", parkFee: 3000 };
 test("monthly cost includes only separately charged known fees and never calls unknown fees zero", () => {
@@ -85,4 +85,29 @@ test("adding existing equipment selects it without duplicate choices, and invali
   expect(validateCompanyRental({ ...form, furniture: Array.from({ length: 41 }, (_, i) => "設備" + i) }, "draft")).toContain("40 項");
   expect(validateCompanyRental({ ...form, furniture: [{}] }, "draft")).toContain("格式");
   expect(normalizeRentalFurniture([" 電視 ", "電視", "", "烘衣機"])).toEqual(["電視", "烘衣機"]);
+});
+
+test("company equipment options include other colleagues and inactive cases without duplicate names", () => {
+  const choices = rentalEquipmentChoices([
+    { ownerUid: "other", status: "rented", furniture: ["電視", "ＴＶ", "冷氣"] },
+    { ownerUid: "third", status: "draft", furniture: [], equipmentCatalog: ["洗碗機", "tv", "設".repeat(31)] },
+    { status: "paused", equipmentCatalog: ["烘衣機", " 電視 "] },
+  ]);
+  expect(choices.slice(0, RENTAL_FURNITURE.length)).toEqual(RENTAL_FURNITURE);
+  expect(choices).toEqual(expect.arrayContaining(["電視", "TV", "洗碗機", "烘衣機"]));
+  expect(choices.filter(name => name.toLowerCase() === "tv")).toHaveLength(1);
+  expect(choices).not.toContain("設".repeat(31));
+});
+test("remembered equipment survives unchecking and re-editing but is never advertised as included", () => {
+  const reopened = companyRentalForm({ furniture: ["電視"], equipmentCatalog: ["洗碗機"] }, {}, { uid: "staff" });
+  const saved = rentalSavePayload({ ...form, ...reopened, furniture: ["冷氣"] }, "draft");
+  expect(saved.listing.equipmentCatalog).toEqual(["洗碗機", "電視", "冷氣"]);
+  expect(rentalEquipmentChoices([saved.listing])).toEqual(expect.arrayContaining(["洗碗機", "電視"]));
+  const share = buildCompanyRentalShare(saved.listing);
+  expect(share).toContain("家具設備：冷氣"); expect(share).not.toMatch(/洗碗機|電視/);
+});
+test("remembered equipment accepts only bounded lists and valid names", () => {
+  expect(validateCompanyRental({ ...form, equipmentCatalog: {} }, "draft")).toContain("格式");
+  expect(validateCompanyRental({ ...form, equipmentCatalog: ["設".repeat(31)] }, "draft")).toContain("30 字");
+  expect(validateCompanyRental({ ...form, equipmentCatalog: Array.from({ length: 201 }, (_, i) => "設備" + i) }, "draft")).toContain("200 項");
 });

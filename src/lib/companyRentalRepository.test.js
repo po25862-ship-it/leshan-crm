@@ -69,3 +69,12 @@ test("responsible colleague and buyer fee update while creator stays fixed and s
   expect(listing.buyerServiceFee).toBe("半個月"); expect(listing).not.toHaveProperty("sellerServiceFee"); expect(internal.sellerServiceFee).toBe("屋主私約 30,000");
   expect(result.rental).not.toHaveProperty("sellerServiceFee");
 });
+
+test("saving remembers equipment with the case atomically and never removes previous shared options", async () => {
+  tx.get.mockResolvedValue(snap({ ...original, furniture: ["電視"], equipmentCatalog: ["洗碗機"] }));
+  const result = await saveCompanyRental({ original, form: { ...form, furniture: ["冷氣"], equipmentCatalog: ["烘衣機"] }, status: "available", photos: [], user, profile });
+  expect(tx.set).toHaveBeenCalledTimes(2);
+  expect(result.rental.equipmentCatalog).toEqual(["洗碗機", "電視", "烘衣機", "冷氣"]);
+  expect(result.rental.furniture).toEqual(["冷氣"]);
+  expect(tx.set.mock.calls[1][1]).not.toHaveProperty("equipmentCatalog");
+});

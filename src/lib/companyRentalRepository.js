@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, runTransaction, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../firebase";
-import { canEditCompanyRental, rentalSavePayload, validateCompanyRental, MAX_RENTAL_PHOTO_BYTES, MAX_RENTAL_PHOTOS, validRentalDate } from "./companyRental";
+import { canEditCompanyRental, rentalSavePayload, validateCompanyRental, normalizeRentalFurniture, MAX_RENTAL_PHOTO_BYTES, MAX_RENTAL_PHOTOS, validRentalDate } from "./companyRental";
 import { normalizeTimeInput } from "./timeInput";
 import { todayTaipeiStr } from "./dates";
 import { updateReadCache } from "../hooks/firestoreReadCache";
@@ -40,7 +40,9 @@ export async function saveCompanyRental({ original, form, status, photos, user, 
       if (original && (!current || (current.revision || 0) !== (original.revision || 0))) throw new Error("這筆案件已被其他人更新，請先重新整理再編輯。");
       if (!original && current) throw new Error("案件已存在，請重新開啟資料。");
       if (nextPhotos.length > MAX_RENTAL_PHOTOS) throw new Error("每案最多 10 張照片。");
-      const payload = { ...listing, ownerUid, photos: nextPhotos, revision: (current?.revision || 0) + 1, createdAt: current?.createdAt || serverTimestamp(), updatedAt: serverTimestamp(), lastModifiedByUid: user.uid };
+      const equipmentCatalog = normalizeRentalFurniture([...normalizeRentalFurniture(current?.equipmentCatalog), ...normalizeRentalFurniture(current?.furniture), ...listing.equipmentCatalog]);
+      const equipmentError = validateCompanyRental({ ...form, equipmentCatalog }, status, photos); if (equipmentError) throw new Error(equipmentError);
+      const payload = { ...listing, equipmentCatalog, ownerUid, photos: nextPhotos, revision: (current?.revision || 0) + 1, createdAt: current?.createdAt || serverTimestamp(), updatedAt: serverTimestamp(), lastModifiedByUid: user.uid };
       transaction.set(target, payload);
       transaction.set(doc(db, COMPANY_RENTAL_COLLECTION, target.id, "internal", "details"), { ...internal, updatedAt: serverTimestamp() });
       saved = { id: target.id, ...payload, createdAt: current?.createdAt || new Date(), updatedAt: new Date() };

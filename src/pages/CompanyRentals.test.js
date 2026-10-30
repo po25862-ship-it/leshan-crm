@@ -17,7 +17,7 @@ jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ ite
 jest.mock("../lib/companyRentalRepository", () => ({ readRentalInternal: jest.fn(), saveCompanyRental: jest.fn(), setCompanyRentalStatus: jest.fn() }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [], loading: false }) }));
 let container, root;
-beforeEach(() => { mockRows[0].furniture = []; global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
+beforeEach(() => { mockRows.forEach(row => { row.furniture = []; delete row.equipmentCatalog; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
@@ -94,4 +94,23 @@ test("existing custom equipment is checked on re-edit and can be removed from th
   expect(equipmentCheckbox("洗碗機").checked).toBe(true);
   act(() => equipmentCheckbox("洗碗機").click());
   await click("存成草稿"); expect(saveCompanyRental.mock.calls[0][0].form.furniture).toEqual(["冷氣"]);
+  expect(saveCompanyRental.mock.calls[0][0].form.equipmentCatalog).toContain("洗碗機");
+});
+
+test("a new rental offers equipment remembered by another colleague's rented case without selecting it", async () => {
+  mockRows[1].equipmentCatalog = ["洗碗機"]; mockRows[1].furniture = ["電視"];
+  render();
+  input(container.querySelector("input[placeholder^='搜尋案名']"), "找不到的案件");
+  await click("＋ 新增租賃"); await rentalConditions();
+  expect(equipmentCheckbox("洗碗機").checked).toBe(false); expect(equipmentCheckbox("電視").checked).toBe(false);
+  act(() => equipmentCheckbox("洗碗機").click());
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form.furniture).toEqual(["洗碗機"]);
+});
+test("new equipment remains remembered when unchecked before saving without including it in this case", async () => {
+  render(); await click("＋ 新增租賃"); await rentalConditions();
+  input(fieldLabel("新增設備名稱").querySelector("input"), "除濕機"); await click("＋ 新增設備");
+  act(() => equipmentCheckbox("除濕機").click()); await click("存成草稿");
+  const savedForm = saveCompanyRental.mock.calls[0][0].form;
+  expect(savedForm.furniture).toEqual([]); expect(savedForm.equipmentCatalog).toEqual(["除濕機"]);
 });

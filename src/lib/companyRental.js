@@ -5,6 +5,7 @@ export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套�
 export const RENTAL_FURNITURE = ["冷氣", "冰箱", "洗衣機", "熱水器", "床", "衣櫃", "沙發", "桌椅", "天然瓦斯", "網路"];
 export const MAX_RENTAL_FURNITURE = 40;
 export const MAX_RENTAL_FURNITURE_NAME = 30;
+export const MAX_RENTAL_EQUIPMENT_CATALOG = 200;
 const furnitureName = value => typeof value === "string" ? value.normalize("NFKC").trim().replace(/\s+/g, " ") : "";
 const furnitureKey = value => furnitureName(value).toLowerCase();
 export function normalizeRentalFurniture(values) {
@@ -14,6 +15,14 @@ export function normalizeRentalFurniture(values) {
     if (!key || seen.has(key)) return false;
     seen.add(key); return true;
   });
+}
+// Reuse the already-loaded company list, including drafts and paused/rented cases.
+// Remembered options are separate from the equipment actually included in a case.
+export function rentalEquipmentChoices(rows = []) {
+  const remembered = normalizeRentalFurniture(rows.flatMap(row => [
+    ...normalizeRentalFurniture(row.equipmentCatalog), ...normalizeRentalFurniture(row.furniture),
+  ])).filter(name => name.length <= MAX_RENTAL_FURNITURE_NAME && !RENTAL_FURNITURE.some(preset => furnitureKey(preset) === furnitureKey(name)));
+  return [...RENTAL_FURNITURE, ...remembered.sort((a, b) => a.localeCompare(b, "zh-Hant"))];
 }
 export function addRentalFurniture(options, selected, input) {
   const name = furnitureName(input);
@@ -33,7 +42,7 @@ export const RENTAL_FORM_DEFAULTS = {
   rooms: "", living: "", baths: "", size: "", sizeBasis: "室內使用，不含車位", rent: "", deposit: 2,
   mgmtMode: "待確認", mgmt: "", parking: "待確認", parkMode: "待確認", parkFee: "", parkingNumber: "",
   minLease: "一年", moveIn: "待確認", availableDate: "", pets: "待確認", cook: "待確認", subsidy: "待確認",
-  websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], description: "", buyerServiceFee: "請洽負責同事確認", sellerServiceFee: "", legacyServiceFee: "",
+  websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], equipmentCatalog: [], description: "", buyerServiceFee: "請洽負責同事確認", sellerServiceFee: "", legacyServiceFee: "",
   agentUid: null, agentName: "", agentPhone: "", branch: "",
   viewingStatus: "待確認", doorAddress: "", landlordName: "", landlordPhone: "", keyInfo: "", internalNotes: "", viewingInstructions: "",
 };
@@ -44,6 +53,7 @@ export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordP
 export function companyRentalForm(original, internal, user, profile = {}) {
   return { ...RENTAL_FORM_DEFAULTS, ...original, ...internal,
     furniture: normalizeRentalFurniture(original?.furniture),
+    equipmentCatalog: normalizeRentalFurniture([...normalizeRentalFurniture(original?.equipmentCatalog), ...normalizeRentalFurniture(original?.furniture)]),
     buyerServiceFee: original?.buyerServiceFee ?? RENTAL_FORM_DEFAULTS.buyerServiceFee,
     sellerServiceFee: internal?.sellerServiceFee || "",
     legacyServiceFee: internal?.legacyServiceFee || original?.serviceFee || "",
@@ -114,6 +124,10 @@ export function validateCompanyRental(form, status, photos = []) {
   const furniture = normalizeRentalFurniture(form.furniture);
   if (furniture.length > MAX_RENTAL_FURNITURE) return "每間物件最多勾選 40 項設備。";
   if (furniture.some(name => name.length > MAX_RENTAL_FURNITURE_NAME)) return "設備名稱請在 30 字以內。";
+  if (form.equipmentCatalog != null && (!Array.isArray(form.equipmentCatalog) || form.equipmentCatalog.some(item => typeof item !== "string"))) return "共用設備清單格式不正確，請重新開啟案件。";
+  const catalog = normalizeRentalFurniture([...normalizeRentalFurniture(form.equipmentCatalog), ...furniture]);
+  if (catalog.length > MAX_RENTAL_EQUIPMENT_CATALOG) return "這筆案件記住的設備已達 200 項，請聯繫管理者整理。";
+  if (catalog.some(name => name.length > MAX_RENTAL_FURNITURE_NAME)) return "設備名稱請在 30 字以內。";
   if ((form.title || "").trim().length > 120) return "案名請在 120 字以內。";
   for (const field of ["websiteUrl", "albumUrl"]) if (form[field] && !safeRentalUrl(form[field])) return "網址請填寫完整的 http 或 https 連結。";
   if (photos.length > MAX_RENTAL_PHOTOS) return "每案最多 10 張照片。";
@@ -139,6 +153,7 @@ export function rentalSavePayload(form, status) {
   listing.shareWebsite = form.shareWebsite === true;
   listing.shareAlbum = form.shareAlbum === true;
   listing.furniture = normalizeRentalFurniture(form.furniture);
+  listing.equipmentCatalog = normalizeRentalFurniture([...normalizeRentalFurniture(form.equipmentCatalog), ...listing.furniture]);
   const internal = {};
   INTERNAL_RENTAL_FIELDS.forEach(key => { internal[key] = String(form[key] || "").trim().slice(0, 6000); });
   return { listing, internal };
