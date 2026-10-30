@@ -3,6 +3,8 @@ import { propertyUnitPrice, priorityPriceTarget, missingUnitPriceFields, nonNega
 import { dealParkingComparison } from "./propertyDealParking";
 import { normalizeNeedRanges, toNum } from "./needsFields";
 
+export const COMPARABLE_AREA_TOLERANCE = 0.3;
+
 export function referenceLookup(property = {}) {
   return { address: String(property.address || "").trim(), communityName: String(property.communityName || "").trim(), district: "" };
 }
@@ -23,13 +25,13 @@ function sameType(property, deal) {
   }
 }
 
-export function comparableDeals(property, reference, { tolerance = 0.2, sameRooms = false, now = Date.now() } = {}) {
+export function comparableDeals(property, reference, { tolerance = COMPARABLE_AREA_TOLERANCE, sameRooms = false, now = Date.now() } = {}) {
   const area = nonNegativeNumber(property?.titlePing);
   const rooms = roomsOf(property || {});
   if (!(area > 0) || !reference?.community || (sameRooms && rooms === null)) return [];
   const today = new Date(now).toISOString().slice(0, 10);
   const cutoff = new Date(now - 365 * 86400000).toISOString().slice(0, 10);
-  const percent = [0.1, 0.2, 0.3].includes(tolerance) ? tolerance : 0.2;
+  const percent = [0.1, 0.2, 0.3].includes(tolerance) ? tolerance : COMPARABLE_AREA_TOLERANCE;
   const seen = new Set();
   return (reference.deals || []).filter((deal) => {
     if (deal.special !== false || !/^\d{4}-\d{2}-\d{2}$/.test(deal.date || "") || deal.date < cutoff || deal.date > today || !sameType(property, deal)) return false;

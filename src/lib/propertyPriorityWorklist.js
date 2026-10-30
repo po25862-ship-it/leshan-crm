@@ -1,4 +1,4 @@
-import { assessPropertyPriority, comparisonSamples, referenceKey } from "./propertyMarketReference";
+import { assessPropertyPriority, COMPARABLE_AREA_TOLERANCE, comparisonSamples, referenceKey } from "./propertyMarketReference";
 
 export const PRIORITY_FILTERS = [
   { value: "all", label: "全部案件" },
@@ -18,7 +18,7 @@ const STORAGE_PREFIX = "leshan-crm.priority-reference.v3:";
 export function priorityReferenceKey(property) {
   // The cached five comparables depend on area/type/address; price, needs and
   // viewing confirmation are always assessed again from the current CRM data.
-  return JSON.stringify([referenceKey(property), property.category || "", String(property.titlePing ?? "")]);
+  return JSON.stringify([referenceKey(property), property.category || "", String(property.titlePing ?? ""), COMPARABLE_AREA_TOLERANCE]);
 }
 
 export function isPriorityCandidate(property, communityNames = []) {

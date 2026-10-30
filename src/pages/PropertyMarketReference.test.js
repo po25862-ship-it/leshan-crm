@@ -17,6 +17,9 @@ test("real source facilities and newest comparables render with their date and p
   expect(host.textContent).toContain("2026-10-21");
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(2);
   expect(host.textContent).toContain("不限房數");
+  expect(host.textContent).toContain("坪數範圍 ±30%");
+  expect(host.textContent).toContain("35.00～65.00 坪");
+  expect(host.textContent).not.toContain("±20%");
   expect(host.textContent).toContain("本次判斷採用 2 筆成交");
   expect(host.textContent).toContain("沒有車位的成交也可納入");
   expect(host.querySelector('input[type="checkbox"]')).toBeNull();

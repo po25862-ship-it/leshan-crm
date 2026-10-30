@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { assessPropertyPriority, comparableDeals } from "../lib/propertyMarketReference";
+import React, { useMemo } from "react";
+import { assessPropertyPriority, COMPARABLE_AREA_TOLERANCE, comparableDeals } from "../lib/propertyMarketReference";
 import { formatUnitPrice, nonNegativeNumber, parkingPricePresetNote } from "../lib/propertyUnitPrice";
 import { formatPropertyManagementFee } from "../lib/propertyManagementFee";
 import { dealParkingComparison } from "../lib/propertyDealParking";
@@ -49,7 +49,7 @@ function DealParkingUnit({ deal }) {
 }
 
 export default function PropertyMarketReference({ property, reference, loading, error, onRefresh, needs, onEdit }) {
-  const [tolerance, setTolerance] = useState(0.2);
+  const tolerance = COMPARABLE_AREA_TOLERANCE;
   const deals = useMemo(() => comparableDeals(property, reference, { tolerance }), [property, reference, tolerance]);
   const assessment = useMemo(() => assessPropertyPriority(property, reference, needs, { error }), [property, reference, needs, error]);
   const community = reference?.community;
@@ -67,7 +67,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
       <PriorityTotalPrice property={property} assessment={assessment} />
       <div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
       {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>去補資料</button>}
-      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價的成交會標示試算{assessment.estimatedSampleCount > 0 ? `（本次 ${assessment.estimatedSampleCount} 筆）` : ""}。</p>}{assessment.sampleDates?.length > 0 && <p>採用成交日期：{assessment.sampleDates.join("、")}。</p>}<p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數。只採近一年（365 天）的成交，至少 1 筆就能比較，最多採用最新 5 筆可用成交。官方已分列車位價格時優先使用；未分列時，車位坪數與類型明確才採平面每個 180 萬、機械每個 150 萬試算。只有 1 筆就用該筆單價，多筆則取中位數。不高於參考單價、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
+      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價的成交會標示試算{assessment.estimatedSampleCount > 0 ? `（本次 ${assessment.estimatedSampleCount} 筆）` : ""}。</p>}{assessment.sampleDates?.length > 0 && <p>採用成交日期：{assessment.sampleDates.join("、")}。</p>}<p>同社區完整門牌、相近建物總坪數 ±30%、同類型，不限房數。只採近一年（365 天）的成交，至少 1 筆就能比較，最多採用最新 5 筆可用成交。官方已分列車位價格時優先使用；未分列時，車位坪數與類型明確才採平面每個 180 萬、機械每個 150 萬試算。只有 1 筆就用該筆單價，多筆則取中位數。不高於參考單價、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
     </div>
     {error && <div className="property-market-error" role="alert">{error}</div>}
     {loading && <div className="property-market-message" role="status">正在取得社區主檔與官方成交；不查電傳，也不啟動付費 AI。</div>}
@@ -76,7 +76,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
       <div className="property-market-grid">
         <section className="property-market-deals" aria-label="同社區相近成交">
           <div className="property-market-section-heading"><h4>{community.name}・近一年相近成交</h4><span>官方實價登錄</span></div>
-          <div className="property-market-controls"><label>坪數範圍<select value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))}><option value={0.1}>相近 ±10%</option><option value={0.2}>相近 ±20%</option><option value={0.3}>相近 ±30%</option></select></label><span className="property-market-caption">不限房數</span></div>
+          <div className="property-market-controls"><span className="property-market-caption">坪數範圍 ±30%</span><span className="property-market-caption">不限房數</span></div>
           <div className="property-market-caption" role="status">{ping > 0 ? `${(ping * (1 - tolerance)).toFixed(2)}～${(ping * (1 + tolerance)).toFixed(2)} 坪・` : "權狀坪數未提供・"}近一年符合 {deals.length} 筆，顯示最近 {recent.length} 筆</div>
           {reference.matchMethod === "exact-community-name" && <div className="property-market-caption warning">依唯一社區名稱／別名配對；請核對本件完整門牌。</div>}
           <div className="property-market-table">

@@ -100,3 +100,12 @@ test('cached estimates preserve parking quantities and produce the same comparis
   expect(result.estimatedSampleCount).toBe(1);
   expect(result.referenceUnit).toBe(31);
 });
+
+test('worklist caching and target prices use the expanded thirty-percent area range', () => {
+  const saved = record(property, { ...reference, deals: [{ ...deal, area: 62.5 }] });
+  expect(saved.data.deals).toHaveLength(1);
+  const result = buildPriorityAssessments([property], { p: saved }, needs, [], now).get('p');
+  expect(result.status).toBe('negotiate');
+  expect(result.sampleCount).toBe(1);
+  expect(result.priceTarget.totalPrice).toBeCloseTo(1266.66);
+});

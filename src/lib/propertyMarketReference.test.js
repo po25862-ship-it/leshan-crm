@@ -153,3 +153,14 @@ test('Nezuen unseparated flat-car sales are usable estimates, with original offi
   expect(rows[0].parkingPrice).toBe(0);
   expect(rows[0].unit).toBe(39.12);
 });
+
+test('the standard area range includes both thirty-percent boundaries and excludes larger differences', () => {
+  const data = { ...reference, deals: [35, 65, 34.99, 65.01].map((area, index) => ({ ...deal, id: String(index), area })) };
+  expect(comparableDeals(property, data, { now }).map((row) => row.area)).toEqual([35, 65]);
+  expect(comparableDeals(property, data, { now, tolerance: null }).map((row) => row.area)).toEqual([35, 65]);
+  const wider = { ...reference, deals: [{ ...deal, area: 62.5 }] };
+  const result = assessPropertyPriority(property, wider, needs, { now });
+  expect(result.sampleCount).toBe(1);
+  expect(result.status).toBe('negotiate');
+  expect(result.priceTarget.totalPrice).toBeCloseTo(1266.66);
+});
