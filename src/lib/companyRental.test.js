@@ -1,4 +1,4 @@
-import { RENTAL_FORM_DEFAULTS, buildCompanyRentalShare, rentalMonthlyCost, rentalSavePayload, validateCompanyRental, rentalSearchRows, canEditCompanyRental, companyRentalUrl, companyRentalForm, companyRentalColleagues, rentalAgentKey } from "./companyRental";
+import { RENTAL_FORM_DEFAULTS, buildCompanyRentalShare, rentalMonthlyCost, rentalSavePayload, validateCompanyRental, rentalSearchRows, canEditCompanyRental, companyRentalUrl, companyRentalForm, companyRentalColleagues, rentalAgentKey, normalizeRentalFurniture, addRentalFurniture, RENTAL_FURNITURE } from "./companyRental";
 import { mergeRentalPhotos } from "./companyRentalPhotos";
 const form = { ...RENTAL_FORM_DEFAULTS, agentName: "小林", agentUid: "staff", title: "金捷市租賃", street: "樂善二路", doorAddress: "秘密門牌", landlordPhone: "0912345678", keyInfo: "秘密鑰匙", viewingInstructions: "請先預約", rent: "28000", mgmtMode: "另計", mgmt: 2000, parking: "坡道平面", parkMode: "另計", parkFee: 3000 };
 test("monthly cost includes only separately charged known fees and never calls unknown fees zero", () => {
@@ -68,4 +68,21 @@ test("staff picker includes every registered colleague and permits manual names 
   expect(canEditCompanyRental(record, "b")).toBe(false);
   const manual = { ...record, agentUid: null, agentName: "外部業務" };
   expect(rentalSearchRows([manual], { colleague: rentalAgentKey(manual) })).toEqual([manual]);
+});
+
+test("custom equipment survives save, re-edit and customer sharing with duplicates removed", () => {
+  const saved = rentalSavePayload({ ...form, furniture: ["冷氣", " 電視 ", "烘衣機", "ＴＶ", "tv"] }, "available");
+  expect(saved.listing.furniture).toEqual(["冷氣", "電視", "烘衣機", "TV"]);
+  const reopened = companyRentalForm(saved.listing, saved.internal, { uid: "staff" });
+  expect(reopened.furniture).toEqual(saved.listing.furniture);
+  expect(buildCompanyRentalShare(saved.listing)).toContain("家具設備：冷氣、電視、烘衣機、TV");
+});
+test("adding existing equipment selects it without duplicate choices, and invalid equipment is refused", () => {
+  const duplicate = addRentalFurniture(RENTAL_FURNITURE, [], " 冷氣 ");
+  expect(duplicate.added).toBe(false); expect(duplicate.options).toEqual(RENTAL_FURNITURE); expect(duplicate.furniture).toEqual(["冷氣"]);
+  expect(() => addRentalFurniture([], [], "   ")).toThrow("請先輸入");
+  expect(validateCompanyRental({ ...form, furniture: ["設".repeat(31)] }, "draft")).toContain("30 字");
+  expect(validateCompanyRental({ ...form, furniture: Array.from({ length: 41 }, (_, i) => "設備" + i) }, "draft")).toContain("40 項");
+  expect(validateCompanyRental({ ...form, furniture: [{}] }, "draft")).toContain("格式");
+  expect(normalizeRentalFurniture([" 電視 ", "電視", "", "烘衣機"])).toEqual(["電視", "烘衣機"]);
 });

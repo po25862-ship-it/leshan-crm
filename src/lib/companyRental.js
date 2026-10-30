@@ -3,6 +3,29 @@ import { MAIN_OWNER_UID, withAgid, withoutAgid } from "./url";
 export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫停招租", draft: "草稿" };
 export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套房", "雅房", "店面", "辦公室", "車位"];
 export const RENTAL_FURNITURE = ["冷氣", "冰箱", "洗衣機", "熱水器", "床", "衣櫃", "沙發", "桌椅", "天然瓦斯", "網路"];
+export const MAX_RENTAL_FURNITURE = 40;
+export const MAX_RENTAL_FURNITURE_NAME = 30;
+const furnitureName = value => typeof value === "string" ? value.normalize("NFKC").trim().replace(/\s+/g, " ") : "";
+const furnitureKey = value => furnitureName(value).toLowerCase();
+export function normalizeRentalFurniture(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : []).map(furnitureName).filter(name => {
+    const key = furnitureKey(name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
+export function addRentalFurniture(options, selected, input) {
+  const name = furnitureName(input);
+  if (!name) throw new Error("請先輸入設備名稱。");
+  if (name.length > MAX_RENTAL_FURNITURE_NAME) throw new Error("設備名稱請在 30 字以內。");
+  const choices = normalizeRentalFurniture(options);
+  const existing = choices.find(item => furnitureKey(item) === furnitureKey(name));
+  const displayName = existing || name;
+  const furniture = normalizeRentalFurniture([...(selected || []), displayName]);
+  if (furniture.length > MAX_RENTAL_FURNITURE) throw new Error("每間物件最多勾選 40 項設備，請先取消不需要的項目。");
+  return { options: existing ? choices : [...choices, displayName], furniture, name: displayName, added: !existing };
+}
 export const MAX_RENTAL_PHOTOS = 10;
 export const MAX_RENTAL_PHOTO_BYTES = 300000;
 export const RENTAL_FORM_DEFAULTS = {
@@ -20,6 +43,7 @@ export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordP
 // Keep older unclassified fee notes internal until a colleague splits them explicitly.
 export function companyRentalForm(original, internal, user, profile = {}) {
   return { ...RENTAL_FORM_DEFAULTS, ...original, ...internal,
+    furniture: normalizeRentalFurniture(original?.furniture),
     buyerServiceFee: original?.buyerServiceFee ?? RENTAL_FORM_DEFAULTS.buyerServiceFee,
     sellerServiceFee: internal?.sellerServiceFee || "",
     legacyServiceFee: internal?.legacyServiceFee || original?.serviceFee || "",
@@ -86,6 +110,10 @@ export function validateCompanyRental(form, status, photos = []) {
     const n = rentalNumber(form[field]);
     if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100000000)) return "金額、面積與格局請填寫有效的非負數字。";
   }
+  if (form.furniture != null && (!Array.isArray(form.furniture) || form.furniture.some(item => typeof item !== "string"))) return "設備清單格式不正確，請重新勾選。";
+  const furniture = normalizeRentalFurniture(form.furniture);
+  if (furniture.length > MAX_RENTAL_FURNITURE) return "每間物件最多勾選 40 項設備。";
+  if (furniture.some(name => name.length > MAX_RENTAL_FURNITURE_NAME)) return "設備名稱請在 30 字以內。";
   if ((form.title || "").trim().length > 120) return "案名請在 120 字以內。";
   for (const field of ["websiteUrl", "albumUrl"]) if (form[field] && !safeRentalUrl(form[field])) return "網址請填寫完整的 http 或 https 連結。";
   if (photos.length > MAX_RENTAL_PHOTOS) return "每案最多 10 張照片。";
@@ -110,13 +138,13 @@ export function rentalSavePayload(form, status) {
   listing.albumUrl = safeRentalUrl(form.albumUrl);
   listing.shareWebsite = form.shareWebsite === true;
   listing.shareAlbum = form.shareAlbum === true;
-  listing.furniture = (form.furniture || []).filter(value => RENTAL_FURNITURE.includes(value));
+  listing.furniture = normalizeRentalFurniture(form.furniture);
   const internal = {};
   INTERNAL_RENTAL_FIELDS.forEach(key => { internal[key] = String(form[key] || "").trim().slice(0, 6000); });
   return { listing, internal };
 }
 export function buildCompanyRentalShare(rental, agid = "") {
-  const cost = rentalMonthlyCost(rental), website = companyRentalUrl(rental.websiteUrl, agid), album = safeRentalUrl(rental.albumUrl);
+  const cost = rentalMonthlyCost(rental), website = companyRentalUrl(rental.websiteUrl, agid), album = safeRentalUrl(rental.albumUrl), furniture = normalizeRentalFurniture(rental.furniture);
   return [rental.title, [rental.community, rentalPublicAddress(rental)].filter(Boolean).join("｜"),
     `${rental.rooms ?? "—"}房${rental.living ?? "—"}廳${rental.baths ?? "—"}衛｜${rental.size ? rentalMoney(rental.size) + " 坪（" + rental.sizeBasis + "）" : "面積待確認"}${rental.floor ? "｜" + rental.floor + " 樓" : ""}`, "",
     `月租：${rental.rent ? rentalMoney(rental.rent) + " 元" : "待確認"}`,
@@ -126,7 +154,7 @@ export function buildCompanyRentalShare(rental, agid = "") {
     ...(cost.complete ? [] : [`另待確認：${cost.missing.join("、")}`]),
     `押金：${rental.deposit == null || !rental.rent ? "待確認" : rental.deposit + " 個月，" + rentalMoney(rental.rent * rental.deposit) + " 元"}`, "",
     `最短租期：${rental.minLease || "待確認"}｜入住：${rental.moveIn === "另約日期" ? rental.availableDate || "另約日期" : rental.moveIn || "待確認"}`,
-    [`寵物：${rental.pets || "待確認"}`, `開伙：${rental.cook || "待確認"}`, `租補：${rental.subsidy || "待確認"}`].filter(Boolean).join("｜"), rental.furniture?.length ? `家具設備：${rental.furniture.join("、")}` : "", rental.description || "",
+    [`寵物：${rental.pets || "待確認"}`, `開伙：${rental.cook || "待確認"}`, `租補：${rental.subsidy || "待確認"}`].filter(Boolean).join("｜"), furniture.length ? `家具設備：${furniture.join("、")}` : "", rental.description || "",
     ...(rental.shareWebsite && website ? ["物件網址：" + website] : []), ...(rental.shareAlbum && album ? ["照片相簿：" + album] : []),
     "", `買方服務費：${rental.buyerServiceFee || "請洽負責同事確認"}`, "有興趣可以聯繫我安排看屋。"].join("\n");
 }

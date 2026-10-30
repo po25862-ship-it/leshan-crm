@@ -5,3 +5,6 @@
 .desktop-shell .company-rentals .cr-editor-bar{top:64px}
 .desktop-shell .crm-core-workspace .company-rentals .cr-editor-bar{top:88px}
 @media(max-width:760px){.mobile-shell .company-rentals .cr-editor-bar{top:56px}}
+
+.cr-equipment-add{display:flex;gap:10px;align-items:flex-end;margin:0 0 10px}.cr-equipment-add .cr-field{flex:1;margin:0}.cr-equipment-add button{flex-shrink:0}.company-rentals .cr-equipment-help{color:var(--cr-muted);font-size:13px;line-height:1.7;margin:0 0 22px}.cr-checks label{max-width:100%;overflow-wrap:anywhere}
+@media(max-width:760px){.cr-equipment-add{flex-wrap:wrap}.cr-equipment-add .cr-field{flex-basis:100%}.cr-equipment-add button{width:100%}}

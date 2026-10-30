@@ -17,7 +17,7 @@ jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ ite
 jest.mock("../lib/companyRentalRepository", () => ({ readRentalInternal: jest.fn(), saveCompanyRental: jest.fn(), setCompanyRentalStatus: jest.fn() }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [], loading: false }) }));
 let container, root;
-beforeEach(() => { global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
+beforeEach(() => { mockRows[0].furniture = []; global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
@@ -68,4 +68,30 @@ test("customer share preview never includes seller fee from colleague-only detai
   render(); await click("查看資料"); await click("分享給客人");
   expect(container.querySelector("textarea[aria-label='分享文字']").value).toContain("買方服務費");
   expect(container.querySelector("textarea[aria-label='分享文字']").value).not.toMatch(/屋主私約費用|未拆分舊費用|賣方服務費/);
+});
+
+async function rentalConditions() { await act(async () => [...container.querySelectorAll("[role=tab]")].find(node => node.textContent === "2. 租金與條件").click()); }
+const equipmentCheckbox = name => [...container.querySelectorAll(".cr-checks label")].find(label => label.textContent === name)?.querySelector("input");
+test("custom equipment is added checked, can be unchecked and selected again with Enter, and saved once", async () => {
+  render(); await click("＋ 新增租賃"); await rentalConditions();
+  input(fieldLabel("新增設備名稱").querySelector("input"), "烘衣機"); await click("＋ 新增設備");
+  expect(equipmentCheckbox("烘衣機").checked).toBe(true);
+  act(() => equipmentCheckbox("烘衣機").click()); expect(equipmentCheckbox("烘衣機").checked).toBe(false);
+  input(fieldLabel("新增設備名稱").querySelector("input"), " 烘衣機 ");
+  act(() => fieldLabel("新增設備名稱").querySelector("input").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  expect(equipmentCheckbox("烘衣機").checked).toBe(true);
+  expect([...container.querySelectorAll(".cr-checks label")].filter(label => label.textContent === "烘衣機")).toHaveLength(1);
+  await click("存成草稿"); expect(saveCompanyRental.mock.calls[0][0].form.furniture).toEqual(["烘衣機"]);
+});
+test("saving also includes the typed equipment name when Add has not been clicked", async () => {
+  render(); await click("＋ 新增租賃"); await rentalConditions();
+  input(fieldLabel("新增設備名稱").querySelector("input"), "電視");
+  await click("存成草稿"); expect(saveCompanyRental.mock.calls[0][0].form.furniture).toEqual(["電視"]);
+});
+test("existing custom equipment is checked on re-edit and can be removed from this rental", async () => {
+  mockRows[0].furniture = ["冷氣", "洗碗機"];
+  render(); await click("查看資料"); await click("編輯資料"); await rentalConditions();
+  expect(equipmentCheckbox("洗碗機").checked).toBe(true);
+  act(() => equipmentCheckbox("洗碗機").click());
+  await click("存成草稿"); expect(saveCompanyRental.mock.calls[0][0].form.furniture).toEqual(["冷氣"]);
 });
