@@ -1,0 +1,114 @@
+import { MAIN_OWNER_UID, withAgid, withoutAgid } from "./url";
+
+export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫停招租", draft: "草稿" };
+export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套房", "雅房", "店面", "辦公室", "車位"];
+export const RENTAL_FURNITURE = ["冷氣", "冰箱", "洗衣機", "熱水器", "床", "衣櫃", "沙發", "桌椅", "天然瓦斯", "網路"];
+export const MAX_RENTAL_PHOTOS = 10;
+export const MAX_RENTAL_PHOTO_BYTES = 300000;
+export const RENTAL_FORM_DEFAULTS = {
+  title: "", community: "", type: "整層住家", area: "A7", city: "桃園市", district: "龜山區", street: "", floor: "",
+  rooms: "", living: "", baths: "", size: "", sizeBasis: "室內使用，不含車位", rent: "", deposit: 2,
+  mgmtMode: "待確認", mgmt: "", parking: "待確認", parkMode: "待確認", parkFee: "", parkingNumber: "",
+  minLease: "一年", moveIn: "待確認", availableDate: "", pets: "待確認", cook: "待確認", subsidy: "待確認",
+  websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], description: "", serviceFee: "成交服務費另洽負責同事",
+  viewingStatus: "待確認", doorAddress: "", landlordName: "", landlordPhone: "", keyInfo: "", internalNotes: "", viewingInstructions: "",
+};
+const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "serviceFee", "viewingStatus"];
+const numericFields = ["rooms", "living", "baths", "size", "rent", "deposit", "mgmt", "parkFee"];
+export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordPhone", "keyInfo", "internalNotes", "viewingInstructions", "parkingNumber"];
+export const rentalNumber = value => value === "" || value == null ? null : Number(String(value).normalize("NFKC").replace(/,/g, ""));
+export const rentalMoney = value => Number(value || 0).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
+export function safeRentalUrl(value) {
+  if (!String(value || "").trim()) return "";
+  try {
+    const url = new URL(String(value).trim());
+    return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password && url.href.length <= 2000 ? url.href : "";
+  } catch { return ""; }
+}
+export function companyRentalUrl(value, agid = "") {
+  const clean = safeRentalUrl(value);
+  if (!clean) return "";
+  const url = new URL(clean);
+  return ["www.twhg.com.tw", "twhg.com.tw"].includes(url.hostname.toLowerCase()) ? withAgid(clean, agid) : clean;
+}
+export function storedRentalUrl(value) {
+  const clean = safeRentalUrl(value);
+  if (!clean) return "";
+  return ["www.twhg.com.tw", "twhg.com.tw"].includes(new URL(clean).hostname.toLowerCase()) ? withoutAgid(clean) : clean;
+}
+export function canEditCompanyRental(rental, uid) { return !!uid && (rental.ownerUid === uid || uid === MAIN_OWNER_UID); }
+export function rentalPublicAddress(rental) { return [rental.city, rental.district, rental.street].filter(Boolean).join(""); }
+export function rentalMonthlyCost(rental) {
+  const rent = rentalNumber(rental.rent), missing = [];
+  let total = Number.isFinite(rent) ? rent : 0;
+  if (!(rent > 0)) missing.push("月租金");
+  if (rental.mgmtMode === "另計") {
+    const fee = rentalNumber(rental.mgmt);
+    if (fee === null || !Number.isFinite(fee) || fee < 0) missing.push("管理費"); else total += fee;
+  } else if (!["已含租金", "無管理費"].includes(rental.mgmtMode)) missing.push("管理費");
+  if (rental.parking !== "無車位") {
+    if (!rental.parking || rental.parking === "待確認") missing.push("車位費用");
+    else if (rental.parkMode === "另計") {
+      const fee = rentalNumber(rental.parkFee);
+      if (fee === null || !Number.isFinite(fee) || fee < 0) missing.push("車位費用"); else total += fee;
+    } else if (rental.parkMode !== "已含租金") missing.push("車位費用");
+  }
+  return { total, complete: missing.length === 0, missing };
+}
+export function validateCompanyRental(form, status, photos = []) {
+  if (!Object.hasOwn(COMPANY_RENTAL_STATUSES, status)) return "請選擇有效的招租狀態。";
+  for (const field of numericFields) {
+    const n = rentalNumber(form[field]);
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100000000)) return "金額、面積與格局請填寫有效的非負數字。";
+  }
+  if ((form.title || "").trim().length > 120) return "案名請在 120 字以內。";
+  for (const field of ["websiteUrl", "albumUrl"]) if (form[field] && !safeRentalUrl(form[field])) return "網址請填寫完整的 http 或 https 連結。";
+  if (photos.length > MAX_RENTAL_PHOTOS) return "每案最多 10 張照片。";
+  if (photos.some(photo => photo.size > MAX_RENTAL_PHOTO_BYTES || photo.type !== "image/jpeg")) return "照片請先壓縮至每張 300KB 內的 JPG。";
+  if (form.moveIn === "另約日期" && form.availableDate && !validRentalDate(form.availableDate)) return "請填寫有效的可入住日期。";
+  if (status !== "draft") {
+    if (![form.title, form.city, form.district, form.street, form.doorAddress].every(value => String(value || "").trim())) return "請填寫案名、縣市、行政區、路段與門牌／樓層。";
+    if (!(rentalNumber(form.rent) > 0)) return "請填寫月租金後再加入招租清單。";
+    if (!String(form.viewingInstructions || "").trim()) return "請填寫帶看方式，方便同事聯繫。";
+  }
+  return "";
+}
+export function rentalSavePayload(form, status) {
+  const listing = {};
+  textFields.forEach(key => { listing[key] = String(form[key] || "").trim().slice(0, key === "description" ? 6000 : 2000); });
+  numericFields.forEach(key => { listing[key] = rentalNumber(form[key]); });
+  listing.title = listing.title || "未命名租賃草稿";
+  listing.status = status;
+  listing.websiteUrl = storedRentalUrl(form.websiteUrl);
+  listing.albumUrl = safeRentalUrl(form.albumUrl);
+  listing.shareWebsite = form.shareWebsite === true;
+  listing.shareAlbum = form.shareAlbum === true;
+  listing.furniture = (form.furniture || []).filter(value => RENTAL_FURNITURE.includes(value));
+  const internal = {};
+  INTERNAL_RENTAL_FIELDS.forEach(key => { internal[key] = String(form[key] || "").trim().slice(0, 6000); });
+  return { listing, internal };
+}
+export function buildCompanyRentalShare(rental, agid = "") {
+  const cost = rentalMonthlyCost(rental), website = companyRentalUrl(rental.websiteUrl, agid), album = safeRentalUrl(rental.albumUrl);
+  return [rental.title, [rental.community, rentalPublicAddress(rental)].filter(Boolean).join("｜"),
+    `${rental.rooms ?? "—"}房${rental.living ?? "—"}廳${rental.baths ?? "—"}衛｜${rental.size ? rentalMoney(rental.size) + " 坪（" + rental.sizeBasis + "）" : "面積待確認"}${rental.floor ? "｜" + rental.floor + " 樓" : ""}`, "",
+    `月租：${rental.rent ? rentalMoney(rental.rent) + " 元" : "待確認"}`,
+    `管理費：${rental.mgmtMode === "另計" ? (rental.mgmt == null ? "待確認" : rentalMoney(rental.mgmt) + " 元／月") : rental.mgmtMode || "待確認"}`,
+    `車位：${rental.parking || "待確認"}${rental.parking === "無車位" ? "" : rental.parkMode === "另計" ? "，另計 " + (rental.parkFee == null ? "待確認" : rentalMoney(rental.parkFee) + " 元／月") : rental.parkMode === "已含租金" ? "，已含租金" : "，費用待確認"}`,
+    `${cost.complete ? "每月固定費用" : "目前已知每月費用"}：${rentalMoney(cost.total)} 元（不含水電等依用量計收費用）`,
+    ...(cost.complete ? [] : [`另待確認：${cost.missing.join("、")}`]),
+    `押金：${rental.deposit == null || !rental.rent ? "待確認" : rental.deposit + " 個月，" + rentalMoney(rental.rent * rental.deposit) + " 元"}`, "",
+    `最短租期：${rental.minLease || "待確認"}｜入住：${rental.moveIn === "另約日期" ? rental.availableDate || "另約日期" : rental.moveIn || "待確認"}`,
+    [`寵物：${rental.pets || "待確認"}`, `開伙：${rental.cook || "待確認"}`, `租補：${rental.subsidy || "待確認"}`].filter(Boolean).join("｜"), rental.furniture?.length ? `家具設備：${rental.furniture.join("、")}` : "", rental.description || "",
+    ...(rental.shareWebsite && website ? ["物件網址：" + website] : []), ...(rental.shareAlbum && album ? ["照片相簿：" + album] : []),
+    "", `服務費：${rental.serviceFee || "請洽負責同事確認"}`, "有興趣可以聯繫我安排看屋。"].join("\n");
+}
+export function validRentalDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+  const date = new Date(value + "T00:00:00Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+export function rentalSearchRows(rows, { keyword = "", area = "", colleague = "", uid = "" } = {}) {
+  const words = keyword.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return rows.filter(row => (!area || row.area === area) && (!colleague || (colleague === "mine" ? row.ownerUid === uid : row.ownerUid === colleague)) && words.every(word => [row.title, row.community, row.city, row.district, row.street, row.area, row.agentName].join(" ").normalize("NFKC").toLowerCase().includes(word)));
+}

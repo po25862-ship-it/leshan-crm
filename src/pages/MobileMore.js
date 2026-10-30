@@ -17,6 +17,9 @@ export default function MobileMore() {
       <Link to="/sellers" className="mobile-more-row">
         賣方管理 <span className="arrow">›</span>
       </Link>
+      <Link to="/company-rentals" className="mobile-more-row">
+        公司租賃 <span className="arrow">›</span>
+      </Link>
       <Link to="/rentals" className="mobile-more-row">
         出租 <span className="arrow">›</span>
       </Link>

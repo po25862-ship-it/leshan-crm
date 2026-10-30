@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { HashRouter, Routes, Route, NavLink, Link, useLocation } from "react-router-dom";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
@@ -8,6 +8,7 @@ import Sellers from "./pages/Sellers";
 import SellerDetail from "./pages/SellerDetail";
 import Buyers from "./pages/Buyers";
 import Rentals from "./pages/Rentals";
+const CompanyRentals = lazy(() => import("./pages/CompanyRentals"));
 import RentalDetail from "./pages/RentalDetail";
 import QuickNotes from "./pages/QuickNotes";
 import Cases from "./pages/Cases";
@@ -59,6 +60,7 @@ const desktopNavItems = [
   { to: "/buyers", label: "買方管理", icon: Users },
   { to: "/needs", label: "客需管理", icon: SearchCheck },
   { to: "/properties", label: "物件管理", icon: Building2 },
+  { to: "/company-rentals", label: "公司租賃", icon: KeyRound },
   { to: "/matching", label: "推薦配對", icon: WandSparkles },
 ];
 
@@ -147,6 +149,7 @@ function AppRoutes() {
       <Route path="/buyers" element={<Buyers />} />
       <Route path="/activity" element={<Buyers />} />
       <Route path="/rentals" element={<Rentals />} />
+      <Route path="/company-rentals" element={<Suspense fallback={<main>載入公司租賃…</main>}><CompanyRentals /></Suspense>} />
       <Route path="/rentals/:rentalId" element={<RentalDetail />} />
       <Route path="/quicknotes" element={<QuickNotes />} />
       <Route path="/cases" element={<Cases />} />

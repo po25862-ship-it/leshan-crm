@@ -12,6 +12,16 @@ service firebase.storage {
         );
       allow delete: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }
+    // 公司租賃照片，每張最多 300KB。檔案路徑固定歸屬建案人。
+    match /companyRentals/{ownerUid}/{rentalId}/{filename} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        (request.auth.uid == ownerUid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132") &&
+        request.resource.size > 0 && request.resource.size <= 300000 &&
+        request.resource.contentType == 'image/jpeg';
+      allow delete: if request.auth != null &&
+        (request.auth.uid == ownerUid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+    }
     // 其他檔案維持只有本人可以讀寫
     match /{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
