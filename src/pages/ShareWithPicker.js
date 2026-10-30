@@ -1,6 +1,7 @@
 import React from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useAuth } from "../AuthContext";
+import { visibleColleagueOptions } from "../lib/colleagueVisibility";
 
 // 你（主要負責人）本來就看得到全部資料，不需要、也不應該出現在「可以分享」的名單裡
 const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
@@ -10,7 +11,7 @@ export default function ShareWithPicker({ value, onChange }) {
   const { user } = useAuth();
   const { items: colleagues } = useCollection("colleagues", "name");
   const shared = value || [];
-  const remaining = colleagues.filter((c) => c.id !== user.uid && c.id !== MAIN_OWNER_UID && !shared.includes(c.id));
+  const remaining = visibleColleagueOptions(colleagues).filter((c) => c.id !== user.uid && c.id !== MAIN_OWNER_UID && !shared.includes(c.id));
 
   const addShare = (uid) => {
     if (!uid) return;

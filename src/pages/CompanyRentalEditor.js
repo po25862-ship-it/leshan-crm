@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, rentalMonthlyCost, rentalMoney, validateCompanyRental, companyRentalForm, companyRentalColleagues, normalizeRentalFurniture, addRentalFurniture, MAX_RENTAL_FURNITURE_NAME } from "../lib/companyRental";
 import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhotos";
 import { useCollection } from "../hooks/useCollection";
+import { isHiddenColleague } from "../lib/colleagueVisibility";
 import { saveCompanyRental } from "../lib/companyRentalRepository";
 
 export default function CompanyRentalEditor({ original, internal, sharedEquipment = RENTAL_FURNITURE, user, profile, onSaved, onClose }) {
@@ -93,7 +94,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
     {error && <p className="cr-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{message && <p className="cr-note" role="status">{message}</p>}
     <fieldset disabled={busy || processing} className="cr-form-body">
       {step === 0 && <><h3>先讓同事快速找到這間房</h3><div className="cr-form-grid">
-        <label className="cr-field cr-wide"><span>案件負責人＊</span><select value={form.agentUid || "__manual__"} onChange={event => chooseAgent(event.target.value)}><optgroup label="店內同事">{staffChoices.map(item => <option key={item.id} value={item.id}>{item.name}{item.id === user.uid ? "（我）" : ""}</option>)}</optgroup><option value="__manual__">自行輸入業務</option></select><small>{staffLoading ? "正在讀取店內同事名冊…" : "可選擇店內同事；名單以外的業務請選「自行輸入業務」。"}</small></label>
+        <label className="cr-field cr-wide"><span>案件負責人＊</span><select value={form.agentUid || "__manual__"} onChange={event => chooseAgent(event.target.value)}><optgroup label="店內同事">{staffChoices.map(item => <option key={item.id} value={item.id} hidden={isHiddenColleague(item)} disabled={isHiddenColleague(item)}>{item.name}{item.id === user.uid ? "（我）" : ""}</option>)}</optgroup><option value="__manual__">自行輸入業務</option></select><small>{staffLoading ? "正在讀取店內同事名冊…" : "可選擇店內同事；名單以外的業務請選「自行輸入業務」。"}</small></label>
         {!form.agentUid && field("agentName", "業務姓名＊", { maxLength: 80 })}
         {field("agentPhone", "業務聯絡電話", { type: "tel", maxLength: 40 })}{field("branch", "所屬分店", { maxLength: 80 })}
         {field("title", "案名＊", { wide: true, placeholder: "例如：金捷市採光兩房平車", maxLength: 120 })}

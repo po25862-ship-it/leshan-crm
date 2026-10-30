@@ -10,14 +10,14 @@ const mockRows = [
   { id: "c", title: "其他同事套房", area: "A7", status: "available", ownerUid: "other", rent: 15000, photos: [] },
 ];
 jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "staff" } }) }));
-jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [{ id: "staff", name: "小林" }, { id: "staff-b", name: "同事乙", phone: "02-12345678" }], loading: false }) }));
+jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [{ id: "staff", name: "小林" }, { id: "staff-b", name: "同事乙", phone: "02-12345678" }, { id: "mTfncojmWcgx3XN3JYceTJFJtw03", name: "我會寫扣" }, { id: "Qv7tWXKV07M5UL0UA6Ug8eWeJOF3", name: "po25862z" }], loading: false }) }));
 jest.mock("../hooks/useDoc", () => ({ useDoc: () => ({ data: { name: "小林" } }) }));
 jest.mock("../hooks/usePersonalAgid", () => ({ usePersonalAgid: () => ({ agid: "67890" }) }));
 jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ items: mockRows, loading: false, error: null, refresh: jest.fn() }) }));
 jest.mock("../lib/companyRentalRepository", () => ({ readRentalInternal: jest.fn(), saveCompanyRental: jest.fn(), setCompanyRentalStatus: jest.fn() }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [], loading: false }) }));
 let container, root;
-beforeEach(() => { mockRows.forEach(row => { row.furniture = []; delete row.equipmentCatalog; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
+beforeEach(() => { mockRows.forEach(row => { row.furniture = []; delete row.equipmentCatalog; delete row.agentUid; delete row.agentName; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
@@ -50,8 +50,20 @@ test("new rental defaults to staff picker and saves another responsible colleagu
   render(); await click("＋ 新增租賃");
   const picker = fieldLabel("案件負責人＊").querySelector("select");
   expect(picker.value).toBe("staff"); expect(picker.textContent).toContain("同事乙");
+  expect(picker.textContent).not.toMatch(/我會寫扣|po25862z/);
   select(picker, "staff-b"); await click("存成草稿");
   expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ agentUid: "staff-b", agentName: "同事乙", agentPhone: "02-12345678" }));
+});
+
+test("an existing hidden assignee is preserved on save but cannot be chosen for a new assignment", async () => {
+  mockRows[0].agentUid = "mTfncojmWcgx3XN3JYceTJFJtw03"; mockRows[0].agentName = "我會寫扣";
+  render(); await click("查看資料"); await click("編輯資料");
+  const picker = fieldLabel("案件負責人＊").querySelector("select");
+  expect(picker.value).toBe(mockRows[0].agentUid);
+  expect(picker.selectedOptions[0].hidden).toBe(true); expect(picker.selectedOptions[0].disabled).toBe(true);
+  expect([...picker.options].filter(option => !option.hidden).map(option => option.textContent)).not.toContain("我會寫扣");
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form.agentUid).toBe(mockRows[0].agentUid);
 });
 test("manual responsible agent and two separate service fees are retained on draft save", async () => {
   render(); await click("＋ 新增租賃");

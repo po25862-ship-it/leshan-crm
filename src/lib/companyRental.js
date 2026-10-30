@@ -1,4 +1,5 @@
 import { MAIN_OWNER_UID, withAgid, withoutAgid } from "./url";
+import { visibleColleagueOptions } from "./colleagueVisibility";
 
 export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫停招租", draft: "草稿" };
 export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套房", "雅房", "店面", "辦公室", "車位"];
@@ -64,10 +65,10 @@ export function companyRentalForm(original, internal, user, profile = {}) {
   };
 }
 export function companyRentalColleagues(rows, user, profile = {}, original) {
-  const map = new Map(rows.filter(row => row.id && row.name?.trim()).map(row => [row.id, row]));
-  if (!map.has(user.uid)) map.set(user.uid, { id: user.uid, name: profile.name || user.displayName || "我（目前登入）", phone: profile.phone || "", branch: profile.branch || "" });
+  const map = new Map(visibleColleagueOptions(rows).filter(row => row.id && row.name?.trim()).map(row => [row.id, row]));
+  if (!map.has(user.uid)) map.set(user.uid, rows.find(row => row.id === user.uid) || { id: user.uid, name: profile.name || user.displayName || "我（目前登入）", phone: profile.phone || "", branch: profile.branch || "" });
   const previousUid = original?.agentUid || (!Object.hasOwn(original || {}, "agentUid") && original?.ownerUid);
-  if (previousUid && !map.has(previousUid)) map.set(previousUid, { id: previousUid, name: original.agentName || "原負責同事", phone: original.agentPhone || "", branch: original.branch || "" });
+  if (previousUid && !map.has(previousUid)) map.set(previousUid, rows.find(row => row.id === previousUid) || { id: previousUid, name: original.agentName || "原負責同事", phone: original.agentPhone || "", branch: original.branch || "" });
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
 }
 export function rentalAgentKey(rental) {

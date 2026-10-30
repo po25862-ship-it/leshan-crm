@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { visibleColleagueOptions } from "../lib/colleagueVisibility";
 import { Link } from "react-router-dom";
 import { CheckCircle2, FileJson, FileText, LockKeyhole, Sparkles, Upload, WandSparkles, XCircle } from "lucide-react";
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
@@ -65,7 +66,7 @@ export default function ConversationAnalysis() {
 
   const parsed = useMemo(() => parseLineChat(rawText), [rawText]);
   const matches = useMemo(() => result?.need ? matchPropertiesForNeed(result.need, properties).slice(0, 5) : [], [result, properties]);
-  const selectableContacts = analysisMode === "buyer" ? buyers : analysisMode === "seller" ? sellers : colleagues;
+  const selectableContacts = analysisMode === "buyer" ? buyers : analysisMode === "seller" ? sellers : visibleColleagueOptions(colleagues);
   const orderedContacts = useMemo(() => [...selectableContacts].sort((a, b) => {
     const aMatch = participant && a.name?.includes(participant) ? 1 : 0;
     const bMatch = participant && b.name?.includes(participant) ? 1 : 0;
