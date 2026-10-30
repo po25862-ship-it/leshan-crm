@@ -66,9 +66,9 @@ export function companyRentalForm(original, internal, user, profile = {}) {
 }
 export function companyRentalColleagues(rows, user, profile = {}, original) {
   const map = new Map(visibleColleagueOptions(rows).filter(row => row.id && row.name?.trim()).map(row => [row.id, row]));
-  if (!map.has(user.uid)) map.set(user.uid, rows.find(row => row.id === user.uid) || { id: user.uid, name: profile.name || user.displayName || "我（目前登入）", phone: profile.phone || "", branch: profile.branch || "" });
+  if (!map.has(user.uid)) map.set(user.uid, rows.find(row => row.id === user.uid && row.name?.trim()) || { id: user.uid, name: profile.name || user.displayName || "我（目前登入）", phone: profile.phone || "", branch: profile.branch || "" });
   const previousUid = original?.agentUid || (!Object.hasOwn(original || {}, "agentUid") && original?.ownerUid);
-  if (previousUid && !map.has(previousUid)) map.set(previousUid, rows.find(row => row.id === previousUid) || { id: previousUid, name: original.agentName || "原負責同事", phone: original.agentPhone || "", branch: original.branch || "" });
+  if (previousUid && !map.has(previousUid)) map.set(previousUid, rows.find(row => row.id === previousUid && row.name?.trim()) || { id: previousUid, name: original.agentName || "原負責同事", phone: original.agentPhone || "", branch: original.branch || "" });
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
 }
 export function rentalAgentKey(rental) {

@@ -20,3 +20,10 @@ test("an existing test assignee and a test user's own identity remain available 
   expect(companyRentalColleagues([...tests, colleague], { uid: tests[1].id })).toContainEqual(tests[1]);
   expect(original.agentUid).toBe(tests[0].id);
 });
+test("missing directory names still fall back to the current profile and original assignee name", () => {
+  const options = companyRentalColleagues([{ id: "owner" }, { id: tests[0].id }, colleague], { uid: "owner" }, { name: "主要負責人" }, { agentUid: tests[0].id, agentName: "原測試業務" });
+  expect(options).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: "owner", name: "主要負責人" }),
+    expect.objectContaining({ id: tests[0].id, name: "原測試業務" }),
+  ]));
+});
