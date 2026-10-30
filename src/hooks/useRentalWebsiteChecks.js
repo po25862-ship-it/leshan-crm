@@ -15,15 +15,18 @@ export function useRentalWebsiteChecks(items, user, enabled) {
         const key = `${user.uid}:${rental.id}:${rentalWebsiteKey(rental.websiteUrl)}`;
         if (cancelled) return;
         if (rental.status !== "available" || !needsRentalWebsiteCheck(rental) || attempts.current.has(key)) continue;
-        attempts.current.add(key);
         try {
           const info = await loadRentalWebsiteInfo(user, rental.websiteUrl);
           if (cancelled) return;
+          attempts.current.add(key);
           const patch = rentalWebsitePatch(rental, info);
           if (!patch) continue;
           setResults(current => ({ ...current, [rental.id]: info }));
           if (canEditCompanyRental(rental, user.uid)) await saveRentalWebsiteCheck(rental, info, user);
-        } catch { /* A failed check never clears a URL or marks a listing unavailable. */ }
+        } catch {
+          if (!cancelled) attempts.current.add(key);
+          // A failed check never clears a URL or marks a listing unavailable.
+        }
       }
     }
     scan();

@@ -33,3 +33,12 @@ test("a response for a URL that changed during the check is discarded", async ()
   expect(container.textContent).toContain("2026-12-31"); expect(container.textContent).not.toContain("2026-11-29");
   expect(saveRentalWebsiteCheck.mock.calls.every(call => call[0].websiteUrl === next.websiteUrl)).toBe(true);
 });
+test("a refreshed rental list does not skip a source check already in progress", async () => {
+  let finish; const pending = new Promise(resolve => { finish = resolve; });
+  loadRentalWebsiteInfo.mockReturnValue(pending);
+  await render([row]);
+  await render([{ ...row }]);
+  await act(async () => finish(info));
+  expect(container.textContent).toContain("2026-11-29");
+  expect(saveRentalWebsiteCheck).toHaveBeenCalledTimes(1);
+});
