@@ -94,7 +94,7 @@ function PropertyPdfLibraryContents({ library, properties, selectedProperties, b
           <button id="pdf-library-draft-tab" type="button" aria-pressed={tab === "draft"} aria-controls="pdf-library-records" className={tab === "draft" ? "btn" : "btn ghost"} onClick={() => { setTab("draft"); setPendingDelete(null); }}>暫存（{drafts.length}／5）</button>
           <button id="pdf-library-favorite-tab" type="button" aria-pressed={tab === "favorite"} aria-controls="pdf-library-records" className={tab === "favorite" ? "btn" : "btn ghost"} onClick={() => { setTab("favorite"); setPendingDelete(null); }}>常用（{favorites.length}／5）</button>
         </div>
-        <p className="pdf-library-help">{tab === "draft" ? "製作 PDF 成功後自動暫存；相同物件順序與客戶會更新原格。滿 5 份時更新最早製作的一份，不影響常用紀錄。" : "常用保留物件組合與順序，不會自動被覆蓋。載入後使用目前的價格與最新資料表重新製作。"}</p>
+        <p className="pdf-library-help">{tab === "draft" ? "製作 PDF 成功後自動暫存；相同物件順序與客戶會更新原格。滿 5 份時更新最早製作的一份，不影響常用紀錄。已存 PDF 不會跟著調價，請載入後重新製作以套用最新售價。" : "常用保留物件組合與順序，不會自動被覆蓋。載入後使用目前的價格與最新資料表重新製作。"}</p>
         {(library.error || error) && <p className="property-viewing-pdf-warning" role="alert">{error || library.error}</p>}
         {notice && <p className="pdf-library-notice" role="status">{notice}</p>}
         {library.loading ? <p>正在讀取這台裝置的紀錄…</p> : <div id="pdf-library-records" className="pdf-library-grid" role="region" aria-labelledby={`pdf-library-${tab}-tab`}>

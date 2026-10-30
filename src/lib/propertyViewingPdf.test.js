@@ -1,4 +1,4 @@
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, degrees } from "pdf-lib";
 import { getPropertySheetPlan, mergePropertySheets } from "./propertyViewingPdf";
 import { buildPropertySummary } from "./propertySummaryCanvas";
 
@@ -6,6 +6,52 @@ const tinyPng = Uint8Array.from(Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=",
   "base64",
 ));
+
+describe("latest sale prices", () => {
+  const { webcrypto, createHash } = require("crypto");
+  const originalCrypto = globalThis.crypto;
+  beforeAll(() => Object.defineProperty(globalThis, "crypto", { configurable: true, value: webcrypto }));
+  afterAll(() => Object.defineProperty(globalThis, "crypto", { configurable: true, value: originalCrypto }));
+  const mark = { schema: 1, page: 0, sourceHash: createHash("sha256").update(tinyPng).digest("hex"), oldPrice: 1398, rect: { x: 0.1, y: 0.15, width: 0.3, height: 0.07 } };
+  test("a verified source receives this property's current price rather than a value cached in its location metadata", async () => {
+    const renderPrice = jest.fn(async () => tinyPng);
+    const property = { id: "a", title: "鴻廣新A7", totalPrice: 1268, sheetFiles: [{ url: "https://example.com/sheet.png", priceMark: mark }] };
+    const result = await mergePropertySheets([property], async () => tinyPng, undefined, { latestPrices: true, renderPrice });
+    expect(result).toMatchObject({ priceOverlayCount: 1, priceHeaderCount: 0, pageCount: 1 });
+    expect(renderPrice).toHaveBeenCalledWith(expect.objectContaining({ property, oldPrice: 1398 }));
+    expect(property.totalPrice).toBe(1268);
+    expect(property.sheetFiles[0].priceMark.oldPrice).toBe(1398);
+  });
+  test("changed file bytes or missing position metadata use a separate header, with no guessed cross-out", async () => {
+    const renderPrice = jest.fn(async () => tinyPng);
+    const properties = [
+      { id: "a", totalPrice: 1268, sheetFiles: [{ url: "https://example.com/a.png", priceMark: { ...mark, sourceHash: "a".repeat(64) } }] },
+      { id: "b", totalPrice: 888, sheetFiles: [{ url: "https://example.com/b.png" }] },
+    ];
+    const result = await mergePropertySheets(properties, async () => tinyPng, undefined, { latestPrices: true, renderPrice });
+    expect(result).toMatchObject({ priceOverlayCount: 0, priceHeaderCount: 2, pageCount: 2 });
+    expect(renderPrice.mock.calls.map(([input]) => [input.property.totalPrice, input.header, input.oldPrice])).toEqual([[1268, true, undefined], [888, true, undefined]]);
+  });
+  test("a source PDF keeps each page and places its current quote above all original content", async () => {
+    const source = await PDFDocument.create();
+    source.addPage([595, 842]).drawText("OLD PRICE 1398");
+    source.addPage([842, 595]).drawText("SECOND PAGE");
+    const result = await mergePropertySheets([{ id: "a", totalPrice: 1268, sheetFiles: [{ url: "https://example.com/a.pdf" }] }], async () => await source.save(), undefined, { latestPrices: true, renderPrice: async () => tinyPng });
+    const pdf = await PDFDocument.load(result.bytes);
+    expect(pdf.getPageCount()).toBe(2);
+    expect(result).toMatchObject({ priceOverlayCount: 0, priceHeaderCount: 2 });
+    expect(pdf.getPages().map((p) => [p.getWidth(), p.getHeight()])).toEqual([[595, 842], [842, 595]]);
+  });
+  test("rotated and blank source pages remain printable with their visible orientation", async () => {
+    const source = await PDFDocument.create();
+    source.addPage([595, 842]).setRotation(degrees(90));
+    source.addPage([595, 842]).drawText("ORIGINAL CONTENT");
+    const result = await mergePropertySheets([{ id: "a", totalPrice: 1268, sheetFiles: [{ url: "https://example.com/a.pdf" }] }], async () => await source.save(), undefined, { latestPrices: true, renderPrice: async () => tinyPng });
+    const pdf = await PDFDocument.load(result.bytes);
+    expect(pdf.getPages().map((p) => [p.getWidth(), p.getHeight()])).toEqual([[842, 595], [595, 842]]);
+    expect(result.priceHeaderCount).toBe(2);
+  });
+});
 
 test("plans all attachments in the selected property order, including legacy files", () => {
   const plan = getPropertySheetPlan([
@@ -134,7 +180,7 @@ test("summary uses only known CRM fields and marks missing values explicitly", (
     address: "桃園市龜山區文化二路", status: "active", layout: "0/0/0",
     notes: "內部備註不該印在帶看資料",
   }, new Date("2026-10-21T00:00:00Z"));
-  expect(summary.basic[0]).toEqual(["總價", "1280 萬"]);
+  expect(summary.basic[0]).toEqual(["最新售價", "1,280 萬"]);
   expect(summary.basic[1]).toEqual(["格局", "未提供"]);
   expect(summary.areas[1]).toEqual(["主建物", "15.1 坪"]);
   expect(summary.location[2]).toEqual(["地址", "桃園市龜山區文化二路"]);

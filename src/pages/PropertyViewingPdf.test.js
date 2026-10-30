@@ -2,10 +2,12 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import PropertyViewingPdf from "./PropertyViewingPdf";
 import { mergePropertySheets } from "../lib/propertyViewingPdf";
+import { readLatestPdfProperties } from "../lib/propertyPdfLatest";
 
 jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "test-staff" } }) }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [{ id: "buyer-a", name: "測試買方" }, { id: "buyer-b", name: "另一買方" }] }) }));
 jest.mock("../lib/propertySheetDownload", () => ({ downloadPropertySheet: jest.fn() }));
+jest.mock("../lib/propertyPdfLatest", () => ({ readLatestPdfProperties: jest.fn(async (properties) => properties) }));
 jest.mock("../lib/propertyViewingPdf", () => ({
   getPropertySheetPlan: (properties) => properties.map((property) => ({ ...property, files: [], missing: true })),
   mergePropertySheets: jest.fn(),
@@ -19,6 +21,7 @@ beforeEach(() => {
   URL.createObjectURL = jest.fn(() => "blob:test-pdf");
   URL.revokeObjectURL = jest.fn();
   mergePropertySheets.mockReset();
+  readLatestPdfProperties.mockReset().mockImplementation(async (properties) => properties);
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const properties = [{ id: "one", title: "測試物件" }];
@@ -35,6 +38,37 @@ test("automatically saves only a successfully generated PDF with the original re
   expect(onGenerated).toHaveBeenCalledWith({ properties, buyerId: "buyer-a", buyerName: "測試買方" }, expect.objectContaining({ ...output, filename: expect.stringContaining("測試買方") }));
   expect(container.textContent).toContain("暫存 3");
   expect(container.querySelector("a[download]").href).toBe("blob:test-pdf");
+});
+
+test("generation uses fresh cloud prices and files instead of the displayed older selection", async () => {
+  const latest = [{ id: "one", title: "測試物件", totalPrice: 1268, sheetFiles: [{ url: "https://example.com/latest.jpg" }] }];
+  readLatestPdfProperties.mockResolvedValue(latest);
+  mergePropertySheets.mockResolvedValue(output);
+  const onGenerated = jest.fn(async () => ({ slot: 0 }));
+  act(() => root.render(<PropertyViewingPdf properties={properties} onGenerated={onGenerated} />));
+  await create();
+  expect(mergePropertySheets).toHaveBeenCalledWith(latest, expect.any(Function), undefined, { latestPrices: true });
+  expect(onGenerated.mock.calls[0][0].properties).toEqual(latest);
+});
+
+test("a failed fresh-price read never exports or saves the older price", async () => {
+  readLatestPdfProperties.mockRejectedValue(new Error("無法取得最新售價"));
+  const onGenerated = jest.fn(), log = jest.spyOn(console, "error").mockImplementation(() => {});
+  act(() => root.render(<PropertyViewingPdf properties={properties} onGenerated={onGenerated} />));
+  await create();
+  expect(mergePropertySheets).not.toHaveBeenCalled();
+  expect(onGenerated).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("無法取得最新售價");
+  log.mockRestore();
+});
+
+test("changing a selected price invalidates the previous download", async () => {
+  mergePropertySheets.mockResolvedValue(output);
+  act(() => root.render(<PropertyViewingPdf properties={properties} />));
+  await create();
+  expect(container.querySelector("a[download]")).not.toBeNull();
+  act(() => root.render(<PropertyViewingPdf properties={[{ ...properties[0], totalPrice: 999 }]} />));
+  expect(container.querySelector("a[download]")).toBeNull();
 });
 
 test("a device storage failure keeps the generated PDF available for download", async () => {

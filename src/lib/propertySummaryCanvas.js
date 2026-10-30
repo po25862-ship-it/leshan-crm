@@ -1,5 +1,6 @@
 import { getPropertyParkingNumber } from "./propertyParkingNumber";
 import { formatPropertyManagementFee } from "./propertyManagementFee";
+import { formatSheetPrice } from "./propertySheetPrice";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -26,7 +27,7 @@ export function buildPropertySummary(property, date = new Date()) {
     status,
     generatedAt: date.toLocaleDateString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" }),
     basic: [
-      ["總價", Number.isFinite(price) && price > 0 ? `${property.totalPrice} 萬` : "未提供"],
+      ["最新售價", Number.isFinite(price) && price > 0 ? `${formatSheetPrice(price)} 萬` : "未提供"],
       ["格局", layout && !/^0\s*\/\s*0\s*\/\s*0$/.test(layout) ? layout : "未提供"],
       ["物件類型", valueOrMissing(property.category)],
       ["樓別／座向", valueOrMissing([property.floor, property.orientation].filter(Boolean).join("・"))],
@@ -125,6 +126,13 @@ export async function renderPropertySummaryPng(property) {
   const basicX = [36, 303];
   summary.basic.forEach(([label, value], index) => {
     drawCard(ctx, basicX[index % 2], 243 + Math.floor(index / 2) * 70, 256, 62, label, value);
+    if (index === 0) {
+      ctx.fillStyle = "#FFFFFF"; ctx.fillRect(49, 268, 230, 32);
+      ctx.fillStyle = "#D52616";
+      let fontSize = 29;
+      do { ctx.font = `900 ${fontSize}px "Arial Black", ${FONT}`; if (ctx.measureText(value).width <= 230) break; fontSize--; } while (fontSize > 12);
+      ctx.fillText(value, 49, 295);
+    }
   });
 
   ctx.fillStyle = "#214C3F";
@@ -154,7 +162,7 @@ export async function renderPropertySummaryPng(property) {
 
   ctx.fillStyle = "#65756E";
   ctx.font = `10px ${FONT}`;
-  ctx.fillText(`產生日期：${summary.generatedAt}   ·   資料來源：CRM 物件欄位`, 36, 825);
+  ctx.fillText("資料來源：CRM 物件欄位", 36, 825);
   ctx.textAlign = "right";
   ctx.fillText("實際現況請以最新委託資料確認", PAGE_WIDTH - 36, 825);
 

@@ -1,4 +1,6 @@
 import { renderPropertySummaryPng } from "./propertySummaryCanvas";
+import { renderPropertyPricePng } from "./propertyPriceCanvas";
+import { validPriceMark } from "./propertySheetPrice";
 
 const A4 = [595.28, 841.89];
 const PAGE_MARGIN = 24;
@@ -58,6 +60,7 @@ export function getPropertySheetPlan(properties) {
         url: typeof entry.url === "string" ? entry.url.trim() : "",
         name: String(entry.name || `資料表 ${index + 1}`),
         type: String(entry.type || ""),
+        ...(validPriceMark(entry.priceMark) ? { priceMark: validPriceMark(entry.priceMark) } : {}),
       };
       return {
         file: normalized,
@@ -132,7 +135,7 @@ async function convertImageToPng(bytes, contentType) {
   }
 }
 
-export async function mergePropertySheets(properties, loadFile = loadFileFromUrl, renderSummary = renderPropertySummaryPng) {
+export async function mergePropertySheets(properties, loadFile = loadFileFromUrl, renderSummary = renderPropertySummaryPng, options = {}) {
   const plan = getPropertySheetPlan(properties);
   if (plan.length === 0) throw new Error("請先勾選要列印的物件。");
   const unavailable = plan.filter((entry) => entry.invalid);
@@ -141,12 +144,33 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
   }
 
   // Load only when the user asks for a PDF, keeping the regular property list lightweight.
-  const { PDFDocument } = await import("pdf-lib");
+  const { PDFDocument, degrees } = await import("pdf-lib");
   const merged = await PDFDocument.create();
   merged.setTitle("帶看物件資料表");
   let totalBytes = 0;
   let fileCount = 0;
   let summaryCount = 0;
+  let priceOverlayCount = 0, priceHeaderCount = 0;
+  const renderPrice = options.renderPrice || renderPropertyPricePng;
+  async function markMatchesBytes(mark, bytes) {
+    if (!mark || !globalThis.crypto?.subtle) return false;
+    const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
+    return Array.from(digest, (n) => n.toString(16).padStart(2, "0")).join("") === mark.sourceHash;
+  }
+  async function drawPrice(page, property, mark, placement) {
+    const r = mark.rect;
+    const width = placement.width * r.width, height = placement.height * r.height;
+    const card = await merged.embedPng(await renderPrice({ property, oldPrice: mark.oldPrice, aspectRatio: width / height }));
+    page.drawImage(card, { x: placement.x + placement.width * r.x, y: placement.y + placement.height * (1 - r.y - r.height), width, height });
+    priceOverlayCount++;
+  }
+  async function drawHeader(page, property) {
+    const height = Math.min(70, page.getHeight() * 0.16), width = page.getWidth();
+    const card = await merged.embedPng(await renderPrice({ property, header: true, aspectRatio: width / height }));
+    page.drawImage(card, { x: 0, y: page.getHeight() - height, width, height });
+    priceHeaderCount++;
+    return height;
+  }
 
   for (const [index, property] of plan.entries()) {
     if (property.missing) {
@@ -170,25 +194,55 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
         if (totalBytes > MAX_TOTAL_BYTES) throw new Error("選取檔案總量超過 120 MB，請分批製作");
 
         const type = detectFileType(file, bytes, contentType);
+        const mark = options.latestPrices && await markMatchesBytes(file.priceMark, bytes) ? file.priceMark : null;
         if (type === "pdf") {
           const source = await PDFDocument.load(bytes);
           const form = source.getForm();
           if (form.getFields().length > 0) form.flatten();
           if (source.getPageCount() === 0) throw new Error("PDF 沒有頁面");
-          const pages = await merged.copyPages(source, source.getPageIndices());
-          pages.forEach((page) => merged.addPage(page));
+          if (!options.latestPrices) {
+            const pages = await merged.copyPages(source, source.getPageIndices());
+            pages.forEach((page) => merged.addPage(page));
+          } else {
+            for (const original of source.getPages()) {
+              const sourceWidth = original.getWidth(), sourceHeight = original.getHeight();
+              const angle = ((original.getRotation().angle % 360) + 360) % 360;
+              const sideways = angle === 90 || angle === 270;
+              const width = sideways ? sourceHeight : sourceWidth, height = sideways ? sourceWidth : sourceHeight;
+              const page = merged.addPage([width, height]);
+              const band = Math.min(70, height * 0.16);
+              const scale = (height - band) / height;
+              // Keep all source content below a separate price band; no guessed
+              // location or source price is used for unrecognized PDF layouts.
+              if (original.node.Contents()) {
+                const embedded = await merged.embedPage(original);
+                const x = width * (1 - scale) / 2;
+                const placement = angle === 90 ? { x, y: sourceWidth * scale, rotate: degrees(-90) }
+                  : angle === 180 ? { x: x + sourceWidth * scale, y: sourceHeight * scale, rotate: degrees(180) }
+                    : angle === 270 ? { x: x + sourceHeight * scale, y: 0, rotate: degrees(90) } : { x, y: 0 };
+                page.drawPage(embedded, { ...placement, width: sourceWidth * scale, height: sourceHeight * scale });
+              }
+              await drawHeader(page, properties[index]);
+            }
+          }
         } else if (type === "png" || type === "jpg" || type === "other-image") {
           const imageBytes = type === "other-image" ? await convertImageToPng(bytes, contentType) : bytes;
           const image = type === "jpg" ? await merged.embedJpg(imageBytes) : await merged.embedPng(imageBytes);
           const pageSize = image.width > image.height ? [A4[1], A4[0]] : A4;
           const page = merged.addPage(pageSize);
-          const fitted = image.scaleToFit(pageSize[0] - PAGE_MARGIN * 2, pageSize[1] - PAGE_MARGIN * 2);
-          page.drawImage(image, {
+          const band = options.latestPrices && !mark ? Math.min(70, pageSize[1] * 0.16) : 0;
+          const fitted = image.scaleToFit(pageSize[0] - PAGE_MARGIN * 2, pageSize[1] - PAGE_MARGIN * 2 - band);
+          const placement = {
             x: (pageSize[0] - fitted.width) / 2,
-            y: (pageSize[1] - fitted.height) / 2,
+            y: (pageSize[1] - band - fitted.height) / 2,
             width: fitted.width,
             height: fitted.height,
-          });
+          };
+          page.drawImage(image, placement);
+          if (options.latestPrices) {
+            if (mark) await drawPrice(page, properties[index], mark, placement);
+            else await drawHeader(page, properties[index]);
+          }
         } else {
           throw new Error("格式不支援；請使用 PDF、JPG 或 PNG，其他圖片需能在瀏覽器開啟");
         }
@@ -202,5 +256,5 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
     }
   }
 
-  return { bytes: await merged.save(), pageCount: merged.getPageCount(), fileCount, summaryCount };
+  return { bytes: await merged.save(), pageCount: merged.getPageCount(), fileCount, summaryCount, priceOverlayCount, priceHeaderCount };
 }

@@ -287,6 +287,7 @@ export default function Properties() {
   const [showShare, setShowShare] = useState(false);
   const [selectedBuyerId, setSelectedBuyerId] = useState("");
   const [showViewingPdf, setShowViewingPdf] = useState(false);
+  const [singleViewingPdfId, setSingleViewingPdfId] = useState(null);
   const [pdfLoadVersion, setPdfLoadVersion] = useState(0);
   const pdfLibrary = usePropertyPdfLibrary(user.uid);
   const [showMobileTools, setShowMobileTools] = useState(false);
@@ -347,6 +348,7 @@ export default function Properties() {
   };
 
   const openEdit = (item) => {
+    setSingleViewingPdfId(null);
     setSharingFloorplanFile(null);
     setDetailTab("overview");
     setPropertySaveError("");
@@ -1611,6 +1613,8 @@ export default function Properties() {
               {detailTab === "files" && <>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
+                <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => setSingleViewingPdfId(editingId)}>製作最新售價 PDF</button>
+                {singleViewingPdfId === editingId && <PropertyViewingPdf properties={[{ ...form, id: editingId }]} onClose={() => setSingleViewingPdfId(null)} onGenerated={pdfLibrary.saveGenerated} />}
                 {(form.sheetFiles || []).length === 0 ? (
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未上傳資料表</div>
                 ) : (
@@ -1620,6 +1624,7 @@ export default function Properties() {
                     ))}
                   </div>
                 )}
+                {(form.sheetFiles || []).length > 0 && <p style={{ fontSize: 12, color: "var(--muted)" }}>上方檔案保留原始物調；分享給客人前，請用「製作最新售價 PDF」套用目前價格。</p>}
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>格局圖（{(form.floorplanFiles || []).length}）</div>

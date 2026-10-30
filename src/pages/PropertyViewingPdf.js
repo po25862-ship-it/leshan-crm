@@ -5,6 +5,7 @@ import { downloadPropertySheet } from "../lib/propertySheetDownload";
 import { useAuth } from "../AuthContext";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { pdfLibraryError } from "../lib/propertyPdfLibrary";
+import { readLatestPdfProperties } from "../lib/propertyPdfLatest";
 
 export default function PropertyViewingPdf({ properties, buyerId, onClose, onGenerated }) {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
   const [storageWarning, setStorageWarning] = useState("");
   const requestId = useRef(0);
   const plan = getPropertySheetPlan(properties);
+  const selectionKey = JSON.stringify(properties.map((p) => [p.id, p.totalPrice, p.sheetFiles, p.sheetFileUrl]));
   const unavailable = plan.filter((entry) => entry.invalid);
   const summaryCount = plan.filter((entry) => entry.missing).length;
   const fileCount = plan.reduce((count, entry) => count + entry.files.length, 0);
@@ -33,7 +35,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
     setStorageNotice("");
     setStorageWarning("");
     return () => { requestId.current += 1; };
-  }, [buyerId]);
+  }, [buyerId, selectionKey]);
 
   const createPdf = async () => {
     if (busy || unavailable.length > 0) return;
@@ -44,7 +46,9 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
     setStorageWarning("");
     setResult(null);
     try {
-      const merged = await mergePropertySheets(properties, (url) => downloadPropertySheet(url, user));
+      const latest = await readLatestPdfProperties(properties);
+      if (request !== requestId.current) return;
+      const merged = await mergePropertySheets(latest, (url) => downloadPropertySheet(url, user), undefined, { latestPrices: true });
       if (request !== requestId.current) return;
       const url = URL.createObjectURL(new Blob([merged.bytes], { type: "application/pdf" }));
       const filename = `帶看物件資料表_${safeBuyerName ? `${safeBuyerName}_` : ""}${todayStr()}_${properties.length}間.pdf`;
@@ -56,7 +60,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
       });
       if (onGenerated) {
         try {
-          const record = await onGenerated({ properties, buyerId, buyerName }, { ...merged, filename });
+          const record = await onGenerated({ properties: latest, buyerId, buyerName }, { ...merged, filename });
           if (request === requestId.current) setStorageNotice(`已自動保留在「暫存 ${record.slot + 1}」。離開頁面後，可從「帶看 PDF 暫存／常用」再次讀取。`);
         } catch (saveError) {
           if (request === requestId.current) setStorageWarning(`PDF 已製作完成，但沒有存入暫存。${pdfLibraryError(saveError)}`);
@@ -77,6 +81,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
           <h2>合併帶看資料表 PDF</h2>
           {buyerName && <p>準備介紹給：{buyerName}</p>}
           <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留；完成後自動暫存在這台裝置，不會上傳合併檔。</p>
+          <p>製作時重新讀取最新售價，以紅色粗體大字標示；有調價時將原表舊價打叉，不顯示調價日期。無法確認售價位置的格式，會在頁首另列最新售價，避免蓋到其他資料。</p>
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>關閉</button>
       </div>
@@ -115,6 +120,9 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
         )}
       </div>
       {result && <p className="property-viewing-pdf-ready" role="status">已整理 {result.fileCount} 份原始資料表、{result.summaryCount} 頁系統摘要，共 {result.pageCount} 頁。開啟後可一次列印全部頁面。</p>}
+      {result?.priceOverlayCount > 0 && <p className="property-viewing-pdf-ready">{result.priceOverlayCount} 頁已在原售價欄標示最新售價；價格相同時不畫叉。</p>}
+      {result?.priceHeaderCount > 0 && <p className="property-viewing-pdf-summary-note">{result.priceHeaderCount} 頁未能確認原售價位置，已在頁首清楚標示最新售價。</p>}
+      {result && <p className="property-viewing-pdf-summary-note">已下載或暫存的 PDF 不會自行改價；之後若有調價，請重新製作。</p>}
       {storageNotice && <p className="property-viewing-pdf-ready" role="status">{storageNotice}</p>}
       {storageWarning && <p className="property-viewing-pdf-warning" role="alert">{storageWarning} 仍可使用上方的下載按鈕保留檔案。</p>}
     </section>
