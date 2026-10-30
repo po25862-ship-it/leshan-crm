@@ -37,6 +37,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
   const { user } = useAuth();
   const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
   const { items: properties } = useCollection("properties", "title");
+  const activeProperties = properties.filter((property) => (property.status || "active") === "active");
   const { items: colleagues } = useCollection("colleagues", "name");
   const MAIN_OWNER_UID = "KiYlsnWcChW5muRkG167r7Mi1132";
   const nameOf = (uid) => {
@@ -107,7 +108,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
     for (const row of normalizedRows) {
       try {
         const propertyLabel = row.propertyLabel.trim();
-        const match = properties.find((p) => p.title === propertyLabel);
+        const match = activeProperties.find((p) => p.title === propertyLabel);
         const docData = {
           date: row.date,
           time: row.time,
@@ -178,12 +179,15 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
     setEditSaving(true);
     try {
       const propertyLabel = editRow.propertyLabel.trim();
-      const match = properties.find((p) => p.title === propertyLabel);
+      const match = activeProperties.find((p) => p.title === propertyLabel);
+      // Editing the date/notes of an old viewing must retain its linked property,
+      // even when that property is no longer available for a new appointment.
+      const unchangedProperty = propertyLabel === String(item.propertyLabel || "").trim();
       const docData = {
         date: editRow.date,
         time: normalizedTime,
         propertyLabel,
-        propertyId: match ? match.id : null,
+        propertyId: (unchangedProperty && item.propertyId) || (match ? match.id : null),
         notes: editRow.notes,
       };
       await updateAppt(item.id, docData);
@@ -304,7 +308,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>第 {idx + 1} 筆物件</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>第 {idx + 1} 筆物件・只列在售</div>
                 {apptRows.length > 1 && (
                   <button
                     type="button"
@@ -321,10 +325,10 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
               </div>
               <div style={{ marginBottom: 8 }}>
                 <PropertyPicker
-                  properties={properties}
+                  properties={activeProperties}
                   value={row.propertyLabel}
                   onChange={(v) => updateApptRow(row.key, "propertyLabel", v)}
-                  placeholder="要帶看的物件（可選填，可從物件清單挑或自己打）"
+                  placeholder="搜尋在售物件案名或地址（可選填）"
                 />
               </div>
               <input
@@ -416,10 +420,10 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <PropertyPicker
-                    properties={properties}
+                    properties={activeProperties}
                     value={editRow.propertyLabel}
                     onChange={(v) => setEditRow({ ...editRow, propertyLabel: v })}
-                    placeholder="要帶看的物件（可選填）"
+                    placeholder="搜尋在售物件案名或地址（可選填）"
                   />
                 </div>
                 <input
