@@ -1,12 +1,41 @@
-import { RENTAL_FORM_DEFAULTS, buildCompanyRentalShare, rentalMonthlyCost, rentalSavePayload, validateCompanyRental, rentalSearchRows, canEditCompanyRental, companyRentalUrl, companyRentalForm, companyRentalColleagues, rentalAgentKey, normalizeRentalFurniture, addRentalFurniture, rentalEquipmentChoices, RENTAL_FURNITURE } from "./companyRental";
+import { RENTAL_FORM_DEFAULTS, buildCompanyRentalShare, rentalMonthlyCost, rentalParkingText, rentalSavePayload, validateCompanyRental, rentalSearchRows, canEditCompanyRental, companyRentalUrl, companyRentalForm, companyRentalColleagues, rentalAgentKey, normalizeRentalFurniture, addRentalFurniture, rentalEquipmentChoices, RENTAL_FURNITURE } from "./companyRental";
 import { mergeRentalPhotos } from "./companyRentalPhotos";
-const form = { ...RENTAL_FORM_DEFAULTS, agentName: "小林", agentUid: "staff", title: "金捷市租賃", street: "樂善二路", doorAddress: "秘密門牌", landlordPhone: "0912345678", keyInfo: "秘密鑰匙", viewingInstructions: "請先預約", rent: "28000", mgmtMode: "另計", mgmt: 2000, parking: "坡道平面", parkMode: "另計", parkFee: 3000 };
+const form = { ...RENTAL_FORM_DEFAULTS, agentName: "小林", agentUid: "staff", title: "金捷市租賃", street: "樂善二路", doorAddress: "秘密門牌", landlordPhone: "0912345678", keyInfo: "秘密鑰匙", viewingInstructions: "請先預約", rent: "28000", mgmtMode: "另計", mgmt: 2000, parking: "坡道平面", parkMode: "另計", parkFee: 3000, motorbikeParking: "無機車位" };
 test("monthly cost includes only separately charged known fees and never calls unknown fees zero", () => {
   expect(rentalMonthlyCost(form)).toEqual({ total: 33000, complete: true, missing: [] });
   expect(rentalMonthlyCost({ ...form, mgmtMode: "已含租金", parking: "無車位" }).total).toBe(28000);
   const unknown = { ...form, mgmt: "", parkFee: null };
-  expect(rentalMonthlyCost(unknown)).toEqual({ total: 28000, complete: false, missing: ["管理費", "車位費用"] });
+  expect(rentalMonthlyCost(unknown)).toEqual({ total: 28000, complete: false, missing: ["管理費", "汽車位費用"] });
   expect(buildCompanyRentalShare(unknown)).toContain("目前已知每月費用");
+});
+
+test("car and motorcycle fees are independent and counted only when separately charged", () => {
+  const both = { ...form, motorbikeParking: "有機車位", motorbikeParkMode: "另計", motorbikeParkFee: "300" };
+  expect(rentalMonthlyCost(both)).toEqual({ total: 33300, complete: true, missing: [] });
+  expect(rentalMonthlyCost({ ...both, motorbikeParkMode: "已含租金" }).total).toBe(33000);
+  expect(rentalMonthlyCost({ ...both, parking: "無車位" }).total).toBe(30300);
+  expect(rentalMonthlyCost({ ...both, parking: "無車位", motorbikeParking: "無機車位" }).total).toBe(30000);
+  expect(rentalParkingText({ ...both, parking: "無車位" })).toBe("無汽車位");
+});
+test("unknown motorcycle information remains pending, and a zero motorcycle fee is valid", () => {
+  const pending = { ...form, motorbikeParking: undefined };
+  expect(rentalMonthlyCost(pending)).toEqual({ total: 33000, complete: false, missing: ["機車位費用"] });
+  const motorcycle = { ...form, motorbikeParking: "有機車位", motorbikeParkMode: "另計", motorbikeParkFee: "" };
+  expect(rentalParkingText(motorcycle, "motorbike")).toBe("有機車位，另計 待確認");
+  expect(rentalMonthlyCost({ ...motorcycle, motorbikeParkFee: 0 })).toEqual({ total: 33000, complete: true, missing: [] });
+  expect(validateCompanyRental({ ...motorcycle, motorbikeParkFee: -1 }, "draft")).not.toBe("");
+  expect(validateCompanyRental({ ...motorcycle, motorbikeParking: "invalid" }, "draft")).toContain("機車位狀況");
+});
+test("old car parking and both private space numbers survive re-edit without leaking into customer text", () => {
+  const old = { ...form, parkingNumber: undefined, motorbikeParking: undefined };
+  delete old.motorbikeParking; delete old.motorbikeParkMode; delete old.motorbikeParkFee;
+  const reopened = companyRentalForm(old, { parkingNumber: "汽車秘密B2-17", motorbikeParkingNumber: "機車秘密M28" }, { uid: "staff" });
+  expect(reopened.parking).toBe("坡道平面"); expect(reopened.parkFee).toBe(3000); expect(reopened.motorbikeParking).toBe("待確認");
+  const { listing, internal } = rentalSavePayload({ ...reopened, motorbikeParking: "有機車位", motorbikeParkMode: "已含租金" }, "available");
+  expect(internal.motorbikeParkingNumber).toBe("機車秘密M28"); expect(internal.parkingNumber).toBe("汽車秘密B2-17");
+  const share = buildCompanyRentalShare({ ...listing, ...internal });
+  expect(share).toContain("汽車位：坡道平面，另計 3,000 元／月"); expect(share).toContain("機車位：有機車位，已含租金");
+  expect(JSON.stringify(listing) + share).not.toMatch(/汽車秘密B2-17|機車秘密M28/);
 });
 test("public payload and customer share never contain private address, owner phone, keys or original URL tracking", () => {
   const { listing, internal } = rentalSavePayload({ ...form, websiteUrl: "https://www.twhg.com.tw/buy/DE001?agid=12345", albumUrl: "https://drive.google.com/a", shareAlbum: false }, "available");

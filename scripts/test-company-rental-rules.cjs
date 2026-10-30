@@ -6,6 +6,13 @@ const member='staff-a', other='staff-b';
 const data={title:'租賃測試',ownerUid:member,photos:[],status:'available',rent:28000,city:'桃園市',district:'龜山區',street:'樂善二路',lastModifiedByUid:member};
 const test=(expectation,path,method,uid,resource,next,mocks=[])=>({expectation,request:{path,method,auth:uid?{uid,token:{}}:null,...(next?{resource:{data:next}}:{})},...(resource?{resource:{data:resource}}:{}),functionMocks:mocks});
 const cases=[
+ test('ALLOW','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,parking:'坡道平面',motorbikeParking:'有機車位',motorbikeParkMode:'另計',motorbikeParkFee:300}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,motorbikeParkingNumber:'private'}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,motorbikeParking:'invalid'}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,motorbikeParkMode:'invalid'}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,motorbikeParkFee:-1}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','update',other,data,{...data,lastModifiedByUid:other,motorbikeParking:'有機車位'}),
+ test('ALLOW','/databases/(default)/documents/companyRentals/test/internal/details','create',member,null,{parkingNumber:'B2-17',motorbikeParkingNumber:'M28'},[{function:'getAfter',args:[{anyValue:{}}],result:{value:{data:{ownerUid:member}}}}]),
  test('ALLOW','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,equipmentCatalog:['電視','烘衣機']}),
  test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,equipmentCatalog:{name:'電視'}}),
  test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,equipmentCatalog:Array.from({length:201},(_,i)=>'設備'+i)}),

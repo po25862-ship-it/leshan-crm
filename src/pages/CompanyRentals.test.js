@@ -73,6 +73,31 @@ test("the A7 community dropdown selection is included in the saved rental", asyn
   await act(async () => option.click()); await click("存成草稿");
   expect(saveCompanyRental.mock.calls[0][0].form.community).toBe("富宇富御");
 });
+
+test("a motorcycle-only rental can select no car space and save its separate monthly fee", async () => {
+  render(); await click("＋ 新增租賃"); await rentalConditions();
+  input(fieldLabel("月租金（元）＊").querySelector("input"), "28000");
+  select(fieldLabel("管理費").querySelector("select"), "已含租金");
+  select(fieldLabel("汽車位類型").querySelector("select"), "無車位");
+  expect(fieldLabel("汽車位費用")).toBeUndefined();
+  select(fieldLabel("機車位狀況").querySelector("select"), "有機車位");
+  select(fieldLabel("機車位費用").querySelector("select"), "另計");
+  input(fieldLabel("機車位租金（元／月）").querySelector("input"), "300");
+  expect(container.querySelector(".cr-editor .cr-cost strong").textContent).toContain("28,300");
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ parking: "無車位", motorbikeParking: "有機車位", motorbikeParkMode: "另計", motorbikeParkFee: "300" }));
+});
+test("a rental can include both car and motorcycle spaces with independent fee settings", async () => {
+  render(); await click("＋ 新增租賃"); await rentalConditions();
+  select(fieldLabel("汽車位類型").querySelector("select"), "坡道平面");
+  select(fieldLabel("汽車位費用").querySelector("select"), "另計");
+  input(fieldLabel("汽車位租金（元／月）").querySelector("input"), "3000");
+  select(fieldLabel("機車位狀況").querySelector("select"), "社區先到先停");
+  select(fieldLabel("機車位費用").querySelector("select"), "已含租金");
+  expect(fieldLabel("機車位租金（元／月）")).toBeUndefined();
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ parking: "坡道平面", parkFee: "3000", motorbikeParking: "社區先到先停", motorbikeParkMode: "已含租金" }));
+});
 test("manual responsible agent and two separate service fees are retained on draft save", async () => {
   render(); await click("＋ 新增租賃");
   select(fieldLabel("案件負責人＊").querySelector("select"), "__manual__");

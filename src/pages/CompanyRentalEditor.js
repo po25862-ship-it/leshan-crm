@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, rentalMonthlyCost, rentalMoney, validateCompanyRental, companyRentalForm, companyRentalColleagues, normalizeRentalFurniture, addRentalFurniture, MAX_RENTAL_FURNITURE_NAME } from "../lib/companyRental";
+import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, MOTORBIKE_PARKING_OPTIONS, RENTAL_PARKING_FEE_OPTIONS, rentalMonthlyCost, rentalMoney, validateCompanyRental, companyRentalForm, companyRentalColleagues, normalizeRentalFurniture, addRentalFurniture, MAX_RENTAL_FURNITURE_NAME } from "../lib/companyRental";
 import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhotos";
 import { useCollection } from "../hooks/useCollection";
 import { isHiddenColleague } from "../lib/colleagueVisibility";
@@ -36,7 +36,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   }
   const change = (key, value) => { if (["agentName", "agentPhone", "branch"].includes(key)) responsibleTouched.current = true; dirty.current = true; setForm(current => ({ ...current, [key]: value })); };
   const close = () => { if (!busy && !processing && (!dirty.current || window.confirm("尚未儲存，確定離開編輯？"))) onClose(); };
-  const field = (key, label, { options, type = "text", hint, wide, ...props } = {}) => <label className={wide ? "cr-field cr-wide" : "cr-field"} key={key}><span>{label}</span>{options ? <select value={form[key] ?? ""} onChange={event => change(key, event.target.value)}>{options.map(value => <option key={value}>{value}</option>)}</select> : <input type={type} value={form[key] ?? ""} onChange={event => change(key, event.target.value)} {...props} />}{hint && <small>{hint}</small>}</label>;
+  const field = (key, label, { options, type = "text", hint, wide, ...props } = {}) => <label className={wide ? "cr-field cr-wide" : "cr-field"} key={key}><span>{label}</span>{options ? <select value={form[key] ?? ""} onChange={event => change(key, event.target.value)}>{options.map(option => { const value = typeof option === "string" ? option : option.value; return <option key={value} value={value}>{typeof option === "string" ? option : option.label}</option>; })}</select> : <input type={type} value={form[key] ?? ""} onChange={event => change(key, event.target.value)} {...props} />}{hint && <small>{hint}</small>}</label>;
   const textarea = (key, label, hint) => <label className="cr-field cr-wide"><span>{label}</span><textarea rows={3} value={form[key] || ""} onChange={event => change(key, event.target.value)} />{hint && <small>{hint}</small>}</label>;
   function prepareEquipment() {
     const result = addRentalFurniture(equipmentOptions, form.furniture, newEquipment);
@@ -108,7 +108,15 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
       {step === 1 && <><h3>費用先說清楚，介紹更省時間</h3><div className="cr-cost"><span>{cost.complete ? "每月固定費用" : "目前已知每月費用"}</span><strong>{rentalMoney(cost.total)} <small>元</small></strong>{!cost.complete && <small>尚待確認：{cost.missing.join("、")}</small>}<small>不含水電等依用量計收費用</small></div><div className="cr-form-grid">
         {field("rent", "月租金（元）＊", { type: "number", min: 1, step: 1 })}{field("deposit", "押金（月）", { type: "number", min: 0, step: ".5" })}
         {field("mgmtMode", "管理費", { options: ["待確認", "已含租金", "另計", "無管理費"] })}{form.mgmtMode === "另計" && field("mgmt", "管理費（元／月）", { type: "number", min: 0 })}
-        {field("parking", "車位", { options: ["待確認", "無車位", "坡道平面", "坡道機械", "升降機械", "其他"] })}{form.parking !== "無車位" && field("parkMode", "車位費用", { options: ["待確認", "已含租金", "另計"] })}{form.parking !== "無車位" && form.parkMode === "另計" && field("parkFee", "車位租金（元／月）", { type: "number", min: 0 })}
+        <div className="cr-wide cr-parking-grid"><section className="cr-parking-section" aria-label="汽車位設定"><h4>汽車位</h4>
+          {field("parking", "汽車位類型", { options: ["待確認", { value: "無車位", label: "無汽車位" }, "坡道平面", "坡道機械", "升降機械", "其他"] })}
+          {form.parking !== "無車位" && field("parkMode", "汽車位費用", { options: RENTAL_PARKING_FEE_OPTIONS })}
+          {form.parking !== "無車位" && form.parkMode === "另計" && field("parkFee", "汽車位租金（元／月）", { type: "number", min: 0 })}
+        </section><section className="cr-parking-section" aria-label="機車位設定"><h4>機車位</h4>
+          {field("motorbikeParking", "機車位狀況", { options: MOTORBIKE_PARKING_OPTIONS })}
+          {form.motorbikeParking !== "無機車位" && field("motorbikeParkMode", "機車位費用", { options: RENTAL_PARKING_FEE_OPTIONS })}
+          {form.motorbikeParking !== "無機車位" && form.motorbikeParkMode === "另計" && field("motorbikeParkFee", "機車位租金（元／月）", { type: "number", min: 0 })}
+        </section></div>
         {field("minLease", "最短租期", { options: ["一年", "兩年", "半年", "可談", "待確認"] })}{field("moveIn", "可入住時間", { options: ["待確認", "隨時入住", "另約日期"] })}{form.moveIn === "另約日期" && field("availableDate", "可入住日期", { type: "date" })}
         {field("pets", "寵物", { options: ["待確認", "可養寵物", "不可養寵物", "寵物可談"] })}{field("cook", "開伙", { options: ["待確認", "可開伙", "不可開伙"] })}{field("subsidy", "租屋補助", { options: ["待確認", "可申請租補", "請洽負責同事"] })}
         {field("buyerServiceFee", "買方服務費（對客人顯示）", { wide: true, hint: "例如：半個月租金、月租金 50% 或 15,000 元；分享文字只帶出這一欄。" })}
@@ -122,7 +130,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
       {step === 2 && <><h3>有網址就貼網址，有照片也能直接上傳</h3><div className="cr-form-grid">{field("websiteUrl", "物件網址", { wide: true, type: "url", placeholder: "https://rent.591.com.tw/…", hint: "支援 591 或公司物件頁；不會自動匯入網站內容。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareWebsite} onChange={event => change("shareWebsite", event.target.checked)} />分享文字附上物件網址</label>{field("albumUrl", "雲端相簿連結", { wide: true, type: "url", placeholder: "貼上 Google Drive 或其他相簿網址", hint: "相簿需先設定客人可開啟的權限。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareAlbum} onChange={event => change("shareAlbum", event.target.checked)} />分享文字附上相簿連結</label></div>
         <div className="cr-photo-head"><div><h3>物件照片（{photos.length}／10）</h3><small>自動縮小至每張 300KB 內，重複照片會跳過。</small></div><button type="button" onClick={() => fileInput.current?.click()}>＋ 選擇照片</button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden onChange={addPhotos} /></div>
         <div className="cr-photo-grid">{photos.map(photo => <figure key={photo.id}><img src={photo.url} alt={photo.name} loading="lazy" /><figcaption>{Math.ceil(photo.size / 1000)} KB <button type="button" aria-label={`移除${photo.name}`} onClick={() => { dirty.current = true; setPhotos(current => current.filter(item => item.id !== photo.id)); if (photo.blob) { URL.revokeObjectURL(photo.url); localUrls.current.delete(photo.url); } }}>移除</button></figcaption></figure>)}</div>
-        <div className="cr-internal"><h3>🔒 同事內部資料</h3><p>以下欄位只在平台內顯示，不會放進「分享給客人」文字。</p><div className="cr-form-grid">{field("landlordName", "屋主稱呼")}{field("landlordPhone", "屋主電話", { type: "tel" })}{field("parkingNumber", "車位編號")}{field("viewingStatus", "帶看狀態", { options: ["待確認", "可預約帶看", "需先聯繫"] })}{textarea("viewingInstructions", "帶看方式＊", "例如：請提前一天聯繫負責同事。")}{textarea("keyInfo", "鑰匙／門禁資訊")}{textarea("internalNotes", "內部備註")}</div></div>
+        <div className="cr-internal"><h3>🔒 同事內部資料</h3><p>以下欄位只在平台內顯示，不會放進「分享給客人」文字。</p><div className="cr-form-grid">{field("landlordName", "屋主稱呼")}{field("landlordPhone", "屋主電話", { type: "tel" })}{field("parkingNumber", "汽車位編號")}{field("motorbikeParkingNumber", "機車位編號")}{field("viewingStatus", "帶看狀態", { options: ["待確認", "可預約帶看", "需先聯繫"] })}{textarea("viewingInstructions", "帶看方式＊", "例如：請提前一天聯繫負責同事。")}{textarea("keyInfo", "鑰匙／門禁資訊")}{textarea("internalNotes", "內部備註")}</div></div>
         <label className="cr-field"><span>儲存後狀態</span><select value={status} onChange={event => { dirty.current = true; setStatus(event.target.value); }}>{Object.entries(COMPANY_RENTAL_STATUSES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       </>}
     </fieldset>

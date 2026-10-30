@@ -3,6 +3,8 @@ import { visibleColleagueOptions } from "./colleagueVisibility";
 
 export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫停招租", draft: "草稿" };
 export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套房", "雅房", "店面", "辦公室", "車位"];
+export const MOTORBIKE_PARKING_OPTIONS = ["待確認", "無機車位", "有機車位", "社區先到先停", "其他"];
+export const RENTAL_PARKING_FEE_OPTIONS = ["待確認", "已含租金", "另計"];
 export const RENTAL_FURNITURE = ["冷氣", "冰箱", "洗衣機", "熱水器", "床", "衣櫃", "沙發", "桌椅", "天然瓦斯", "網路"];
 export const MAX_RENTAL_FURNITURE = 40;
 export const MAX_RENTAL_FURNITURE_NAME = 30;
@@ -42,14 +44,15 @@ export const RENTAL_FORM_DEFAULTS = {
   title: "", community: "", type: "整層住家", area: "A7", city: "桃園市", district: "龜山區", street: "", floor: "",
   rooms: "", living: "", baths: "", size: "", sizeBasis: "室內使用，不含車位", rent: "", deposit: 2,
   mgmtMode: "待確認", mgmt: "", parking: "待確認", parkMode: "待確認", parkFee: "", parkingNumber: "",
+  motorbikeParking: "待確認", motorbikeParkMode: "待確認", motorbikeParkFee: "", motorbikeParkingNumber: "",
   minLease: "一年", moveIn: "待確認", availableDate: "", pets: "待確認", cook: "待確認", subsidy: "待確認",
   websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], equipmentCatalog: [], description: "", buyerServiceFee: "請洽負責同事確認", sellerServiceFee: "", legacyServiceFee: "",
   agentUid: null, agentName: "", agentPhone: "", branch: "",
   viewingStatus: "待確認", doorAddress: "", landlordName: "", landlordPhone: "", keyInfo: "", internalNotes: "", viewingInstructions: "",
 };
-const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "buyerServiceFee", "viewingStatus", "agentName", "agentPhone", "branch"];
-const numericFields = ["rooms", "living", "baths", "size", "rent", "deposit", "mgmt", "parkFee"];
-export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordPhone", "keyInfo", "internalNotes", "viewingInstructions", "parkingNumber", "sellerServiceFee", "legacyServiceFee"];
+const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "motorbikeParking", "motorbikeParkMode", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "buyerServiceFee", "viewingStatus", "agentName", "agentPhone", "branch"];
+const numericFields = ["rooms", "living", "baths", "size", "rent", "deposit", "mgmt", "parkFee", "motorbikeParkFee"];
+export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordPhone", "keyInfo", "internalNotes", "viewingInstructions", "parkingNumber", "motorbikeParkingNumber", "sellerServiceFee", "legacyServiceFee"];
 // Keep older unclassified fee notes internal until a colleague splits them explicitly.
 export function companyRentalForm(original, internal, user, profile = {}) {
   return { ...RENTAL_FORM_DEFAULTS, ...original, ...internal,
@@ -98,6 +101,12 @@ export function storedRentalUrl(value) {
 }
 export function canEditCompanyRental(rental, uid) { return !!uid && (rental.ownerUid === uid || uid === MAIN_OWNER_UID); }
 export function rentalPublicAddress(rental) { return [rental.city, rental.district, rental.street].filter(Boolean).join(""); }
+export function rentalParkingText(rental, kind = "car") {
+  const motorcycle = kind === "motorbike", parking = (motorcycle ? rental.motorbikeParking : rental.parking) || "待確認";
+  if (parking === (motorcycle ? "無機車位" : "無車位")) return motorcycle ? "無機車位" : "無汽車位";
+  const mode = motorcycle ? rental.motorbikeParkMode : rental.parkMode, fee = rentalNumber(motorcycle ? rental.motorbikeParkFee : rental.parkFee);
+  return `${parking}${mode === "已含租金" ? "，已含租金" : mode === "另計" ? `，另計 ${fee !== null && Number.isFinite(fee) && fee >= 0 ? rentalMoney(fee) + " 元／月" : "待確認"}` : "，費用待確認"}`;
+}
 export function rentalMonthlyCost(rental) {
   const rent = rentalNumber(rental.rent), missing = [];
   let total = Number.isFinite(rent) ? rent : 0;
@@ -106,12 +115,16 @@ export function rentalMonthlyCost(rental) {
     const fee = rentalNumber(rental.mgmt);
     if (fee === null || !Number.isFinite(fee) || fee < 0) missing.push("管理費"); else total += fee;
   } else if (!["已含租金", "無管理費"].includes(rental.mgmtMode)) missing.push("管理費");
-  if (rental.parking !== "無車位") {
-    if (!rental.parking || rental.parking === "待確認") missing.push("車位費用");
-    else if (rental.parkMode === "另計") {
-      const fee = rentalNumber(rental.parkFee);
-      if (fee === null || !Number.isFinite(fee) || fee < 0) missing.push("車位費用"); else total += fee;
-    } else if (rental.parkMode !== "已含租金") missing.push("車位費用");
+  for (const [parking, mode, amount, none, label] of [
+    [rental.parking, rental.parkMode, rental.parkFee, "無車位", "汽車位費用"],
+    [rental.motorbikeParking, rental.motorbikeParkMode, rental.motorbikeParkFee, "無機車位", "機車位費用"],
+  ]) {
+    if (parking === none) continue;
+    if (!parking || parking === "待確認") missing.push(label);
+    else if (mode === "另計") {
+      const fee = rentalNumber(amount);
+      if (fee === null || !Number.isFinite(fee) || fee < 0) missing.push(label); else total += fee;
+    } else if (mode !== "已含租金") missing.push(label);
   }
   return { total, complete: missing.length === 0, missing };
 }
@@ -121,6 +134,8 @@ export function validateCompanyRental(form, status, photos = []) {
     const n = rentalNumber(form[field]);
     if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100000000)) return "金額、面積與格局請填寫有效的非負數字。";
   }
+  if (form.motorbikeParking && !MOTORBIKE_PARKING_OPTIONS.includes(form.motorbikeParking)) return "請選擇有效的機車位狀況。";
+  if (form.motorbikeParkMode && !RENTAL_PARKING_FEE_OPTIONS.includes(form.motorbikeParkMode)) return "請選擇有效的機車位費用方式。";
   if (form.furniture != null && (!Array.isArray(form.furniture) || form.furniture.some(item => typeof item !== "string"))) return "設備清單格式不正確，請重新勾選。";
   const furniture = normalizeRentalFurniture(form.furniture);
   if (furniture.length > MAX_RENTAL_FURNITURE) return "每間物件最多勾選 40 項設備。";
@@ -146,6 +161,8 @@ export function rentalSavePayload(form, status) {
   const listing = {};
   textFields.forEach(key => { listing[key] = String(form[key] || "").trim().slice(0, key === "description" ? 6000 : 2000); });
   numericFields.forEach(key => { listing[key] = rentalNumber(form[key]); });
+  listing.motorbikeParking = listing.motorbikeParking || "待確認";
+  listing.motorbikeParkMode = listing.motorbikeParkMode || "待確認";
   listing.agentUid = typeof form.agentUid === "string" && form.agentUid.trim() ? form.agentUid.trim().slice(0, 128) : null;
   listing.title = listing.title || "未命名租賃草稿";
   listing.status = status;
@@ -165,7 +182,8 @@ export function buildCompanyRentalShare(rental, agid = "") {
     `${rental.rooms ?? "—"}房${rental.living ?? "—"}廳${rental.baths ?? "—"}衛｜${rental.size ? rentalMoney(rental.size) + " 坪（" + rental.sizeBasis + "）" : "面積待確認"}${rental.floor ? "｜" + rental.floor + " 樓" : ""}`, "",
     `月租：${rental.rent ? rentalMoney(rental.rent) + " 元" : "待確認"}`,
     `管理費：${rental.mgmtMode === "另計" ? (rental.mgmt == null ? "待確認" : rentalMoney(rental.mgmt) + " 元／月") : rental.mgmtMode || "待確認"}`,
-    `車位：${rental.parking || "待確認"}${rental.parking === "無車位" ? "" : rental.parkMode === "另計" ? "，另計 " + (rental.parkFee == null ? "待確認" : rentalMoney(rental.parkFee) + " 元／月") : rental.parkMode === "已含租金" ? "，已含租金" : "，費用待確認"}`,
+    `汽車位：${rentalParkingText(rental)}`,
+    `機車位：${rentalParkingText(rental, "motorbike")}`,
     `${cost.complete ? "每月固定費用" : "目前已知每月費用"}：${rentalMoney(cost.total)} 元（不含水電等依用量計收費用）`,
     ...(cost.complete ? [] : [`另待確認：${cost.missing.join("、")}`]),
     `押金：${rental.deposit == null || !rental.rent ? "待確認" : rental.deposit + " 個月，" + rentalMoney(rental.rent * rental.deposit) + " 元"}`, "",

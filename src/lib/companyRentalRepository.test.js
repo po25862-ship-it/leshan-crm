@@ -78,3 +78,10 @@ test("saving remembers equipment with the case atomically and never removes prev
   expect(result.rental.furniture).toEqual(["冷氣"]);
   expect(tx.set.mock.calls[1][1]).not.toHaveProperty("equipmentCatalog");
 });
+
+test("car and motorcycle data save separately with both space numbers restricted to the internal record", async () => {
+  const result = await saveCompanyRental({ original, form: { ...form, parking: "坡道平面", parkMode: "另計", parkFee: 3000, motorbikeParking: "有機車位", motorbikeParkMode: "另計", motorbikeParkFee: 300, parkingNumber: "B2-17", motorbikeParkingNumber: "M28" }, status: "available", photos: [], user, profile });
+  expect(result.rental).toEqual(expect.objectContaining({ parking: "坡道平面", parkFee: 3000, motorbikeParking: "有機車位", motorbikeParkFee: 300 }));
+  expect(result.rental).not.toHaveProperty("parkingNumber"); expect(result.rental).not.toHaveProperty("motorbikeParkingNumber");
+  expect(tx.set.mock.calls[1][1]).toEqual(expect.objectContaining({ parkingNumber: "B2-17", motorbikeParkingNumber: "M28" }));
+});
