@@ -65,6 +65,14 @@ test("an existing hidden assignee is preserved on save but cannot be chosen for 
   await click("存成草稿");
   expect(saveCompanyRental.mock.calls[0][0].form.agentUid).toBe(mockRows[0].agentUid);
 });
+
+test("the A7 community dropdown selection is included in the saved rental", async () => {
+  render(); await click("＋ 新增租賃");
+  await act(async () => container.querySelector(".cr-community-toggle").click());
+  const option = [...container.querySelectorAll("[role=option]")].find(node => node.textContent === "富宇富御");
+  await act(async () => option.click()); await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form.community).toBe("富宇富御");
+});
 test("manual responsible agent and two separate service fees are retained on draft save", async () => {
   render(); await click("＋ 新增租賃");
   select(fieldLabel("案件負責人＊").querySelector("select"), "__manual__");

@@ -3,6 +3,7 @@ import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, rental
 import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhotos";
 import { useCollection } from "../hooks/useCollection";
 import { isHiddenColleague } from "../lib/colleagueVisibility";
+import RentalCommunityPicker from "./RentalCommunityPicker";
 import { saveCompanyRental } from "../lib/companyRentalRepository";
 
 export default function CompanyRentalEditor({ original, internal, sharedEquipment = RENTAL_FURNITURE, user, profile, onSaved, onClose }) {
@@ -98,7 +99,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
         {!form.agentUid && field("agentName", "業務姓名＊", { maxLength: 80 })}
         {field("agentPhone", "業務聯絡電話", { type: "tel", maxLength: 40 })}{field("branch", "所屬分店", { maxLength: 80 })}
         {field("title", "案名＊", { wide: true, placeholder: "例如：金捷市採光兩房平車", maxLength: 120 })}
-        {field("community", "社區名稱")}{field("type", "租賃類型", { options: COMPANY_RENTAL_TYPES })}
+        <RentalCommunityPicker value={form.community} onChange={value => change("community", value)} />{field("type", "租賃類型", { options: COMPANY_RENTAL_TYPES })}
         {field("area", "生活圈", { options: ["A7", "A8", "A9", "其他"] })}{field("city", "縣市＊")}{field("district", "行政區＊")}{field("street", "公開路段＊", { placeholder: "例如：樂善二路", hint: "分享給客人只帶出這個路段，請勿填完整門牌。" })}
         {field("doorAddress", "完整門牌／樓層＊（內部）", { wide: true, placeholder: "供同事帶看核對，不帶入分享文字" })}
         {field("floor", "樓層", { placeholder: "例如：8／28" })}{field("rooms", "房", { type: "number", min: 0, step: 1 })}{field("living", "廳", { type: "number", min: 0, step: 1 })}{field("baths", "衛", { type: "number", min: 0, step: 1 })}

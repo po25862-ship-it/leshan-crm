@@ -1,0 +1,447 @@
+{
+  "source": "leshan-market A7 社區主檔",
+  "version": "1793269766351",
+  "asOf": "2026-10-31",
+  "communities": [
+    {
+      "name": "皇翔歡喜城",
+      "aliases": [
+        "歡喜城"
+      ]
+    },
+    {
+      "name": "遠雄文青／遠雄合宜",
+      "aliases": [
+        "遠雄文青",
+        "遠雄合宜"
+      ]
+    },
+    {
+      "name": "竹城甲子園",
+      "aliases": [
+        "A7地王 竹城甲子園",
+        "A7地王竹城甲子園",
+        "甲子園"
+      ]
+    },
+    {
+      "name": "華悅城",
+      "aliases": [
+        "華悦城"
+      ]
+    },
+    {
+      "name": "禾悅花園",
+      "aliases": []
+    },
+    {
+      "name": "遠雄新未來3",
+      "aliases": [
+        "新未來3"
+      ]
+    },
+    {
+      "name": "文華天際",
+      "aliases": []
+    },
+    {
+      "name": "玄泰T1",
+      "aliases": []
+    },
+    {
+      "name": "鴻築捷市達",
+      "aliases": [
+        "捷市達"
+      ]
+    },
+    {
+      "name": "皇普MVP",
+      "aliases": []
+    },
+    {
+      "name": "和發大境",
+      "aliases": []
+    },
+    {
+      "name": "鴻廣新A7",
+      "aliases": [
+        "鴻廣新 A7"
+      ]
+    },
+    {
+      "name": "富宇哈佛苑",
+      "aliases": [
+        "哈佛苑"
+      ]
+    },
+    {
+      "name": "新潤翡麗",
+      "aliases": [
+        "翡麗",
+        "新潤翡麗A7"
+      ]
+    },
+    {
+      "name": "鴻築金捷市",
+      "aliases": [
+        "金捷市"
+      ]
+    },
+    {
+      "name": "奇幻莊園",
+      "aliases": []
+    },
+    {
+      "name": "鴻築鴻典",
+      "aliases": []
+    },
+    {
+      "name": "合展家禾",
+      "aliases": []
+    },
+    {
+      "name": "名軒快樂家",
+      "aliases": []
+    },
+    {
+      "name": "水悦青青",
+      "aliases": [
+        "水悅青青"
+      ]
+    },
+    {
+      "name": "豐邑氧森",
+      "aliases": []
+    },
+    {
+      "name": "AiCITY樂捷市",
+      "aliases": []
+    },
+    {
+      "name": "和耀恆美",
+      "aliases": []
+    },
+    {
+      "name": "玄泰V1",
+      "aliases": []
+    },
+    {
+      "name": "和境心見",
+      "aliases": []
+    },
+    {
+      "name": "富宇天匯",
+      "aliases": []
+    },
+    {
+      "name": "富宇悅峰",
+      "aliases": [
+        "悅峰"
+      ]
+    },
+    {
+      "name": "遠雄新未來2",
+      "aliases": [
+        "新未來2"
+      ]
+    },
+    {
+      "name": "丹佛花都",
+      "aliases": []
+    },
+    {
+      "name": "大華旭",
+      "aliases": []
+    },
+    {
+      "name": "鴻廣絵青",
+      "aliases": []
+    },
+    {
+      "name": "台北奇蹟",
+      "aliases": []
+    },
+    {
+      "name": "富宇敦峰",
+      "aliases": []
+    },
+    {
+      "name": "森木",
+      "aliases": []
+    },
+    {
+      "name": "頤昌澄岳",
+      "aliases": []
+    },
+    {
+      "name": "A7合宜名店城／麗寶快樂家",
+      "aliases": [
+        "麗寶快樂家",
+        "A7合宜名店城"
+      ]
+    },
+    {
+      "name": "台北國際村",
+      "aliases": []
+    },
+    {
+      "name": "和洲金剛",
+      "aliases": []
+    },
+    {
+      "name": "大華昇耕",
+      "aliases": []
+    },
+    {
+      "name": "富御捷境",
+      "aliases": []
+    },
+    {
+      "name": "樂田田",
+      "aliases": []
+    },
+    {
+      "name": "欣時代",
+      "aliases": []
+    },
+    {
+      "name": "富來舞綻",
+      "aliases": []
+    },
+    {
+      "name": "合遠友文化",
+      "aliases": [
+        "友文化"
+      ]
+    },
+    {
+      "name": "君邑丘比特",
+      "aliases": []
+    },
+    {
+      "name": "君邑羅浮",
+      "aliases": [
+        "羅浮"
+      ]
+    },
+    {
+      "name": "富宇上城",
+      "aliases": [
+        "上城"
+      ]
+    },
+    {
+      "name": "竹城明治",
+      "aliases": []
+    },
+    {
+      "name": "詠勝市中欣",
+      "aliases": []
+    },
+    {
+      "name": "富宇富御",
+      "aliases": []
+    },
+    {
+      "name": "智匯學",
+      "aliases": []
+    },
+    {
+      "name": "遠雄新未來",
+      "aliases": [
+        "新未來",
+        "遠雄新未來1"
+      ]
+    },
+    {
+      "name": "頤昌豐岳",
+      "aliases": []
+    },
+    {
+      "name": "合遠新天地",
+      "aliases": []
+    },
+    {
+      "name": "竹城豐州",
+      "aliases": []
+    },
+    {
+      "name": "頤昌璞岳",
+      "aliases": []
+    },
+    {
+      "name": "協勝玉子園",
+      "aliases": []
+    },
+    {
+      "name": "竹城宇治",
+      "aliases": []
+    },
+    {
+      "name": "合康幸福漾",
+      "aliases": []
+    },
+    {
+      "name": "合謙學",
+      "aliases": []
+    },
+    {
+      "name": "新潤鉑麗／新潤翡麗2",
+      "aliases": [
+        "新潤興業鉑麗",
+        "新潤鉑麗",
+        "新潤翡麗2"
+      ]
+    },
+    {
+      "name": "櫻花澍",
+      "aliases": []
+    },
+    {
+      "name": "竹城中州",
+      "aliases": []
+    },
+    {
+      "name": "耀台北",
+      "aliases": []
+    },
+    {
+      "name": "樂善妍",
+      "aliases": []
+    },
+    {
+      "name": "知森堂森上",
+      "aliases": [
+        "森上"
+      ]
+    },
+    {
+      "name": "昱旺City",
+      "aliases": []
+    },
+    {
+      "name": "鴻承根津苑",
+      "aliases": [
+        "根津苑"
+      ]
+    },
+    {
+      "name": "鴻築玥",
+      "aliases": []
+    },
+    {
+      "name": "富中綠大地二期",
+      "aliases": []
+    },
+    {
+      "name": "富寓",
+      "aliases": []
+    },
+    {
+      "name": "證源富陽",
+      "aliases": []
+    },
+    {
+      "name": "維特魯威",
+      "aliases": []
+    },
+    {
+      "name": "荷蘊七期-荷蘊青",
+      "aliases": []
+    },
+    {
+      "name": "和煦隆陞",
+      "aliases": []
+    },
+    {
+      "name": "大亮時代A7",
+      "aliases": [
+        "大亮時代"
+      ]
+    },
+    {
+      "name": "富中綠大地一期",
+      "aliases": []
+    },
+    {
+      "name": "富寓二期",
+      "aliases": []
+    },
+    {
+      "name": "溫莎堡",
+      "aliases": []
+    },
+    {
+      "name": "富寓家園",
+      "aliases": []
+    },
+    {
+      "name": "曼曼金硯",
+      "aliases": []
+    },
+    {
+      "name": "豐邑Green iN",
+      "aliases": []
+    },
+    {
+      "name": "允將大作",
+      "aliases": []
+    },
+    {
+      "name": "允將大聚",
+      "aliases": []
+    },
+    {
+      "name": "大亮波波",
+      "aliases": []
+    },
+    {
+      "name": "大亮睦粼",
+      "aliases": []
+    },
+    {
+      "name": "大亮．泊",
+      "aliases": []
+    },
+    {
+      "name": "大華開朗",
+      "aliases": []
+    },
+    {
+      "name": "富堡菁英滙",
+      "aliases": []
+    },
+    {
+      "name": "富宇天玥",
+      "aliases": []
+    },
+    {
+      "name": "文森",
+      "aliases": []
+    },
+    {
+      "name": "樂捷綻",
+      "aliases": []
+    },
+    {
+      "name": "英倫花都",
+      "aliases": []
+    },
+    {
+      "name": "長耀辰",
+      "aliases": []
+    },
+    {
+      "name": "頤昌筑岳",
+      "aliases": []
+    },
+    {
+      "name": "鴻廣麴町",
+      "aliases": []
+    },
+    {
+      "name": "鴻築捷市閱",
+      "aliases": []
+    }
+  ]
+}
