@@ -20,7 +20,38 @@ function bitmap(bytes) {
     const lo = Math.min(bytes[p], bytes[p + 1], bytes[p + 2]);
     return hi < 235 && hi - lo < 55;
   }
-  return { width, height, dark };
+  function red(x, y) {
+    if (x < 0 || x >= width || y < 0 || y >= height) return false;
+    const p = offset + (signedHeight < 0 ? y : height - y - 1) * stride + x * step;
+    const r = bytes[p + 2], g = bytes[p + 1], b = bytes[p];
+    return r > 110 && r - g > 35 && r - b > 18;
+  }
+  return { width, height, dark, red };
+}
+
+// Some older company sheets have a vertical sale label and tiny currency glyph
+// that Vision omits. Recover only the red amount in the recognizable sale row;
+// the same grid and unrelated-content checks below still have to pass.
+function unlabeledPriceCandidates(map, lines) {
+  const items = lines.filter(l => l && [l.x,l.y,l.width,l.height].every(Number.isFinite)).map(l => ({...l,
+    text: String(l.text || "").normalize("NFKC").replace(/\s/g,""), top: 1-l.y-l.height, bottom: 1-l.y}));
+  if (!items.some(l => /台灣房屋.*物件銷售資料表/.test(l.text))) return [];
+  return items.flatMap(line => {
+    if (!/^[0-9,]+(?:\.[0-9]+)?$/.test(line.text) || line.confidence < .5 || line.height < .025 || line.x < .08 || line.x+line.width > .48 || line.top < .08 || line.bottom > .36) return [];
+    const oldPrice = Number(line.text.replace(/,/g,""));
+    if (!(oldPrice > 0 && oldPrice <= 100000000)) return [];
+    const exclusive = items.some(l => /^專任約$/.test(l.text) && l.x >= line.x+line.width && l.x < .7 && Math.abs(l.bottom-line.bottom) < .06);
+    const registration = items.some(l => /所有權登記日/.test(l.text) && l.x >= .60 && Math.abs(l.top-line.top) < .09);
+    const building = items.some(l => /主建物[:：]/.test(l.text) && l.top > line.bottom && l.top-line.bottom < .10);
+    if (!exclusive || !registration || !building) return [];
+    let red = 0, neutral = 0, count = 0;
+    for (let y=Math.max(0,Math.ceil(line.top*map.height)); y<Math.min(map.height,line.bottom*map.height); y+=2)
+      for(let x=Math.max(0,Math.ceil(line.x*map.width)); x<Math.min(map.width,(line.x+line.width)*map.width); x+=2) {
+        count++; if(map.red(x,y))red++; else if(map.dark(x,y))neutral++;
+      }
+    if (red < count*.025 || red/(red+neutral) < .7) return [];
+    return [{oldPrice,line,currency:null,items}];
+  });
 }
 
 function gridRect(map, candidate) {
@@ -65,15 +96,17 @@ function analyzePropertySheet(file, lines, expectedHash = "") {
   const sourceHash = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
   if (expectedHash && sourceHash !== expectedHash) return null;
   const candidates = visionPriceCandidates(lines);
-  if (candidates.length !== 1) return null;
+  if (candidates.length > 1) return null;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "leshan-price-grid-"));
   try {
     const output = path.join(dir, "source.bmp");
     execFileSync("/usr/bin/sips", ["-Z", "1200", "-s", "format", "bmp", file, "--out", output], { stdio: "ignore", timeout: 20000 });
     const map = bitmap(fs.readFileSync(output));
     if (!map) return null;
-    const rect = gridRect(map, candidates[0]);
-    return rect ? validPriceMark({ schema: 1, page: 0, sourceHash, oldPrice: candidates[0].oldPrice, rect }) : null;
+    const selected = candidates.length ? candidates : unlabeledPriceCandidates(map,lines);
+    if (selected.length !== 1) return null;
+    const rect = gridRect(map, selected[0]);
+    return rect ? validPriceMark({ schema: 1, page: 0, sourceHash, oldPrice: selected[0].oldPrice, rect }) : null;
   } catch { return null; }
   finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
@@ -82,15 +115,15 @@ function cachedPropertySheetPrice(file, lines, sourceHash, cacheDir) {
   const cacheFile = path.join(cacheDir, `${sourceHash}.json`);
   try {
     const saved = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
-    if (saved.detectorVersion === 1 && (saved.mark === null || validPriceMark(saved.mark))) return saved.mark;
+    if (saved.detectorVersion === 2 && (saved.mark === null || validPriceMark(saved.mark))) return saved.mark;
   } catch { /* A missing/older preparation is safe to recompute. */ }
   const mark = analyzePropertySheet(file, lines, sourceHash);
   fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(cacheFile, JSON.stringify({ detectorVersion: 1, mark }), { mode: 0o600 });
+  fs.writeFileSync(cacheFile, JSON.stringify({ detectorVersion: 2, mark }), { mode: 0o600 });
   return mark;
 }
 
-module.exports = { analyzePropertySheet, cachedPropertySheetPrice, bitmap, gridRect };
+module.exports = { analyzePropertySheet, cachedPropertySheetPrice, bitmap, gridRect, unlabeledPriceCandidates };
 if (require.main === module) {
   const [file, linesFile] = process.argv.slice(2);
   process.stdout.write(JSON.stringify(analyzePropertySheet(file, JSON.parse(fs.readFileSync(linesFile, "utf8")))) + "\n");
