@@ -61,7 +61,7 @@ test("priority assessment uses the requested car preset and clearly identifies t
   expect(result.reason).toContain("平面每個 180 萬預設試算");
 });
 
-test("Huangxiang's two no-parking sales count alongside two fully split car sales, excluding the preset-only sale", () => {
+test("Huangxiang sales include a clearly identified parking preset alongside official and no-parking sales", () => {
   const subject = { ...property, titlePing: 42.15, totalPrice: 1598, parkingPing: 11.01, parkingPrice: "", parkingDescription: "坡道平面", layout: "2/2/1" };
   const raw = [
     { date: "2026-06-11", area: 40.67, price: 14300000, parkingType: "坡道平面", parkingPrice: 1800000, parkingArea: 9.53 },
@@ -73,14 +73,15 @@ test("Huangxiang's two no-parking sales count alongside two fully split car sale
   const actual = { ...reference, deals: raw.map((row, index) => ({ ...deal, id: String(index), ...row })) };
   const result = assessPropertyPriority(subject, actual, [], { now });
   expect(result.status).toBe("negotiate");
-  expect(result.sampleCount).toBe(4);
-  expect(result.referenceUnit.toFixed(2)).toBe("39.48");
+  expect(result.sampleCount).toBe(5);
+  expect(result.estimatedSampleCount).toBe(1);
+  expect(result.referenceUnit.toFixed(2)).toBe("39.58");
   expect(result.unit.toFixed(2)).toBe("45.54");
   expect(result.reason).toContain("預設試算");
   const onlyTwo = { ...actual, deals: actual.deals.filter((row) => row.parkingType) };
-  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).sampleCount).toBe(2);
+  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).sampleCount).toBe(3);
   expect(assessPropertyPriority(subject, onlyTwo, [], { now }).status).toBe("negotiate");
-  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).sampleNote).toContain("只有 2 筆");
+  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).estimatedSampleCount).toBe(1);
 });
 
 test.each([1, 2])("%s usable sale(s) in the past year allow price comparison with a limited-sample note", (count) => {
@@ -111,7 +112,7 @@ test("the one-year cutoff is inclusive and older or future sales cannot provide 
 
 test("incomplete recent sales do not hide a single usable sale later in the past-year records", () => {
   const data = { ...reference, deals: [
-    ...Array.from({ length: 5 }, (_, i) => ({ ...deal, id: `incomplete-${i}`, parkingPrice: 0 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ ...deal, id: `incomplete-${i}`, parkingPrice: 0, parkingArea: null })),
     { ...deal, id: "usable", date: "2026-08-01" },
     { ...deal, id: "too-old", date: "2024-01-01" },
   ] };
@@ -119,4 +120,36 @@ test("incomplete recent sales do not hide a single usable sale later in the past
   expect(result.status).toBe("priority");
   expect(result.sampleCount).toBe(1);
   expect(result.sampleDates).toEqual(["2026-08-01"]);
+});
+
+test('the suggested total meets the price rule but does not bypass buyer or viewing requirements', () => {
+  const expensive = { ...property, totalPrice: 1700 };
+  const result = assessPropertyPriority(expensive, reference, needs, { now });
+  expect(result.priceTarget.totalPrice).toBe(1600);
+  expect(result.status).toBe('negotiate');
+  const atTarget = { ...expensive, totalPrice: result.priceTarget.totalPrice };
+  expect(assessPropertyPriority(atTarget, reference, needs, { now }).status).toBe('priority');
+  const noBuyer = assessPropertyPriority(atTarget, reference, [], { now });
+  expect(noBuyer.status).toBe('pending');
+  expect(noBuyer.priceTarget.totalPrice).toBe(1600);
+  expect(assessPropertyPriority({ ...atTarget, viewingStatus: '' }, reference, needs, { now }).status).toBe('pending');
+  expect(assessPropertyPriority(expensive, { ...reference, deals: [] }, needs, { now }).priceTarget).toBeUndefined();
+});
+
+test('Nezuen unseparated flat-car sales are usable estimates, with original official values preserved', () => {
+  const subject = { ...property, titlePing: 34.66, parkingPing: 8.52, parkingDescription: '坡道平面', parkingPrice: '', totalPrice: 1500 };
+  const rows = [
+    { ...deal, id: 'nezu-1', date: '2026-02-07', area: 34.66, price: 13560000, unit: 39.12, parkingPrice: 0, parkingArea: 8.52 },
+    { ...deal, id: 'nezu-2', date: '2025-12-07', area: 34.66, price: 12800000, unit: 36.93, parkingPrice: 0, parkingArea: 8.52 },
+  ].map(Object.freeze);
+  const result = assessPropertyPriority(subject, { ...reference, deals: rows }, [], { now });
+  expect(result.status).toBe('negotiate');
+  expect(result.sampleCount).toBe(2);
+  expect(result.estimatedSampleCount).toBe(2);
+  expect(result.referenceUnit).toBeCloseTo(((1356 - 180) / (34.66 - 8.52) + (1280 - 180) / (34.66 - 8.52)) / 2);
+  expect(result.reason).toContain('2 筆成交的車位價格採預設試算');
+  expect(result.priceTarget.totalPrice).toBeLessThanOrEqual(1318);
+  expect(result.priceTarget.totalPrice).toBeGreaterThanOrEqual(1317.99);
+  expect(rows[0].parkingPrice).toBe(0);
+  expect(rows[0].unit).toBe(39.12);
 });

@@ -1,4 +1,4 @@
-import { propertyUnitPrice, matchesUnitPrice, officialNetUnit, propertyParkingState, resolvePropertyParkingPrice, formatPropertyParkingPrice, missingUnitPriceFields, formatUnitPrice } from "./propertyUnitPrice";
+import { priorityPriceTarget, propertyUnitPrice, matchesUnitPrice, officialNetUnit, propertyParkingState, resolvePropertyParkingPrice, formatPropertyParkingPrice, missingUnitPriceFields, formatUnitPrice } from "./propertyUnitPrice";
 
 const p = { totalPrice: 1758, titlePing: 54.59, parkingPing: 11.01, parkingCount: 1 };
 test("gross and parking-exclusive asking prices remain distinct", () => {
@@ -66,4 +66,28 @@ test("unknown or mixed types are not guessed and official sales never receive as
   }
   expect(resolvePropertyParkingPrice({ ...p, parkingDescription: "坡道平面", parkingCount: 1.5 }).price).toBeNull();
   expect(officialNetUnit({ price: 16000000, area: 50, parkingArea: 10, parkingType: "坡道平面" })).toBeNull();
+});
+
+test.each([
+  [{ totalPrice: 1700, titlePing: 50, parkingPing: 10, parkingPrice: 200 }, 35, 1600, 200, 'entered'],
+  [{ totalPrice: 1700, titlePing: 50, parkingPing: 10, parkingDescription: '坡道平面' }, 35, 1580, 180, 'preset'],
+  [{ totalPrice: 1700, titlePing: 50, parkingPing: 10, parkingDescription: '機械', parkingCount: 2 }, 35, 1700, 300, 'preset'],
+  [{ totalPrice: 1200, titlePing: 30, parkingDescription: '無' }, 35, 1050, 0, 'none'],
+])('the target total reverses the same net-price basis and adds the full parking value', (property, unit, total, carPrice, source) => {
+  const target = priorityPriceTarget(property, unit);
+  expect(target.totalPrice).toBe(total);
+  expect(target.parkingPrice).toBe(carPrice);
+  expect(target.parkingSource).toBe(source);
+  expect(propertyUnitPrice({ ...property, totalPrice: target.totalPrice }, 'net')).toBeLessThanOrEqual(unit);
+  expect(propertyUnitPrice({ ...property, totalPrice: target.totalPrice + 0.01 }, 'net')).toBeGreaterThan(unit);
+});
+
+test('the quoted total rounds down and never invents a target from missing or impossible data', () => {
+  const subject = { titlePing: 43.21, parkingDescription: '無' };
+  const target = priorityPriceTarget(subject, 35.123456);
+  expect(target.totalPrice).toBeLessThanOrEqual(43.21 * 35.123456);
+  expect(propertyUnitPrice({ ...subject, totalPrice: target.totalPrice }, 'net')).toBeLessThanOrEqual(35.123456);
+  for (const [input, unit] of [[{}, 35], [subject, null], [subject, -1], [{ titlePing: 40 }, 35], [{ titlePing: 40, parkingPing: 5, parkingDescription: '有' }, 35], [{ titlePing: 40, parkingPing: 40, parkingDescription: '平面' }, 35]]) {
+    expect(priorityPriceTarget(input, unit)).toBeNull();
+  }
 });

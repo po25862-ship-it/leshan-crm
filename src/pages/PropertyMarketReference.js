@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { assessPropertyPriority, comparableDeals } from "../lib/propertyMarketReference";
-import { formatUnitPrice, parkingPricePresetNote } from "../lib/propertyUnitPrice";
+import { formatUnitPrice, nonNegativeNumber, parkingPricePresetNote } from "../lib/propertyUnitPrice";
 import { formatPropertyManagementFee } from "../lib/propertyManagementFee";
 import { dealParkingComparison } from "../lib/propertyDealParking";
 import "./PropertyMarketReference.css";
@@ -15,6 +15,22 @@ function dateTime(value) {
 export function PropertyPriorityBadge({ assessment }) {
   if (!assessment || assessment.status === "inactive") return null;
   return <span className={`property-priority-badge ${assessment.status}`} aria-label={`${assessment.label}：${assessment.reason}`} title={assessment.reason}>{assessment.label}</span>;
+}
+
+function PriorityTotalPrice({ property, assessment }) {
+  const target = assessment.priceTarget;
+  if (!target) return null;
+  const current = nonNegativeNumber(property.totalPrice);
+  const priceMet = assessment.unit <= assessment.referenceUnit;
+  const difference = Math.max(0, current - target.totalPrice);
+  const estimated = target.parkingSource === "preset" || assessment.estimatedSampleCount > 0;
+  return <section className="property-priority-price" aria-label="優先推案參考總價">
+    <div className="property-priority-price-title">優先推案的參考總價{target.parkingPrice > 0 ? "（含車位）" : ""}</div>
+    <strong className="property-priority-price-amount">{money(target.totalPrice)} <span>萬以下{estimated ? "（試算）" : ""}</span></strong>
+    <p>{priceMet ? `目前總價 ${money(current)} 萬，已符合價格條件。` : `目前總價 ${money(current)} 萬，約需調整 ${money(difference)} 萬。`}</p>
+    <p>價格達標後，仍需有合適客需，且近 30 天已確認可帶看，才會列為優先推案。</p>
+    <details><summary>查看總價怎麼算{estimated ? "（含預設試算）" : ""}</summary><p>以原始成交參考單價 × 本件扣車面積 {money(target.netPing)} 坪{target.parkingPrice > 0 ? `，再加回車位 ${money(target.parkingPrice)} 萬` : "（本件無車位）"}。顯示總價向下取到小數兩位。</p>{target.parkingSource === "preset" && <p>{parkingPricePresetNote(property)}確認實際車位價格後，可到「編輯資料」修改。</p>}{assessment.estimatedSampleCount > 0 && <p>成交參考含 {assessment.estimatedSampleCount} 筆車位預設試算，未分列的平面車位每個採 180 萬、機械車位每個採 150 萬。</p>}</details>
+  </section>;
 }
 
 function DealParkingUnit({ deal }) {
@@ -47,9 +63,11 @@ export default function PropertyMarketReference({ property, reference, loading, 
     {parkingPricePresetNote(property) && <p className="property-market-caption">{parkingPricePresetNote(property)}可在「編輯資料」修改。</p>}
     <div className={`property-priority-detail ${assessment.status}`}>
       <div className="property-priority-detail-heading"><strong>業務搶攻提醒</strong><PropertyPriorityBadge assessment={assessment} /><span>內部參考</span></div>
-      <div>{assessment.reason}</div><div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
+      <div>{assessment.reason}</div>
+      <PriorityTotalPrice property={property} assessment={assessment} />
+      <div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
       {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>去補資料</button>}
-      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價試算的成交不計入。</p>}{assessment.sampleDates?.length > 0 && <p>採用成交日期：{assessment.sampleDates.join("、")}。</p>}<p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數。只採近一年（365 天）的成交；無車位或官方車位價與坪數完整，至少 1 筆就能比較，最多採用最新 5 筆可用成交。只有 1 筆就用該筆單價，多筆則取中位數。不高於參考單價、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
+      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價的成交會標示試算{assessment.estimatedSampleCount > 0 ? `（本次 ${assessment.estimatedSampleCount} 筆）` : ""}。</p>}{assessment.sampleDates?.length > 0 && <p>採用成交日期：{assessment.sampleDates.join("、")}。</p>}<p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數。只採近一年（365 天）的成交，至少 1 筆就能比較，最多採用最新 5 筆可用成交。官方已分列車位價格時優先使用；未分列時，車位坪數與類型明確才採平面每個 180 萬、機械每個 150 萬試算。只有 1 筆就用該筆單價，多筆則取中位數。不高於參考單價、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
     </div>
     {error && <div className="property-market-error" role="alert">{error}</div>}
     {loading && <div className="property-market-message" role="status">正在取得社區主檔與官方成交；不查電傳，也不啟動付費 AI。</div>}
@@ -74,7 +92,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
           </div>
           {!recent.length && <div className="property-market-message">近一年沒有符合條件的相近成交。可調整坪數範圍查看參考。</div>}
           <div className="property-market-source">資料發布：{reference.publishedDate || "未提供"}；成交年度：{(reference.years || []).join("、")}。本社區本批最新成交：{reference.deals?.[0]?.date || "未提供"}。</div>
-          <details className="property-priority-method"><summary>面積與單價說明</summary><p>官方揭露單價保留原數字；扣車單價另以（成交總價－車位價）÷（建物總坪數－車位坪數）計算。有官方車位價就優先使用；未分列時，平面每個預設 180 萬、機械每個預設 150 萬，標示「預設試算」。官方未提供車位數量時先按 1 個試算；未提供車位坪數、類型不明或數字不合理時不計算。預設試算供業務參考，自動案件判斷仍只採官方拆分完整的成交。已排除特殊交易；車位數量、屋況與備註仍須核對。</p></details>
+          <details className="property-priority-method"><summary>面積與單價說明</summary><p>官方揭露單價保留原數字；扣車單價另以（成交總價－車位價）÷（建物總坪數－車位坪數）計算。有官方車位價就優先使用；未分列時，平面每個預設 180 萬、機械每個預設 150 萬，標示「預設試算」並可納入價格參考。官方未提供車位數量時先按 1 個試算；未提供車位坪數、類型不明或數字不合理時不計算。已排除特殊交易；車位數量、屋況與備註仍須核對。</p></details>
         </section>
         <aside className="property-market-community" aria-label="社區公設與管理">
           <h4>社區公設與管理</h4><div className="property-market-caption">{community.name}・{community.zone}</div>

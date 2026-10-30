@@ -13,7 +13,7 @@ export function priorityActionLabel(assessment) {
 }
 
 export const REFERENCE_MAX_AGE = 86400000;
-const STORAGE_PREFIX = "leshan-crm.priority-reference.v2:";
+const STORAGE_PREFIX = "leshan-crm.priority-reference.v3:";
 
 export function priorityReferenceKey(property) {
   // The cached five comparables depend on area/type/address; price, needs and
@@ -57,7 +57,7 @@ export function compactPriorityReference(property, data) {
     matchMethod: data.matchMethod, reason: data.reason,
     fetchedAt: Number(data.fetchedAt) || Date.now(),
     deals: comparisonSamples(property, data).map((deal) => Object.fromEntries(
-      ["id", "date", "type", "use", "area", "price", "parkingPrice", "parkingArea", "parkingType", "rooms", "special"]
+      ["id", "date", "type", "use", "area", "price", "parkingPrice", "parkingArea", "parkingType", "parkingCount", "rooms", "special"]
         .filter((key) => deal[key] !== undefined).map((key) => [key, deal[key]])
     )),
   };

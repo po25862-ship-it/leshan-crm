@@ -61,6 +61,26 @@ export function propertyUnitPrice(property = {}, basis = "gross") {
   return (price - parkingPrice) / (area - parkingArea);
 }
 
+export function priorityPriceTarget(property = {}, referenceUnit) {
+  const unit = nonNegativeNumber(referenceUnit);
+  const area = nonNegativeNumber(property.titlePing);
+  const parking = propertyParkingState(property);
+  if (!(unit > 0) || !(area > 0) || parking === "unknown") return null;
+  const resolved = parking === "yes" ? resolvePropertyParkingPrice(property) : { price: 0, source: "none" };
+  const carArea = parking === "yes" ? nonNegativeNumber(property.parkingPing) : 0;
+  if (parking === "yes" && (!(resolved.price > 0) || !(carArea > 0) || carArea >= area)) return null;
+  const netPing = area - carArea;
+  const exactTotal = unit * netPing + resolved.price;
+  if (!Number.isFinite(exactTotal) || exactTotal <= 0) return null;
+  // Quote a price to 0.01 wan without rounding above the classifier's limit.
+  let totalPrice = Math.floor(exactTotal * 100) / 100;
+  const unitAtTarget = propertyUnitPrice({ ...property, totalPrice }, "net");
+  if (unitAtTarget === null) return null;
+  if (unitAtTarget > unit) totalPrice = Math.round((totalPrice - 0.01) * 100) / 100;
+  if (!(totalPrice > resolved.price)) return null;
+  return { totalPrice, referenceUnit: unit, netPing, parkingPrice: resolved.price, parkingSource: resolved.source };
+}
+
 export function matchesUnitPrice(property, minimum, maximum, basis = "gross") {
   if (minimum === "" && maximum === "") return basis === "net" ? propertyUnitPrice(property, basis) !== null : true;
   const min = minimum === "" ? 0 : nonNegativeNumber(minimum);

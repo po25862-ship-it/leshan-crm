@@ -38,7 +38,7 @@ test("only five necessary public trade fields are cached, not profile, contact o
 
 test("the worklist retains a usable past-year sale beyond five incomplete newer rows", () => {
   const data = { ...reference, deals: [
-    ...Array.from({ length: 5 }, (_, i) => ({ ...deal, id: `incomplete-${i}`, parkingPrice: 0 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ ...deal, id: `incomplete-${i}`, parkingPrice: 0, parkingArea: null })),
     { ...deal, id: "usable", date: "2026-08-01" },
   ] };
   const saved = record(property, data);
@@ -90,4 +90,13 @@ test("stopping a refresh ignores an in-flight result and does not continue to an
   const result = await refreshPriorityReferences([property, { ...property, id: "two" }], { load: async () => { stopped = true; return reference; }, onResult, onProgress: jest.fn(), shouldStop: () => stopped });
   expect(onResult).not.toHaveBeenCalled();
   expect(result.stopped).toBe(true);
+});
+
+test('cached estimates preserve parking quantities and produce the same comparison as the complete source', () => {
+  const data = { ...reference, deals: [{ ...deal, parkingPrice: 0, parkingCount: 2 }] };
+  const saved = record(property, data);
+  expect(saved.data.deals[0].parkingCount).toBe(2);
+  const result = buildPriorityAssessments([property], { p: saved }, needs, [], now).get('p');
+  expect(result.estimatedSampleCount).toBe(1);
+  expect(result.referenceUnit).toBe(31);
 });

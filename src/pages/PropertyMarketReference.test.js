@@ -29,12 +29,14 @@ test("missing parking is actionable and does not produce an opportunity label", 
   const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "去補資料");
   act(() => button.click());
   expect(onEdit).toHaveBeenCalledWith("property-parking-price");
+  expect(host.querySelector('[aria-label="優先推案參考總價"]')).toBeNull();
 });
 test("offline errors do not leave old trades or positive opportunity labels visible", () => {
   render({ error: "來源離線，請更新參考。" });
   expect(host.querySelector('[role="alert"]').textContent).toContain("來源離線");
   expect(host.querySelectorAll(".property-market-trade")).toHaveLength(0);
   expect(host.querySelector(".property-priority-badge").textContent).toBe("先把資料補齊");
+  expect(host.querySelector('[aria-label="優先推案參考總價"]')).toBeNull();
 });
 
 test("the requested parking preset is identified without replacing missing official car prices", () => {
@@ -74,4 +76,27 @@ test("one recent sale supplies comparison details while older rows are excluded 
   expect(host.textContent).toContain("至少 1 筆就能比較");
   expect(host.textContent).toContain("採用成交日期：2026-03-31");
   expect(host.textContent).not.toContain("需要至少 3 筆");
+});
+
+test("the target total shows the adjustment and keeps the remaining priority requirements explicit", () => {
+  render({ property: { ...property, totalPrice: 1700, parkingPrice: 200 } });
+  const target = host.querySelector('[aria-label="優先推案參考總價"]');
+  expect(target.textContent).toContain("1,600 萬以下");
+  expect(target.textContent).toContain("約需調整 100 萬");
+  expect(target.textContent).toContain("仍需有合適客需");
+  expect(target.textContent).toContain("近 30 天已確認可帶看");
+  expect(target.textContent).toContain("扣車面積 40 坪");
+  expect(target.textContent).toContain("車位 200 萬");
+  expect(host.querySelector(".property-priority-badge").textContent).toBe("議價追蹤");
+  render({ property: { ...property, totalPrice: 1500, parkingPrice: 200 } });
+  expect(host.querySelector('[aria-label="優先推案參考總價"]').textContent).toContain("已符合價格條件");
+});
+
+test("unseparated parking sales take part in the judgment and identify the target as estimated", () => {
+  render({ property: { ...property, totalPrice: 1700, parkingPrice: 200 }, reference: { ...reference, deals: [{ ...row, parkingPrice: 0 }] } });
+  const target = host.querySelector('[aria-label="優先推案參考總價"]');
+  expect(target.textContent).toContain("萬以下（試算）");
+  expect(target.textContent).toContain("成交參考含 1 筆車位預設試算");
+  expect(host.textContent).toContain("其中 1 筆成交的車位價格採預設試算");
+  expect(host.querySelector(".property-priority-badge").textContent).toBe("議價追蹤");
 });
