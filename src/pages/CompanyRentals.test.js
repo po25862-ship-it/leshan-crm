@@ -105,6 +105,7 @@ test("a rental can include both car and motorcycle spaces with independent fee s
 test("expired website stays stored but is replaced with no-website text in details and customer sharing", async () => {
   Object.assign(mockRows[0], { websiteUrl: "https://rent.591.com.tw/22258856", websiteExpiresOn: "2000-01-01", mandateExpiresOn: "2000-01-02", shareWebsite: true });
   render(); expect(container.textContent).toContain("目前無網站"); expect(container.textContent).toContain("有到期提醒");
+  expect(container.querySelector(".cr-row-actions a")).toBeNull();
   await click("只看到期提醒"); expect(container.querySelectorAll("article")).toHaveLength(1); expect(container.querySelector("h1").textContent).toContain("1");
   await click("查看資料"); expect([...container.querySelectorAll("a")].some(node => node.textContent.includes("開啟物件網址"))).toBe(false);
   expect(container.textContent).toContain("https://rent.591.com.tw/22258856");
@@ -127,6 +128,10 @@ test("rental editor saves independent mandate and website dates and resets old U
 test("today's mandate date reminds staff without hiding the website before its own expiry date", async () => {
   Object.assign(mockRows[0], { websiteUrl: "https://example.test/rental", websiteExpiresOn: "2099-01-01", mandateExpiresOn: rentalToday() });
   render(); expect(container.textContent).toContain("委託今天到期");
+  const website = container.querySelector(".cr-row-actions a");
+  expect(website.getAttribute("href")).toBe("https://example.test/rental");
+  expect(website.target).toBe("_blank"); expect(website.rel).toContain("noopener");
+  expect(container.querySelector(".cr-detail")).toBeNull();
   await click("查看資料"); expect(container.querySelector("a[href='https://example.test/rental']")).not.toBeNull();
 });
 test("manual responsible agent and two separate service fees are retained on draft save", async () => {
