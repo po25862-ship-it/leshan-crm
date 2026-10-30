@@ -1,4 +1,4 @@
-import { assessPropertyPriority, comparableDeals, referenceKey } from "./propertyMarketReference";
+import { assessPropertyPriority, comparisonSamples, referenceKey } from "./propertyMarketReference";
 
 export const PRIORITY_FILTERS = [
   { value: "all", label: "全部案件" },
@@ -13,7 +13,7 @@ export function priorityActionLabel(assessment) {
 }
 
 export const REFERENCE_MAX_AGE = 86400000;
-const STORAGE_PREFIX = "leshan-crm.priority-reference.v1:";
+const STORAGE_PREFIX = "leshan-crm.priority-reference.v2:";
 
 export function priorityReferenceKey(property) {
   // The cached five comparables depend on area/type/address; price, needs and
@@ -56,7 +56,7 @@ export function compactPriorityReference(property, data) {
     community: data.community ? { id: data.community.id, name: data.community.name, zone: data.community.zone } : null,
     matchMethod: data.matchMethod, reason: data.reason,
     fetchedAt: Number(data.fetchedAt) || Date.now(),
-    deals: comparableDeals(property, data).slice(0, 5).map((deal) => Object.fromEntries(
+    deals: comparisonSamples(property, data).map((deal) => Object.fromEntries(
       ["id", "date", "type", "use", "area", "price", "parkingPrice", "parkingArea", "parkingType", "rooms", "special"]
         .filter((key) => deal[key] !== undefined).map((key) => [key, deal[key]])
     )),

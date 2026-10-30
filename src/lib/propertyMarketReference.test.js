@@ -32,7 +32,7 @@ test("old and incomplete parking transactions cannot supply confident comparison
   const old = { ...reference, deals: reference.deals.map((d) => ({ ...d, date: "2024-01-01" })) };
   const result = assessPropertyPriority(property, old, needs, { now });
   expect(result.code).toBe("insufficient_comps");
-  expect(result.label).toBe("找到的相近成交太少，還不能判斷");
+  expect(result.label).toBe("近一年沒有可比較的成交");
 });
 test("offline or stale responses never keep an old positive priority label", () => {
   expect(assessPropertyPriority(property, reference, needs, { now, error: "offline" }).code).toBe("source_unavailable");
@@ -79,5 +79,44 @@ test("Huangxiang's two no-parking sales count alongside two fully split car sale
   expect(result.reason).toContain("預設試算");
   const onlyTwo = { ...actual, deals: actual.deals.filter((row) => row.parkingType) };
   expect(assessPropertyPriority(subject, onlyTwo, [], { now }).sampleCount).toBe(2);
-  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).code).toBe("insufficient_comps");
+  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).status).toBe("negotiate");
+  expect(assessPropertyPriority(subject, onlyTwo, [], { now }).sampleNote).toContain("只有 2 筆");
+});
+
+test.each([1, 2])("%s usable sale(s) in the past year allow price comparison with a limited-sample note", (count) => {
+  const data = { ...reference, deals: reference.deals.slice(0, count) };
+  const result = assessPropertyPriority(property, data, needs, { now });
+  expect(result.status).toBe("priority");
+  expect(result.sampleCount).toBe(count);
+  expect(result.referenceUnit).toBe(35);
+  expect(result.reason).toContain(`近一年只有 ${count} 筆可用成交`);
+  const expensive = assessPropertyPriority({ ...property, totalPrice: 1700 }, data, [], { now });
+  expect(expensive.status).toBe("negotiate");
+  expect(expensive.sampleCount).toBe(count);
+});
+
+test("the one-year cutoff is inclusive and older or future sales cannot provide comparison evidence", () => {
+  const data = { ...reference, deals: [
+    { ...deal, id: "boundary", date: "2025-10-29" },
+    { ...deal, id: "old", date: "2025-10-28" },
+    { ...deal, id: "future", date: "2026-10-30" },
+  ] };
+  expect(comparableDeals(property, data, { now }).map((row) => row.id)).toEqual(["boundary"]);
+  const result = assessPropertyPriority(property, data, needs, { now });
+  expect(result.sampleCount).toBe(1);
+  expect(result.sampleDates).toEqual(["2025-10-29"]);
+  const oldOnly = { ...data, deals: data.deals.filter((row) => row.id !== "boundary") };
+  expect(assessPropertyPriority(property, oldOnly, needs, { now }).code).toBe("insufficient_comps");
+});
+
+test("incomplete recent sales do not hide a single usable sale later in the past-year records", () => {
+  const data = { ...reference, deals: [
+    ...Array.from({ length: 5 }, (_, i) => ({ ...deal, id: `incomplete-${i}`, parkingPrice: 0 })),
+    { ...deal, id: "usable", date: "2026-08-01" },
+    { ...deal, id: "too-old", date: "2024-01-01" },
+  ] };
+  const result = assessPropertyPriority(property, data, needs, { now });
+  expect(result.status).toBe("priority");
+  expect(result.sampleCount).toBe(1);
+  expect(result.sampleDates).toEqual(["2026-08-01"]);
 });

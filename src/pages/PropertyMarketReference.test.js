@@ -65,3 +65,13 @@ test("cloud reference identifies the sync time separately from the current read 
   expect(host.textContent).toContain("雲端最後同步");
   expect(host.querySelector("a")).toBeNull();
 });
+
+test("one recent sale supplies comparison details while older rows are excluded from the displayed list", () => {
+  render({ property: { ...property, parkingPrice: 200 }, reference: { ...reference, deals: [row, { ...row, id: "old", date: "2024-01-01" }] } });
+  expect(host.querySelectorAll(".property-market-trade")).toHaveLength(1);
+  expect(host.textContent).not.toContain("2024-01-01");
+  expect(host.textContent).toContain("近一年只有 1 筆可用成交");
+  expect(host.textContent).toContain("至少 1 筆就能比較");
+  expect(host.textContent).toContain("採用成交日期：2026-03-31");
+  expect(host.textContent).not.toContain("需要至少 3 筆");
+});

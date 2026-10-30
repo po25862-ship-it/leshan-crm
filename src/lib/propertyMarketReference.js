@@ -27,10 +27,11 @@ export function comparableDeals(property, reference, { tolerance = 0.2, sameRoom
   const rooms = roomsOf(property || {});
   if (!(area > 0) || !reference?.community || (sameRooms && rooms === null)) return [];
   const today = new Date(now).toISOString().slice(0, 10);
+  const cutoff = new Date(now - 365 * 86400000).toISOString().slice(0, 10);
   const percent = [0.1, 0.2, 0.3].includes(tolerance) ? tolerance : 0.2;
   const seen = new Set();
   return (reference.deals || []).filter((deal) => {
-    if (deal.special !== false || !/^\d{4}-\d{2}-\d{2}$/.test(deal.date || "") || deal.date > today || !sameType(property, deal)) return false;
+    if (deal.special !== false || !/^\d{4}-\d{2}-\d{2}$/.test(deal.date || "") || deal.date < cutoff || deal.date > today || !sameType(property, deal)) return false;
     const ping = nonNegativeNumber(deal.area);
     if (!(ping > 0) || ping < area * (1 - percent) || ping > area * (1 + percent)) return false;
     if (sameRooms && deal.rooms !== rooms) return false;
@@ -38,6 +39,12 @@ export function comparableDeals(property, reference, { tolerance = 0.2, sameRoom
     seen.add(deal.id);
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function comparisonSamples(property, reference, options = {}) {
+  // Look for usable sales throughout the past year before limiting the sample;
+  // incomplete newer rows must not hide the community's one valid recent sale.
+  return comparableDeals(property, reference, options).filter((deal) => officialNetUnit(deal) !== null).slice(0, 5);
 }
 
 function activeMatches(property, needs) {
@@ -80,16 +87,16 @@ export function assessPropertyPriority(property = {}, reference = null, needs = 
   if (!reference.community) return pending("尚未配對到 A7／A8／A9 的唯一社區。", "核對完整門牌及社區名稱。", { code: "unmatched_community" });
   if (reference.matchMethod !== "exact-doorplate") return pending("目前只依社區名稱配對，完整門牌仍需核對。", "核對本件門牌是否屬於該社區。", { code: "unconfirmed_community" });
   const matches = comparableDeals(property, reference, { now, sameRooms: false });
-  const cutoff = new Date(now - 365 * 86400000).toISOString().slice(0, 10);
-  const samples = matches.slice(0, 5).filter((d) => d.date >= cutoff && officialNetUnit(d) !== null);
-  if (samples.length < 3) return pending(`找到的相近成交太少，還不能判斷。最近五筆中，近一年能把車位分開算的成交只有 ${samples.length} 筆，需要至少 3 筆。`, "可以調整坪數範圍，多看幾筆參考。資料還不夠時，系統先不判斷是否優先推薦。", { code: "insufficient_comps", sampleCount: samples.length, label: "找到的相近成交太少，還不能判斷" });
+  const samples = comparisonSamples(property, reference, { now, sameRooms: false });
+  if (!samples.length) return pending(matches.length ? "近一年有相近成交，但車位資料還不完整，暫時沒辦法比較房子的每坪價格。" : "近一年找不到同社區、大小差不多的成交，暫時沒辦法比較價格。", "可調整坪數範圍查看參考，或等成交資料補齊後再比較。", { code: "insufficient_comps", sampleCount: 0, label: "近一年沒有可比較的成交" });
   const referenceUnit = median(samples.map(officialNetUnit));
   const buyers = activeMatches(property, needs);
-  const detail = { unit, referenceUnit, sampleCount: samples.length, matchedNeeds: buyers.strict, possibleNeeds: buyers.possible };
-  if (unit > referenceUnit) return { ...detail, status: "negotiate", label: "議價追蹤", reason: `扣車開價 ${unit.toFixed(2)} 萬／坪，高於相近成交中位數 ${referenceUnit.toFixed(2)}；${buyers.possible > 0 ? `有 ${buyers.possible} 組客人的需求可能適合` : "目前還沒找到合適的客人"}。${parkingNote}`, next: "先問負責業務，屋主的價格還能不能談，再看看適合推薦給誰。" };
-  if (buyers.strict === 0) return pending("目前還沒找到合適的客人。", "先看看現有客人的需求，有合適的再安排介紹。", { ...detail, label: "目前還沒找到合適的客人" });
+  const sampleNote = samples.length < 3 ? `近一年只有 ${samples.length} 筆可用成交，價格比較先作參考。` : "";
+  const detail = { unit, referenceUnit, sampleCount: samples.length, sampleDates: samples.map((deal) => deal.date), sampleNote, matchedNeeds: buyers.strict, possibleNeeds: buyers.possible };
+  if (unit > referenceUnit) return { ...detail, status: "negotiate", label: "議價追蹤", reason: `扣車開價 ${unit.toFixed(2)} 萬／坪，高於相近成交中位數 ${referenceUnit.toFixed(2)}；${buyers.possible > 0 ? `有 ${buyers.possible} 組客人的需求可能適合` : "目前還沒找到合適的客人"}。${sampleNote}${parkingNote}`, next: "先問負責業務，屋主的價格還能不能談，再看看適合推薦給誰。" };
+  if (buyers.strict === 0) return pending(`目前還沒找到合適的客人。${sampleNote}`, "先看看現有客人的需求，有合適的再安排介紹。", { ...detail, label: "目前還沒找到合適的客人" });
   const confirmed = time(property.viewingConfirmedAt);
   const ready = property.viewingStatus === "available" && confirmed !== null && confirmed <= now && now - confirmed <= 30 * 86400000;
-  if (!ready) return pending(`符合 ${buyers.strict} 組現有客需，尚待近期帶看確認。`, "向負責業務確認可帶看，並在編輯資料更新帶看狀態。", detail);
-  return { ...detail, status: "priority", label: "優先推案", reason: `扣車開價不高於相近成交中位數，符合 ${buyers.strict} 組現有客需，且近 30 天已確認可帶看。${parkingNote}`, next: "核對樓層、屋況與交易條件後，聯繫符合需求的買方安排帶看。" };
+  if (!ready) return pending(`符合 ${buyers.strict} 組現有客需，尚待近期帶看確認。${sampleNote}`, "向負責業務確認可帶看，並在編輯資料更新帶看狀態。", detail);
+  return { ...detail, status: "priority", label: "優先推案", reason: `扣車開價不高於相近成交中位數，符合 ${buyers.strict} 組現有客需，且近 30 天已確認可帶看。${sampleNote}${parkingNote}`, next: "核對樓層、屋況與交易條件後，聯繫符合需求的買方安排帶看。" };
 }

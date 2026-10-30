@@ -36,6 +36,18 @@ test("only five necessary public trade fields are cached, not profile, contact o
   expect(data.community).toEqual({ id: "community", name: "測試社區", zone: "A7" });
 });
 
+test("the worklist retains a usable past-year sale beyond five incomplete newer rows", () => {
+  const data = { ...reference, deals: [
+    ...Array.from({ length: 5 }, (_, i) => ({ ...deal, id: `incomplete-${i}`, parkingPrice: 0 })),
+    { ...deal, id: "usable", date: "2026-08-01" },
+  ] };
+  const saved = record(property, data);
+  expect(saved.data.deals.map((row) => row.id)).toEqual(["usable"]);
+  const result = buildPriorityAssessments([property], { p: saved }, needs, [], now).get("p");
+  expect(result.status).toBe("priority");
+  expect(result.sampleCount).toBe(1);
+});
+
 test("local cache is per colleague, expires and never retains failed references", () => {
   const values = new Map();
   const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };

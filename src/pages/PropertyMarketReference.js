@@ -49,7 +49,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
       <div className="property-priority-detail-heading"><strong>業務搶攻提醒</strong><PropertyPriorityBadge assessment={assessment} /><span>內部參考</span></div>
       <div>{assessment.reason}</div><div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
       {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>去補資料</button>}
-      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價試算的成交不計入。</p>}<p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數，取最近五筆；其中近一年、無車位或官方車位價與坪數完整的成交至少 3 筆，才比較房屋每坪價格的中位數。不高於中位數、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
+      <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價試算的成交不計入。</p>}{assessment.sampleDates?.length > 0 && <p>採用成交日期：{assessment.sampleDates.join("、")}。</p>}<p>同社區完整門牌、相近建物總坪數 ±20%、同類型，不限房數。只採近一年（365 天）的成交；無車位或官方車位價與坪數完整，至少 1 筆就能比較，最多採用最新 5 筆可用成交。只有 1 筆就用該筆單價，多筆則取中位數。不高於參考單價、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
     </div>
     {error && <div className="property-market-error" role="alert">{error}</div>}
     {loading && <div className="property-market-message" role="status">正在取得社區主檔與官方成交；不查電傳，也不啟動付費 AI。</div>}
@@ -57,9 +57,9 @@ export default function PropertyMarketReference({ property, reference, loading, 
     {community && !error && <>
       <div className="property-market-grid">
         <section className="property-market-deals" aria-label="同社區相近成交">
-          <div className="property-market-section-heading"><h4>{community.name}・近五筆相近成交</h4><span>官方實價登錄</span></div>
+          <div className="property-market-section-heading"><h4>{community.name}・近一年相近成交</h4><span>官方實價登錄</span></div>
           <div className="property-market-controls"><label>坪數範圍<select value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))}><option value={0.1}>相近 ±10%</option><option value={0.2}>相近 ±20%</option><option value={0.3}>相近 ±30%</option></select></label><span className="property-market-caption">不限房數</span></div>
-          <div className="property-market-caption" role="status">{ping > 0 ? `${(ping * (1 - tolerance)).toFixed(2)}～${(ping * (1 + tolerance)).toFixed(2)} 坪・` : "權狀坪數未提供・"}符合 {deals.length} 筆，顯示最近 {recent.length} 筆</div>
+          <div className="property-market-caption" role="status">{ping > 0 ? `${(ping * (1 - tolerance)).toFixed(2)}～${(ping * (1 + tolerance)).toFixed(2)} 坪・` : "權狀坪數未提供・"}近一年符合 {deals.length} 筆，顯示最近 {recent.length} 筆</div>
           {reference.matchMethod === "exact-community-name" && <div className="property-market-caption warning">依唯一社區名稱／別名配對；請核對本件完整門牌。</div>}
           <div className="property-market-table">
             <div className="property-market-table-heading" aria-hidden="true"><span>日期／樓層</span><span>格局／坪數／地址</span><span>成交總價</span><span>官方揭露單價</span><span>扣車單價</span><span>車位／備註</span></div>
@@ -72,7 +72,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
               <div><small>{d.parkingType || "未列車位"}{Number(d.parkingPrice) > 0 ? `／車價 ${money(d.parkingPrice, 10000)} 萬` : d.parkingType ? "／車價未分列" : ""}</small>{d.remark && <details><summary>交易備註</summary><small>{d.remark}</small></details>}</div>
             </article>)}
           </div>
-          {!recent.length && <div className="property-market-message">目前條件查無可比成交，不以其他社區補足。可調整坪數範圍。</div>}
+          {!recent.length && <div className="property-market-message">近一年沒有符合條件的相近成交。可調整坪數範圍查看參考。</div>}
           <div className="property-market-source">資料發布：{reference.publishedDate || "未提供"}；成交年度：{(reference.years || []).join("、")}。本社區本批最新成交：{reference.deals?.[0]?.date || "未提供"}。</div>
           <details className="property-priority-method"><summary>面積與單價說明</summary><p>官方揭露單價保留原數字；扣車單價另以（成交總價－車位價）÷（建物總坪數－車位坪數）計算。有官方車位價就優先使用；未分列時，平面每個預設 180 萬、機械每個預設 150 萬，標示「預設試算」。官方未提供車位數量時先按 1 個試算；未提供車位坪數、類型不明或數字不合理時不計算。預設試算供業務參考，自動案件判斷仍只採官方拆分完整的成交。已排除特殊交易；車位數量、屋況與備註仍須核對。</p></details>
         </section>
