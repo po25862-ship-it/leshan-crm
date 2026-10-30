@@ -10,6 +10,7 @@ const mockRows = [
   { id: "c", title: "其他同事套房", area: "A7", status: "available", ownerUid: "other", rent: 15000, photos: [] },
 ];
 jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "staff" } }) }));
+jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [{ id: "staff", name: "小林" }, { id: "staff-b", name: "同事乙", phone: "02-12345678" }], loading: false }) }));
 jest.mock("../hooks/useDoc", () => ({ useDoc: () => ({ data: { name: "小林" } }) }));
 jest.mock("../hooks/usePersonalAgid", () => ({ usePersonalAgid: () => ({ agid: "67890" }) }));
 jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ items: mockRows, loading: false, error: null, refresh: jest.fn() }) }));
@@ -41,4 +42,30 @@ test("empty new listing can be saved as draft, while publishing requires complet
   render(); await click("＋ 新增租賃"); await click("儲存並招租");
   expect(saveCompanyRental).not.toHaveBeenCalled(); expect(container.querySelector("[role=alert]").textContent).toContain("請填寫");
   await click("存成草稿"); expect(saveCompanyRental).toHaveBeenCalledWith(expect.objectContaining({ status: "draft", photos: [] }));
+});
+
+const fieldLabel = text => [...container.querySelectorAll("label")].find(node => node.querySelector("span")?.textContent === text);
+function select(element, value) { act(() => { element.value = value; element.dispatchEvent(new Event("change", { bubbles: true })); }); }
+test("new rental defaults to staff picker and saves another responsible colleague", async () => {
+  render(); await click("＋ 新增租賃");
+  const picker = fieldLabel("案件負責人＊").querySelector("select");
+  expect(picker.value).toBe("staff"); expect(picker.textContent).toContain("同事乙");
+  select(picker, "staff-b"); await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ agentUid: "staff-b", agentName: "同事乙", agentPhone: "02-12345678" }));
+});
+test("manual responsible agent and two separate service fees are retained on draft save", async () => {
+  render(); await click("＋ 新增租賃");
+  select(fieldLabel("案件負責人＊").querySelector("select"), "__manual__");
+  input(fieldLabel("業務姓名＊").querySelector("input"), "自填業務");
+  await act(async () => [...container.querySelectorAll("[role=tab]")].find(node => node.textContent === "2. 租金與條件").click());
+  input(fieldLabel("買方服務費（對客人顯示）").querySelector("input"), "半個月租金");
+  input(fieldLabel("賣方服務費（僅同仁可見）").querySelector("input"), "屋主約定 20,000 元");
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ agentUid: null, agentName: "自填業務", buyerServiceFee: "半個月租金", sellerServiceFee: "屋主約定 20,000 元" }));
+});
+test("customer share preview never includes seller fee from colleague-only detail", async () => {
+  readRentalInternal.mockResolvedValue({ sellerServiceFee: "屋主私約費用", legacyServiceFee: "未拆分舊費用" });
+  render(); await click("查看資料"); await click("分享給客人");
+  expect(container.querySelector("textarea[aria-label='分享文字']").value).toContain("買方服務費");
+  expect(container.querySelector("textarea[aria-label='分享文字']").value).not.toMatch(/屋主私約費用|未拆分舊費用|賣方服務費/);
 });

@@ -6,6 +6,11 @@ const member='staff-a', other='staff-b';
 const data={title:'租賃測試',ownerUid:member,photos:[],status:'available',rent:28000,city:'桃園市',district:'龜山區',street:'樂善二路',lastModifiedByUid:member};
 const test=(expectation,path,method,uid,resource,next,mocks=[])=>({expectation,request:{path,method,auth:uid?{uid,token:{}}:null,...(next?{resource:{data:next}}:{})},...(resource?{resource:{data:resource}}:{}),functionMocks:mocks});
 const cases=[
+ test('ALLOW','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,buyerServiceFee:'half month',agentUid:other}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,sellerServiceFee:'private'}),
+ test('DENY','/databases/(default)/documents/companyRentals/test','create',member,null,{...data,legacyServiceFee:'private'}),
+ test('ALLOW','/databases/(default)/documents/companyRentals/test/internal/details','create',member,null,{sellerServiceFee:'private',legacyServiceFee:'unclassified'},[{function:'getAfter',args:[{anyValue:{}}],result:{value:{data:{ownerUid:member}}}}]),
+ test('DENY','/databases/(default)/documents/companyRentals/test/internal/details','get',null,{sellerServiceFee:'private'}),
  test('ALLOW','/databases/(default)/documents/companyRentals/test','get',member,data),
  test('DENY','/databases/(default)/documents/companyRentals/test','get',null,data),
  test('ALLOW','/databases/(default)/documents/companyRentals/test','create',member,null,data),

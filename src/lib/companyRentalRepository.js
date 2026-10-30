@@ -40,7 +40,7 @@ export async function saveCompanyRental({ original, form, status, photos, user, 
       if (original && (!current || (current.revision || 0) !== (original.revision || 0))) throw new Error("這筆案件已被其他人更新，請先重新整理再編輯。");
       if (!original && current) throw new Error("案件已存在，請重新開啟資料。");
       if (nextPhotos.length > MAX_RENTAL_PHOTOS) throw new Error("每案最多 10 張照片。");
-      const payload = { ...listing, ownerUid, agentName: current?.agentName || profile.name || user.displayName || "同事", agentPhone: current?.agentPhone || profile.phone || "", branch: current?.branch || profile.branch || "", photos: nextPhotos, revision: (current?.revision || 0) + 1, createdAt: current?.createdAt || serverTimestamp(), updatedAt: serverTimestamp(), lastModifiedByUid: user.uid };
+      const payload = { ...listing, ownerUid, photos: nextPhotos, revision: (current?.revision || 0) + 1, createdAt: current?.createdAt || serverTimestamp(), updatedAt: serverTimestamp(), lastModifiedByUid: user.uid };
       transaction.set(target, payload);
       transaction.set(doc(db, COMPANY_RENTAL_COLLECTION, target.id, "internal", "details"), { ...internal, updatedAt: serverTimestamp() });
       saved = { id: target.id, ...payload, createdAt: current?.createdAt || new Date(), updatedAt: new Date() };

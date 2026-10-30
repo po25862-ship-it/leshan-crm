@@ -1,19 +1,33 @@
 import React, { useEffect, useRef, useState } from "react";
-import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FORM_DEFAULTS, RENTAL_FURNITURE, rentalMonthlyCost, rentalMoney, validateCompanyRental } from "../lib/companyRental";
+import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, rentalMonthlyCost, rentalMoney, validateCompanyRental, companyRentalForm, companyRentalColleagues } from "../lib/companyRental";
 import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhotos";
+import { useCollection } from "../hooks/useCollection";
 import { saveCompanyRental } from "../lib/companyRentalRepository";
 
 export default function CompanyRentalEditor({ original, internal, user, profile, onSaved, onClose }) {
-  const [form, setForm] = useState(() => ({ ...RENTAL_FORM_DEFAULTS, ...original, ...internal }));
+  const [form, setForm] = useState(() => companyRentalForm(original, internal, user, profile));
+  const { items: staff, loading: staffLoading } = useCollection("colleagues", "name");
+  const staffChoices = companyRentalColleagues(staff, user, profile, original);
   const [photos, setPhotos] = useState(() => original?.photos || []);
   const [status, setStatus] = useState(original?.status || "available");
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false), [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState(""), [error, setError] = useState("");
-  const dirty = useRef(false), localUrls = useRef(new Set()), fileInput = useRef(null), errorRef = useRef(null);
+  const responsibleTouched = useRef(false), dirty = useRef(false), localUrls = useRef(new Set()), fileInput = useRef(null), errorRef = useRef(null);
   const cost = rentalMonthlyCost(form);
   useEffect(() => () => localUrls.current.forEach(url => URL.revokeObjectURL(url)), []);
   useEffect(() => { const warn = event => { if (dirty.current) { event.preventDefault(); event.returnValue = ""; } }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, []);
-  const change = (key, value) => { dirty.current = true; setForm(current => ({ ...current, [key]: value })); };
+  const currentStaff = staffChoices.find(item => item.id === user.uid);
+  useEffect(() => {
+    if (original || responsibleTouched.current || !currentStaff) return;
+    setForm(current => current.agentUid === user.uid && (current.agentName !== currentStaff.name || current.agentPhone !== (currentStaff.phone || "") || current.branch !== (currentStaff.branch || ""))
+      ? { ...current, agentName: currentStaff.name, agentPhone: currentStaff.phone || "", branch: currentStaff.branch || "" } : current);
+  }, [original, user.uid, currentStaff?.name, currentStaff?.phone, currentStaff?.branch]);
+  function chooseAgent(uid) {
+    responsibleTouched.current = true; dirty.current = true;
+    const selected = staffChoices.find(item => item.id === uid);
+    setForm(current => selected ? { ...current, agentUid: selected.id, agentName: selected.name, agentPhone: selected.phone || "", branch: selected.branch || "" } : { ...current, agentUid: null });
+  }
+  const change = (key, value) => { if (["agentName", "agentPhone", "branch"].includes(key)) responsibleTouched.current = true; dirty.current = true; setForm(current => ({ ...current, [key]: value })); };
   const close = () => { if (!busy && !processing && (!dirty.current || window.confirm("尚未儲存，確定離開編輯？"))) onClose(); };
   const field = (key, label, { options, type = "text", hint, wide, ...props } = {}) => <label className={wide ? "cr-field cr-wide" : "cr-field"} key={key}><span>{label}</span>{options ? <select value={form[key] ?? ""} onChange={event => change(key, event.target.value)}>{options.map(value => <option key={value}>{value}</option>)}</select> : <input type={type} value={form[key] ?? ""} onChange={event => change(key, event.target.value)} {...props} />}{hint && <small>{hint}</small>}</label>;
   const textarea = (key, label, hint) => <label className="cr-field cr-wide"><span>{label}</span><textarea rows={3} value={form[key] || ""} onChange={event => change(key, event.target.value)} />{hint && <small>{hint}</small>}</label>;
@@ -50,6 +64,9 @@ export default function CompanyRentalEditor({ original, internal, user, profile,
     {error && <p className="cr-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{message && <p className="cr-note" role="status">{message}</p>}
     <fieldset disabled={busy || processing} className="cr-form-body">
       {step === 0 && <><h3>先讓同事快速找到這間房</h3><div className="cr-form-grid">
+        <label className="cr-field cr-wide"><span>案件負責人＊</span><select value={form.agentUid || "__manual__"} onChange={event => chooseAgent(event.target.value)}><optgroup label="店內同事">{staffChoices.map(item => <option key={item.id} value={item.id}>{item.name}{item.id === user.uid ? "（我）" : ""}</option>)}</optgroup><option value="__manual__">自行輸入業務</option></select><small>{staffLoading ? "正在讀取店內同事名冊…" : "可選擇店內同事；名單以外的業務請選「自行輸入業務」。"}</small></label>
+        {!form.agentUid && field("agentName", "業務姓名＊", { maxLength: 80 })}
+        {field("agentPhone", "業務聯絡電話", { type: "tel", maxLength: 40 })}{field("branch", "所屬分店", { maxLength: 80 })}
         {field("title", "案名＊", { wide: true, placeholder: "例如：金捷市採光兩房平車", maxLength: 120 })}
         {field("community", "社區名稱")}{field("type", "租賃類型", { options: COMPANY_RENTAL_TYPES })}
         {field("area", "生活圈", { options: ["A7", "A8", "A9", "其他"] })}{field("city", "縣市＊")}{field("district", "行政區＊")}{field("street", "公開路段＊", { placeholder: "例如：樂善二路", hint: "分享給客人只帶出這個路段，請勿填完整門牌。" })}
@@ -63,7 +80,9 @@ export default function CompanyRentalEditor({ original, internal, user, profile,
         {field("parking", "車位", { options: ["待確認", "無車位", "坡道平面", "坡道機械", "升降機械", "其他"] })}{form.parking !== "無車位" && field("parkMode", "車位費用", { options: ["待確認", "已含租金", "另計"] })}{form.parking !== "無車位" && form.parkMode === "另計" && field("parkFee", "車位租金（元／月）", { type: "number", min: 0 })}
         {field("minLease", "最短租期", { options: ["一年", "兩年", "半年", "可談", "待確認"] })}{field("moveIn", "可入住時間", { options: ["待確認", "隨時入住", "另約日期"] })}{form.moveIn === "另約日期" && field("availableDate", "可入住日期", { type: "date" })}
         {field("pets", "寵物", { options: ["待確認", "可養寵物", "不可養寵物", "寵物可談"] })}{field("cook", "開伙", { options: ["待確認", "可開伙", "不可開伙"] })}{field("subsidy", "租屋補助", { options: ["待確認", "可申請租補", "請洽負責同事"] })}
-        {field("serviceFee", "服務費說明", { wide: true })}
+        {field("buyerServiceFee", "買方服務費（對客人顯示）", { wide: true, hint: "例如：半個月租金、月租金 50% 或 15,000 元；分享文字只帶出這一欄。" })}
+        {field("sellerServiceFee", "賣方服務費（僅同仁可見）", { wide: true, hint: "僅保存在同事內部資料，不帶入客人分享文字。" })}
+        {form.legacyServiceFee && <div className="cr-note cr-wide"><strong>原服務費說明（尚未拆分）</strong><p>{form.legacyServiceFee}</p><small>請確認買方、賣方各自的費用後分開填寫，這段原說明只保留給同仁查看。</small></div>}
       </div><h3>家具設備</h3><div className="cr-checks">{RENTAL_FURNITURE.map(value => <label key={value}><input type="checkbox" checked={form.furniture.includes(value)} onChange={event => change("furniture", event.target.checked ? [...form.furniture, value] : form.furniture.filter(item => item !== value))} />{value}</label>)}</div>{textarea("description", "給客人的房屋介紹", "請勿填入屋主電話、鑰匙位置或其他不適合公開的內容。")}</>}
       {step === 2 && <><h3>有網址就貼網址，有照片也能直接上傳</h3><div className="cr-form-grid">{field("websiteUrl", "物件網址", { wide: true, type: "url", placeholder: "https://rent.591.com.tw/…", hint: "支援 591 或公司物件頁；不會自動匯入網站內容。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareWebsite} onChange={event => change("shareWebsite", event.target.checked)} />分享文字附上物件網址</label>{field("albumUrl", "雲端相簿連結", { wide: true, type: "url", placeholder: "貼上 Google Drive 或其他相簿網址", hint: "相簿需先設定客人可開啟的權限。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareAlbum} onChange={event => change("shareAlbum", event.target.checked)} />分享文字附上相簿連結</label></div>
         <div className="cr-photo-head"><div><h3>物件照片（{photos.length}／10）</h3><small>自動縮小至每張 300KB 內，重複照片會跳過。</small></div><button type="button" onClick={() => fileInput.current?.click()}>＋ 選擇照片</button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden onChange={addPhotos} /></div>

@@ -8,7 +8,7 @@ jest.mock("firebase/firestore", () => ({ collection: (...args) => ({ path: [args
 jest.mock("firebase/storage", () => ({ ref: (_, path) => path, uploadBytes: jest.fn(async () => {}), getDownloadURL: jest.fn(async path => "https://example.test/" + path), deleteObject: jest.fn(async () => {}) }));
 jest.mock("../hooks/firestoreReadCache", () => ({ updateReadCache: jest.fn() }));
 const user = { uid: "staff" }, profile = { name: "小林" };
-const form = { ...RENTAL_FORM_DEFAULTS, title: "測試", rent: 28000, street: "文青路", doorAddress: "內部門牌", viewingInstructions: "先預約" };
+const form = { ...RENTAL_FORM_DEFAULTS, agentName: "小林", agentUid: "staff", title: "測試", rent: 28000, street: "文青路", doorAddress: "內部門牌", viewingInstructions: "先預約" };
 const original = { id: "rental", ownerUid: "staff", revision: 2, photos: [], ...rentalSavePayload(form, "available").listing };
 const snap = data => ({ id: "rental", exists: () => !!data, data: () => data });
 const tx = { get: jest.fn(), set: jest.fn(), update: jest.fn() };
@@ -59,4 +59,13 @@ test("stale availability or invalid date cannot create an appointment", async ()
   await expect(saveRentalViewing({ rental: original, user, newName: "客戶", date: "2030-01-01", time: "9" })).rejects.toThrow("不在招租");
   expect(tx.set).not.toHaveBeenCalled();
   await expect(saveRentalViewing({ rental: original, user, newName: "客戶", date: "2030-02-30", time: "9" })).rejects.toThrow("有效日期");
+});
+
+test("responsible colleague and buyer fee update while creator stays fixed and seller fee stays internal", async () => {
+  tx.get.mockResolvedValue(snap({ ...original, agentName: "原業務", agentPhone: "舊電話" }));
+  const result = await saveCompanyRental({ original, form: { ...form, agentUid: "colleague-b", agentName: "新業務", agentPhone: "新電話", buyerServiceFee: "半個月", sellerServiceFee: "屋主私約 30,000" }, status: "available", photos: [], user, profile });
+  const listing = tx.set.mock.calls[0][1], internal = tx.set.mock.calls[1][1];
+  expect(listing.ownerUid).toBe("staff"); expect(listing.agentUid).toBe("colleague-b"); expect(listing.agentName).toBe("新業務"); expect(listing.agentPhone).toBe("新電話");
+  expect(listing.buyerServiceFee).toBe("半個月"); expect(listing).not.toHaveProperty("sellerServiceFee"); expect(internal.sellerServiceFee).toBe("屋主私約 30,000");
+  expect(result.rental).not.toHaveProperty("sellerServiceFee");
 });

@@ -10,12 +10,37 @@ export const RENTAL_FORM_DEFAULTS = {
   rooms: "", living: "", baths: "", size: "", sizeBasis: "室內使用，不含車位", rent: "", deposit: 2,
   mgmtMode: "待確認", mgmt: "", parking: "待確認", parkMode: "待確認", parkFee: "", parkingNumber: "",
   minLease: "一年", moveIn: "待確認", availableDate: "", pets: "待確認", cook: "待確認", subsidy: "待確認",
-  websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], description: "", serviceFee: "成交服務費另洽負責同事",
+  websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], description: "", buyerServiceFee: "請洽負責同事確認", sellerServiceFee: "", legacyServiceFee: "",
+  agentUid: null, agentName: "", agentPhone: "", branch: "",
   viewingStatus: "待確認", doorAddress: "", landlordName: "", landlordPhone: "", keyInfo: "", internalNotes: "", viewingInstructions: "",
 };
-const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "serviceFee", "viewingStatus"];
+const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "buyerServiceFee", "viewingStatus", "agentName", "agentPhone", "branch"];
 const numericFields = ["rooms", "living", "baths", "size", "rent", "deposit", "mgmt", "parkFee"];
-export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordPhone", "keyInfo", "internalNotes", "viewingInstructions", "parkingNumber"];
+export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordPhone", "keyInfo", "internalNotes", "viewingInstructions", "parkingNumber", "sellerServiceFee", "legacyServiceFee"];
+// Keep older unclassified fee notes internal until a colleague splits them explicitly.
+export function companyRentalForm(original, internal, user, profile = {}) {
+  return { ...RENTAL_FORM_DEFAULTS, ...original, ...internal,
+    buyerServiceFee: original?.buyerServiceFee ?? RENTAL_FORM_DEFAULTS.buyerServiceFee,
+    sellerServiceFee: internal?.sellerServiceFee || "",
+    legacyServiceFee: internal?.legacyServiceFee || original?.serviceFee || "",
+    agentUid: original ? (Object.hasOwn(original, "agentUid") ? original.agentUid : original.ownerUid || null) : user.uid,
+    agentName: original?.agentName || profile.name || user.displayName || "同事",
+    agentPhone: original?.agentPhone ?? profile.phone ?? "",
+    branch: original?.branch ?? profile.branch ?? "",
+  };
+}
+export function companyRentalColleagues(rows, user, profile = {}, original) {
+  const map = new Map(rows.filter(row => row.id && row.name?.trim()).map(row => [row.id, row]));
+  if (!map.has(user.uid)) map.set(user.uid, { id: user.uid, name: profile.name || user.displayName || "我（目前登入）", phone: profile.phone || "", branch: profile.branch || "" });
+  const previousUid = original?.agentUid || (!Object.hasOwn(original || {}, "agentUid") && original?.ownerUid);
+  if (previousUid && !map.has(previousUid)) map.set(previousUid, { id: previousUid, name: original.agentName || "原負責同事", phone: original.agentPhone || "", branch: original.branch || "" });
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
+}
+export function rentalAgentKey(rental) {
+  if (rental.agentUid) return rental.agentUid;
+  if (!Object.hasOwn(rental, "agentUid") && rental.ownerUid) return rental.ownerUid;
+  return "manual:" + String(rental.agentName || "").normalize("NFKC").trim();
+}
 export const rentalNumber = value => value === "" || value == null ? null : Number(String(value).normalize("NFKC").replace(/,/g, ""));
 export const rentalMoney = value => Number(value || 0).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
 export function safeRentalUrl(value) {
@@ -68,6 +93,7 @@ export function validateCompanyRental(form, status, photos = []) {
   if (form.moveIn === "另約日期" && form.availableDate && !validRentalDate(form.availableDate)) return "請填寫有效的可入住日期。";
   if (status !== "draft") {
     if (![form.title, form.city, form.district, form.street, form.doorAddress].every(value => String(value || "").trim())) return "請填寫案名、縣市、行政區、路段與門牌／樓層。";
+    if (!String(form.agentName || "").trim()) return "請選擇案件負責人或自行輸入業務姓名。";
     if (!(rentalNumber(form.rent) > 0)) return "請填寫月租金後再加入招租清單。";
     if (!String(form.viewingInstructions || "").trim()) return "請填寫帶看方式，方便同事聯繫。";
   }
@@ -77,6 +103,7 @@ export function rentalSavePayload(form, status) {
   const listing = {};
   textFields.forEach(key => { listing[key] = String(form[key] || "").trim().slice(0, key === "description" ? 6000 : 2000); });
   numericFields.forEach(key => { listing[key] = rentalNumber(form[key]); });
+  listing.agentUid = typeof form.agentUid === "string" && form.agentUid.trim() ? form.agentUid.trim().slice(0, 128) : null;
   listing.title = listing.title || "未命名租賃草稿";
   listing.status = status;
   listing.websiteUrl = storedRentalUrl(form.websiteUrl);
@@ -101,7 +128,7 @@ export function buildCompanyRentalShare(rental, agid = "") {
     `最短租期：${rental.minLease || "待確認"}｜入住：${rental.moveIn === "另約日期" ? rental.availableDate || "另約日期" : rental.moveIn || "待確認"}`,
     [`寵物：${rental.pets || "待確認"}`, `開伙：${rental.cook || "待確認"}`, `租補：${rental.subsidy || "待確認"}`].filter(Boolean).join("｜"), rental.furniture?.length ? `家具設備：${rental.furniture.join("、")}` : "", rental.description || "",
     ...(rental.shareWebsite && website ? ["物件網址：" + website] : []), ...(rental.shareAlbum && album ? ["照片相簿：" + album] : []),
-    "", `服務費：${rental.serviceFee || "請洽負責同事確認"}`, "有興趣可以聯繫我安排看屋。"].join("\n");
+    "", `買方服務費：${rental.buyerServiceFee || "請洽負責同事確認"}`, "有興趣可以聯繫我安排看屋。"].join("\n");
 }
 export function validRentalDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
@@ -110,5 +137,5 @@ export function validRentalDate(value) {
 }
 export function rentalSearchRows(rows, { keyword = "", area = "", colleague = "", uid = "" } = {}) {
   const words = keyword.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
-  return rows.filter(row => (!area || row.area === area) && (!colleague || (colleague === "mine" ? row.ownerUid === uid : row.ownerUid === colleague)) && words.every(word => [row.title, row.community, row.city, row.district, row.street, row.area, row.agentName].join(" ").normalize("NFKC").toLowerCase().includes(word)));
+  return rows.filter(row => (!area || row.area === area) && (!colleague || (colleague === "mine" ? row.ownerUid === uid : rentalAgentKey(row) === colleague)) && words.every(word => [row.title, row.community, row.city, row.district, row.street, row.area, row.agentName].join(" ").normalize("NFKC").toLowerCase().includes(word)));
 }

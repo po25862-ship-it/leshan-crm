@@ -3,7 +3,7 @@ import { useAuth } from "../AuthContext";
 import { useDoc } from "../hooks/useDoc";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
 import { useCompanyRentals } from "../hooks/useCompanyRentals";
-import { COMPANY_RENTAL_STATUSES, rentalSearchRows, rentalMoney, rentalPublicAddress } from "../lib/companyRental";
+import { COMPANY_RENTAL_STATUSES, rentalSearchRows, rentalMoney, rentalPublicAddress, rentalAgentKey } from "../lib/companyRental";
 import CompanyRentalEditor from "./CompanyRentalEditor";
 import CompanyRentalDetail from "./CompanyRentalDetail";
 import "./CompanyRentals.css";
@@ -17,7 +17,7 @@ export default function CompanyRentals() {
   const [openId, setOpenId] = useState(""), [editing, setEditing] = useState(null), [notice, setNotice] = useState("");
   const searched = useMemo(() => rentalSearchRows(items, { keyword, area, colleague, uid: user.uid }), [items, keyword, area, colleague, user.uid]);
   const filtered = searched.filter(row => row.status === status).sort((a, b) => (b.updatedAt?.toMillis?.() || +new Date(b.updatedAt) || 0) - (a.updatedAt?.toMillis?.() || +new Date(a.updatedAt) || 0));
-  const colleagues = [...new Map(items.map(row => [row.ownerUid, row.agentName || "同事"])).entries()];
+  const colleagues = [...new Map(items.map(row => [rentalAgentKey(row), row.agentName || "同事"])).entries()];
   const resetDetail = () => { setOpenId(""); setNotice(""); };
   return <main className="company-rentals"><div className="cr-page-heading"><div><small>同事一起找房、介紹、安排帶看</small><h1>公司租賃 <span>{filtered.length}</span></h1></div><div className="cr-actions"><button disabled={loading} onClick={() => { refresh().then(() => setNotice("已讀取最新租賃清單。")).catch(() => {}); }}>{loading ? "讀取中…" : "重新整理"}</button><button className="cr-primary" disabled={!!editing} onClick={() => { setEditing({ original: null, internal: {} }); setOpenId(""); setNotice(""); }}>＋ 新增租賃</button></div></div>
     {notice && <p className="cr-success" role="status">{notice}</p>}{error && <p className="cr-error" role="alert">租賃清單讀取失敗，請按重新整理再試一次。{error.code === "permission-denied" ? "目前帳號尚無公司租賃權限。" : ""}</p>}
