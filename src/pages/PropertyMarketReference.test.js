@@ -34,6 +34,19 @@ test("missing parking is actionable and does not produce an opportunity label", 
   expect(onEdit).toHaveBeenCalledWith("property-parking-price");
   expect(host.querySelector('[aria-label="優先推案參考總價"]')).toBeNull();
 });
+
+test("a price-qualified property with a customer opens viewing confirmation without changing the record", () => {
+  const onEdit = jest.fn();
+  const subject = Object.freeze({ ...property, parkingPrice: 200, viewingStatus: "unknown" });
+  render({ property: subject, needs: [{ id: "n", budgetMax: 1600 }], onEdit });
+  expect(host.querySelector(".property-priority-badge").textContent).toBe("待確認可帶看");
+  expect(host.textContent).toContain("價格已符合，符合 1 組現有客需");
+  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "更新帶看狀態");
+  act(() => button.click());
+  expect(onEdit).toHaveBeenCalledWith("property-viewing-status");
+  expect(subject.viewingStatus).toBe("unknown");
+  expect(host.querySelector('[aria-label="優先推案參考總價"]').textContent).toContain("已符合價格條件");
+});
 test("offline errors do not leave old trades or positive opportunity labels visible", () => {
   render({ error: "來源離線，請更新參考。" });
   expect(host.querySelector('[role="alert"]').textContent).toContain("來源離線");

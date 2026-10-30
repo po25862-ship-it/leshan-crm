@@ -4,12 +4,18 @@ export const PRIORITY_FILTERS = [
   { value: "all", label: "全部案件" },
   { value: "priority", label: "優先推案" },
   { value: "negotiate", label: "議價追蹤" },
-  { value: "pending", label: "先把資料補齊" },
+  { value: "pending", label: "待處理／待確認" },
   { value: "unassessed", label: "還沒查過附近成交" },
 ];
 
 export function priorityActionLabel(assessment) {
+  if (assessment?.code === "viewing_unconfirmed") return "更新帶看狀態";
   return assessment?.code === "missing_unit" ? "去補資料" : "看價格比較";
+}
+
+export function priorityEditField(assessment) {
+  if (assessment?.code === "viewing_unconfirmed") return "property-viewing-status";
+  return assessment?.code === "missing_unit" ? assessment.missingFields?.[0]?.fieldId : null;
 }
 
 export const REFERENCE_MAX_AGE = 86400000;

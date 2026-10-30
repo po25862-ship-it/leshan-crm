@@ -3,6 +3,7 @@ import { assessPropertyPriority, COMPARABLE_AREA_TOLERANCE, comparableDeals } fr
 import { formatUnitPrice, nonNegativeNumber, parkingPricePresetNote } from "../lib/propertyUnitPrice";
 import { formatPropertyManagementFee } from "../lib/propertyManagementFee";
 import { dealParkingComparison } from "../lib/propertyDealParking";
+import { priorityActionLabel, priorityEditField } from "../lib/propertyPriorityWorklist";
 import "./PropertyMarketReference.css";
 
 const money = (value, divisor = 1) => value === null || value === undefined || value === "" ? "未提供" : (Number(value) / divisor).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
@@ -66,7 +67,7 @@ export default function PropertyMarketReference({ property, reference, loading, 
       <div>{assessment.reason}</div>
       <PriorityTotalPrice property={property} assessment={assessment} />
       <div className="property-priority-next"><span>建議下一步</span><strong>{assessment.next}</strong></div>
-      {assessment.code === "missing_unit" && <button type="button" className="btn ghost" onClick={() => onEdit(assessment.missingFields?.[0]?.fieldId)}>去補資料</button>}
+      {priorityEditField(assessment) && <button type="button" className="btn ghost" onClick={() => onEdit(priorityEditField(assessment))}>{priorityActionLabel(assessment)}</button>}
       <details className="property-priority-method"><summary>查看判斷依據</summary>{Number.isInteger(assessment.sampleCount) && <p>本次判斷採用 {assessment.sampleCount} 筆成交。沒有車位的成交也可納入；用預設車價的成交會標示試算{assessment.estimatedSampleCount > 0 ? `（本次 ${assessment.estimatedSampleCount} 筆）` : ""}。</p>}{assessment.sampleDates?.length > 0 && <p>採用成交日期：{assessment.sampleDates.join("、")}。</p>}<p>同社區完整門牌、相近建物總坪數 ±30%、同類型，不限房數。只採近一年（365 天）的成交，至少 1 筆就能比較，最多採用最新 5 筆可用成交。官方已分列車位價格時優先使用；未分列時，車位坪數與類型明確才採平面每個 180 萬、機械每個 150 萬試算。只有 1 筆就用該筆單價，多筆則取中位數。不高於參考單價、至少一組客需完全符合、近 30 天人工確認可帶看，才標示優先推案。樓層、屋況與交易條件仍須業務核對。</p></details>
     </div>
     {error && <div className="property-market-error" role="alert">{error}</div>}

@@ -4,6 +4,11 @@ const property = { id: "p", category: "電梯大樓", totalPrice: 1500, titlePin
 const deal = { id: "a", date: "2026-09-01", kind: "sale", type: "住宅大樓(11層含以上有電梯)", use: "住家用", area: 50, price: 16000000, unit: 35, rooms: 3, parkingPrice: 2000000, parkingArea: 10, parkingType: "坡道平面", special: false };
 const reference = { community: { id: "c" }, matchMethod: "exact-doorplate", deals: [deal, { ...deal, id: "b", date: "2026-08-01" }, { ...deal, id: "c", date: "2026-07-01" }] };
 const needs = [{ id: "n", contactId: "buyer", statusTag: "正在找", budgetMax: 1600, areas: [{ city: "桃園市", district: "龜山區" }] }];
+test.each(["建地", "農地", "車位", "工廠", "廠辦", "農舍"])("%s is not incorrectly presented as missing house comparison data", (category) => {
+  const result = assessPropertyPriority({ category, totalPrice: 1500 }, null, needs, { now });
+  expect(result).toMatchObject({ status: "not_applicable", code: "unsupported_category", label: "此類案件暫不比價" });
+  expect(result.missingFields).toBeUndefined();
+});
 test("comparables include different room counts while excluding special, wrong-type and future records", () => {
   const source = { ...reference, deals: [...reference.deals, { ...deal, id: "special", special: true }, { ...deal, id: "future", date: "2027-01-01" }, { ...deal, id: "wrong-type", type: "店面" }, { ...deal, id: "two-room", rooms: 2 }, { ...deal, id: "far", area: 90 }] };
   expect(comparableDeals(property, source, { now })).toHaveLength(4);
@@ -24,6 +29,32 @@ test("priority needs actual clients, recent comparable evidence, exact community
   expect(assessPropertyPriority(property, reference, [], { now }).status).toBe("pending");
   expect(assessPropertyPriority({ ...property, viewingConfirmedAt: "2026-01-01" }, reference, needs, { now }).status).toBe("pending");
   expect(assessPropertyPriority(property, { ...reference, matchMethod: "exact-community-name" }, needs, { now }).status).toBe("pending");
+});
+
+test.each([
+  ["unknown", "", "待確認可帶看"],
+  ["appointment", "", "需預約確認帶看"],
+  ["unavailable", "", "目前無法帶看"],
+  ["available", "2026-01-01", "帶看需重新確認"],
+  ["available", "", "帶看需重新確認"],
+  ["available", "2026-10-30", "帶看需重新確認"],
+])("viewing %s with confirmation %s identifies the actual next step", (viewingStatus, viewingConfirmedAt, label) => {
+  const subject = Object.freeze({ ...property, viewingStatus, viewingConfirmedAt });
+  const result = assessPropertyPriority(subject, reference, needs, { now });
+  expect(result).toMatchObject({ status: "pending", code: "viewing_unconfirmed", label, matchedNeeds: 1 });
+  expect(result.reason).toContain("價格已符合");
+  expect(result.label).not.toBe("先把資料補齊");
+  expect(result.next).toContain("向負責業務確認可帶看後");
+  expect(result.priceTarget.totalPrice).toBe(1600);
+  expect(subject.viewingConfirmedAt).toBe(viewingConfirmedAt);
+});
+
+test("a viewing confirmation is valid through thirty days, but cannot bypass price or customer requirements", () => {
+  const atBoundary = new Date(now - 30 * 86400000).toISOString();
+  expect(assessPropertyPriority({ ...property, viewingConfirmedAt: atBoundary }, reference, needs, { now }).status).toBe("priority");
+  expect(assessPropertyPriority({ ...property, viewingConfirmedAt: new Date(now - 30 * 86400000 - 1).toISOString() }, reference, needs, { now }).code).toBe("viewing_unconfirmed");
+  expect(assessPropertyPriority({ ...property, viewingStatus: "unknown", totalPrice: 1700 }, reference, needs, { now }).status).toBe("negotiate");
+  expect(assessPropertyPriority({ ...property, viewingStatus: "unknown" }, reference, [], { now }).code).toBe("no_matching_need");
 });
 test("a higher asking price may trigger negotiation but never priority", () => {
   expect(assessPropertyPriority({ ...property, totalPrice: 1700 }, reference, needs, { now }).status).toBe("negotiate");

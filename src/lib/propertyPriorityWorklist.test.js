@@ -1,4 +1,4 @@
-import { buildPriorityAssessments, cachedPriorityReference, compactPriorityReference, countPriorityGroups, loadPriorityReferences, matchesPriorityFilter, priorityGroup, priorityReferenceKey, refreshPriorityReferences, savePriorityReferences } from "./propertyPriorityWorklist";
+import { buildPriorityAssessments, cachedPriorityReference, compactPriorityReference, countPriorityGroups, loadPriorityReferences, matchesPriorityFilter, priorityActionLabel, priorityEditField, priorityGroup, priorityReferenceKey, refreshPriorityReferences, savePriorityReferences } from "./propertyPriorityWorklist";
 
 const now = Date.parse("2026-10-29T04:00:00Z");
 const property = { id: "p", area: "A7重劃區", address: "桃園市龜山區文青路222號", communityName: "測試社區", category: "電梯大樓", totalPrice: 1500, titlePing: 50, parkingPrice: 200, parkingPing: 10, layout: "3/2/2", viewingStatus: "available", viewingConfirmedAt: "2026-10-28" };
@@ -6,6 +6,19 @@ const deal = { id: "one", date: "2026-09-01", type: "住宅大樓", use: "住家
 const reference = { fetchedAt: now, matchMethod: "exact-doorplate", community: { id: "community", name: "測試社區", zone: "A7" }, deals: [deal, { ...deal, id: "two", date: "2026-08-01" }, { ...deal, id: "three", date: "2026-07-01" }] };
 const needs = [{ id: "need", contactId: "buyer", statusTag: "正在找", budgetMax: 2000, areas: [{ city: "桃園市", district: "龜山區" }] }];
 const record = (p, data = reference) => ({ key: priorityReferenceKey(p), data: compactPriorityReference(p, data) });
+
+test("viewing tasks remain pending and open the viewing field, while missing data opens its own field", () => {
+  const unconfirmed = { ...property, viewingStatus: "unknown", viewingConfirmedAt: "" };
+  const result = buildPriorityAssessments([unconfirmed], { p: record(unconfirmed) }, needs, [], now).get("p");
+  expect(result.label).toBe("待確認可帶看");
+  expect(priorityGroup(result)).toBe("pending");
+  expect(priorityActionLabel(result)).toBe("更新帶看狀態");
+  expect(priorityEditField(result)).toBe("property-viewing-status");
+  const missing = { code: "missing_unit", missingFields: [{ fieldId: "property-parking-ping" }] };
+  expect(priorityActionLabel(missing)).toBe("去補資料");
+  expect(priorityEditField(missing)).toBe("property-parking-ping");
+  expect(priorityEditField({ status: "negotiate" })).toBeNull();
+});
 
 test("work categories use the same current assessment as badges, with unchecked cases kept separate", () => {
   const properties = [property, { ...property, id: "negotiate", totalPrice: 1800 }, { ...property, id: "missing", parkingPrice: "" }, { ...property, id: "unchecked" }, { ...property, id: "outside", area: "桃園市", title: "其他區域", communityName: "" }, { ...property, id: "inactive", status: "onHold" }];
