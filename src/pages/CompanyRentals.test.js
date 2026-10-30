@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import CompanyRentals from "./CompanyRentals";
 import { readRentalInternal, saveCompanyRental } from "../lib/companyRentalRepository";
+import { rentalToday } from "../lib/companyRentalWebsite";
 const mockRows = [
   { id: "a", title: "金捷市兩房", community: "金捷市", street: "樂善二路", area: "A7", status: "available", ownerUid: "staff", rent: 28000, photos: [], revision: 1 },
   { id: "b", title: "林口三房", area: "A9", status: "rented", ownerUid: "other", rent: 35000, photos: [] },
@@ -14,10 +15,12 @@ jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [{ i
 jest.mock("../hooks/useDoc", () => ({ useDoc: () => ({ data: { name: "小林" } }) }));
 jest.mock("../hooks/usePersonalAgid", () => ({ usePersonalAgid: () => ({ agid: "67890" }) }));
 jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ items: mockRows, loading: false, error: null, refresh: jest.fn() }) }));
+jest.mock("../hooks/useRentalWebsiteChecks", () => ({ useRentalWebsiteChecks: () => ({}) }));
+jest.mock("../lib/rentalWebsiteClient", () => ({ loadRentalWebsiteInfo: jest.fn(), needsRentalWebsiteCheck: jest.fn(() => false) }));
 jest.mock("../lib/companyRentalRepository", () => ({ readRentalInternal: jest.fn(), saveCompanyRental: jest.fn(), setCompanyRentalStatus: jest.fn() }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [], loading: false }) }));
 let container, root;
-beforeEach(() => { mockRows.forEach(row => { row.furniture = []; delete row.equipmentCatalog; delete row.agentUid; delete row.agentName; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
+beforeEach(() => { mockRows.forEach(row => { row.furniture = []; for (const key of ["equipmentCatalog", "agentUid", "agentName", "websiteUrl", "websiteExpiresOn", "mandateExpiresOn", "websiteCheckStatus", "websiteCheckedUrl", "websiteUnavailable"]) delete row[key]; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
@@ -97,6 +100,34 @@ test("a rental can include both car and motorcycle spaces with independent fee s
   expect(fieldLabel("機車位租金（元／月）")).toBeUndefined();
   await click("存成草稿");
   expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ parking: "坡道平面", parkFee: "3000", motorbikeParking: "社區先到先停", motorbikeParkMode: "已含租金" }));
+});
+
+test("expired website stays stored but is replaced with no-website text in details and customer sharing", async () => {
+  Object.assign(mockRows[0], { websiteUrl: "https://rent.591.com.tw/22258856", websiteExpiresOn: "2000-01-01", mandateExpiresOn: "2000-01-02", shareWebsite: true });
+  render(); expect(container.textContent).toContain("目前無網站"); expect(container.textContent).toContain("有到期提醒");
+  await click("只看到期提醒"); expect(container.querySelectorAll("article")).toHaveLength(1); expect(container.querySelector("h1").textContent).toContain("1");
+  await click("查看資料"); expect([...container.querySelectorAll("a")].some(node => node.textContent.includes("開啟物件網址"))).toBe(false);
+  expect(container.textContent).toContain("https://rent.591.com.tw/22258856");
+  await click("分享給客人"); const share = container.querySelector("textarea[aria-label='分享文字']").value;
+  expect(share).toContain("目前無網站"); expect(share).not.toContain("rent.591.com.tw"); expect(share).not.toContain("2000-01-02");
+});
+test("rental editor saves independent mandate and website dates and resets old URL expiry after a URL change", async () => {
+  render(); await click("＋ 新增租賃");
+  await act(async () => [...container.querySelectorAll("[role=tab]")].find(node => node.textContent === "3. 網址、照片與內部資料").click());
+  input(fieldLabel("物件網址").querySelector("input"), "https://rent.591.com.tw/22258856");
+  input(fieldLabel("網站刊登到期日").querySelector("input"), "2026-11-29");
+  input(fieldLabel("委託到期日").querySelector("input"), "2027-01-31");
+  input(fieldLabel("物件網址").querySelector("input"), "https://rent.591.com.tw/12345678");
+  expect(fieldLabel("網站刊登到期日").querySelector("input").value).toBe("");
+  expect(fieldLabel("委託到期日").querySelector("input").value).toBe("2027-01-31");
+  input(fieldLabel("網站刊登到期日").querySelector("input"), "2026-12-15");
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ mandateExpiresOn: "2027-01-31", websiteExpiresOn: "2026-12-15", websiteExpirySource: "manual", websiteCheckStatus: "unchecked" }));
+});
+test("today's mandate date reminds staff without hiding the website before its own expiry date", async () => {
+  Object.assign(mockRows[0], { websiteUrl: "https://example.test/rental", websiteExpiresOn: "2099-01-01", mandateExpiresOn: rentalToday() });
+  render(); expect(container.textContent).toContain("委託今天到期");
+  await click("查看資料"); expect(container.querySelector("a[href='https://example.test/rental']")).not.toBeNull();
 });
 test("manual responsible agent and two separate service fees are retained on draft save", async () => {
   render(); await click("＋ 新增租賃");

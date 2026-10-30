@@ -1,6 +1,6 @@
 import { runTransaction } from "firebase/firestore";
 import { uploadBytes, deleteObject } from "firebase/storage";
-import { saveCompanyRental, setCompanyRentalStatus, saveRentalViewing } from "./companyRentalRepository";
+import { saveCompanyRental, setCompanyRentalStatus, saveRentalViewing, saveRentalWebsiteCheck } from "./companyRentalRepository";
 import { RENTAL_FORM_DEFAULTS, rentalSavePayload } from "./companyRental";
 import { updateReadCache } from "../hooks/firestoreReadCache";
 jest.mock("../firebase", () => ({ db: {}, storage: {} }));
@@ -84,4 +84,29 @@ test("car and motorcycle data save separately with both space numbers restricted
   expect(result.rental).toEqual(expect.objectContaining({ parking: "坡道平面", parkFee: 3000, motorbikeParking: "有機車位", motorbikeParkFee: 300 }));
   expect(result.rental).not.toHaveProperty("parkingNumber"); expect(result.rental).not.toHaveProperty("motorbikeParkingNumber");
   expect(tx.set.mock.calls[1][1]).toEqual(expect.objectContaining({ parkingNumber: "B2-17", motorbikeParkingNumber: "M28" }));
+});
+
+const webUrl = "https://rent.591.com.tw/22258856";
+const webInfo = { url: webUrl, status: "live", expiresOn: "2026-11-29", checkedAt: "2026-10-31T04:00:00Z" };
+test("source checks enrich only website metadata without changing the listing's revision or business-update date", async () => {
+  tx.get.mockResolvedValue(snap({ ...original, websiteUrl: webUrl }));
+  const result = await saveRentalWebsiteCheck({ ...original, websiteUrl: webUrl }, webInfo, user);
+  expect(result.websiteExpiresOn).toBe("2026-11-29"); expect(result.revision).toBe(2);
+  expect(tx.update.mock.calls[0][1]).not.toHaveProperty("updatedAt"); expect(tx.update.mock.calls[0][1]).not.toHaveProperty("revision");
+  expect(tx.set).not.toHaveBeenCalled();
+});
+test("unknown sources, unauthorized colleagues and a URL changed during checking cannot overwrite website metadata", async () => {
+  tx.get.mockResolvedValue(snap({ ...original, websiteUrl: webUrl }));
+  expect(await saveRentalWebsiteCheck({ ...original, websiteUrl: webUrl }, { ...webInfo, status: "unknown" }, user)).toBeNull();
+  expect(tx.update).not.toHaveBeenCalled();
+  expect(await saveRentalWebsiteCheck({ ...original, websiteUrl: webUrl }, webInfo, { uid: "other" })).toBeNull();
+  tx.get.mockResolvedValue(snap({ ...original, websiteUrl: "https://rent.591.com.tw/12345678" }));
+  expect(await saveRentalWebsiteCheck({ ...original, websiteUrl: webUrl }, webInfo, user)).toBeNull();
+  expect(tx.update).not.toHaveBeenCalled();
+});
+test("editing business fields preserves newer website checks that arrived while the form was open", async () => {
+  const old = { ...original, websiteUrl: webUrl, websiteExpiresOn: "2026-11-01", websiteExpirySource: "591", websiteCheckedAt: "2026-10-30T04:00:00Z" };
+  tx.get.mockResolvedValue(snap({ ...old, websiteExpiresOn: "2026-11-29", websiteCheckedAt: webInfo.checkedAt, websiteCheckStatus: "live", websiteCheckedUrl: webUrl }));
+  const result = await saveCompanyRental({ original: old, form: { ...form, websiteUrl: webUrl, websiteExpiresOn: old.websiteExpiresOn, websiteExpirySource: "591", websiteCheckedAt: old.websiteCheckedAt }, status: "available", photos: [], user, profile });
+  expect(result.rental.websiteCheckedAt).toBe(Date.parse(webInfo.checkedAt)); expect(result.rental.websiteExpiresOn).toBe("2026-11-29");
 });

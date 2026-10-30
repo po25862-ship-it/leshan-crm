@@ -5,6 +5,8 @@ import { useCollection } from "../hooks/useCollection";
 import { isHiddenColleague } from "../lib/colleagueVisibility";
 import RentalCommunityPicker from "./RentalCommunityPicker";
 import { saveCompanyRental } from "../lib/companyRentalRepository";
+import { isRental591Url, rentalWebsiteKey, rentalWebsitePatch } from "../lib/companyRentalWebsite";
+import { loadRentalWebsiteInfo, needsRentalWebsiteCheck } from "../lib/rentalWebsiteClient";
 
 export default function CompanyRentalEditor({ original, internal, sharedEquipment = RENTAL_FURNITURE, user, profile, onSaved, onClose }) {
   const [form, setForm] = useState(() => companyRentalForm(original, internal, user, profile));
@@ -18,6 +20,9 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   const [status, setStatus] = useState(original?.status || "available");
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false), [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState(""), [error, setError] = useState("");
+  const [checkingWebsite, setCheckingWebsite] = useState(false), [websiteMessage, setWebsiteMessage] = useState("");
+  const websiteRequest = useRef(0);
+  useEffect(() => () => { websiteRequest.current++; }, []);
   const responsibleTouched = useRef(false), dirty = useRef(false), localUrls = useRef(new Set()), fileInput = useRef(null), errorRef = useRef(null);
   const cost = rentalMonthlyCost(form);
   useEffect(() => () => localUrls.current.forEach(url => URL.revokeObjectURL(url)), []);
@@ -34,7 +39,34 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
     const selected = staffChoices.find(item => item.id === uid);
     setForm(current => selected ? { ...current, agentUid: selected.id, agentName: selected.name, agentPhone: selected.phone || "", branch: selected.branch || "" } : { ...current, agentUid: null });
   }
-  const change = (key, value) => { if (["agentName", "agentPhone", "branch"].includes(key)) responsibleTouched.current = true; dirty.current = true; setForm(current => ({ ...current, [key]: value })); };
+  const change = (key, value) => {
+    if (["agentName", "agentPhone", "branch"].includes(key)) responsibleTouched.current = true;
+    dirty.current = true;
+    setForm(current => {
+      if (key === "websiteUrl" && rentalWebsiteKey(value) !== rentalWebsiteKey(current.websiteUrl)) return { ...current, websiteUrl: value, websiteExpiresOn: "", websiteExpirySource: "", websiteCheckStatus: "unchecked", websiteCheckedUrl: "", websiteCheckedAt: 0, websiteUnavailable: false };
+      if (key === "websiteExpiresOn") return { ...current, websiteExpiresOn: value, websiteExpirySource: value ? "manual" : "" };
+      return { ...current, [key]: value };
+    });
+    if (key === "websiteUrl") {
+      setWebsiteMessage("");
+      if (rentalWebsiteKey(value) !== rentalWebsiteKey(form.websiteUrl)) { websiteRequest.current++; setCheckingWebsite(false); }
+    }
+  };
+  async function checkWebsite(force = false) {
+    const url = form.websiteUrl;
+    if (!isRental591Url(url) || (!force && !needsRentalWebsiteCheck(form))) return;
+    const request = ++websiteRequest.current; setCheckingWebsite(true); setWebsiteMessage("");
+    try {
+      const info = await loadRentalWebsiteInfo(user, url, force);
+      if (request !== websiteRequest.current) return;
+      const patch = rentalWebsitePatch(form, info, { overwriteExpiry: force });
+      if (!patch) { setWebsiteMessage("591 暫時無法確認，已保留原網址與日期；可自行填寫到期日。"); return; }
+      dirty.current = true;
+      setForm(current => rentalWebsiteKey(current.websiteUrl) === rentalWebsiteKey(url) ? { ...current, ...rentalWebsitePatch(current, info, { overwriteExpiry: force }) } : current);
+      setWebsiteMessage(info.status === "unlisted" ? "591 已下架，儲存後會顯示「目前無網站」。" : info.expiresOn ? `已讀取 591 刊登到期日：${info.expiresOn}，請儲存案件。` : "網址目前可用；591 未提供可辨識的到期日，請自行補上。");
+    } catch { if (request === websiteRequest.current) setWebsiteMessage("目前無法讀取 591，已保留原網址與日期，請稍後再試。"); }
+    finally { if (request === websiteRequest.current) setCheckingWebsite(false); }
+  }
   const close = () => { if (!busy && !processing && (!dirty.current || window.confirm("尚未儲存，確定離開編輯？"))) onClose(); };
   const field = (key, label, { options, type = "text", hint, wide, ...props } = {}) => <label className={wide ? "cr-field cr-wide" : "cr-field"} key={key}><span>{label}</span>{options ? <select value={form[key] ?? ""} onChange={event => change(key, event.target.value)}>{options.map(option => { const value = typeof option === "string" ? option : option.value; return <option key={value} value={value}>{typeof option === "string" ? option : option.label}</option>; })}</select> : <input type={type} value={form[key] ?? ""} onChange={event => change(key, event.target.value)} {...props} />}{hint && <small>{hint}</small>}</label>;
   const textarea = (key, label, hint) => <label className="cr-field cr-wide"><span>{label}</span><textarea rows={3} value={form[key] || ""} onChange={event => change(key, event.target.value)} />{hint && <small>{hint}</small>}</label>;
@@ -74,6 +106,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   }
   async function save(nextStatus) {
     setError("");
+    if (checkingWebsite) { setError("正在讀取 591，到期資料回來後即可儲存。"); return; }
     let saveForm = form;
     if (newEquipment.trim()) {
       try { saveForm = prepareEquipment(); }
@@ -127,7 +160,11 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
         {equipmentError && <p className="cr-error" role="alert">{equipmentError}</p>}{equipmentNotice && <p className="cr-note" role="status">{equipmentNotice}</p>}
         <p className="cr-equipment-help">新增後會自動勾選，儲存案件時也會記住設備名稱。取消勾選只會從本案移除，共用選項仍會保留；客人介紹只顯示本案勾選的設備。</p>
         {textarea("description", "給客人的房屋介紹", "請勿填入屋主電話、鑰匙位置或其他不適合公開的內容。")}</>}
-      {step === 2 && <><h3>有網址就貼網址，有照片也能直接上傳</h3><div className="cr-form-grid">{field("websiteUrl", "物件網址", { wide: true, type: "url", placeholder: "https://rent.591.com.tw/…", hint: "支援 591 或公司物件頁；不會自動匯入網站內容。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareWebsite} onChange={event => change("shareWebsite", event.target.checked)} />分享文字附上物件網址</label>{field("albumUrl", "雲端相簿連結", { wide: true, type: "url", placeholder: "貼上 Google Drive 或其他相簿網址", hint: "相簿需先設定客人可開啟的權限。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareAlbum} onChange={event => change("shareAlbum", event.target.checked)} />分享文字附上相簿連結</label></div>
+      {step === 2 && <><h3>有網址就貼網址，有照片也能直接上傳</h3><div className="cr-form-grid">{field("websiteUrl", "物件網址", { wide: true, type: "url", placeholder: "https://rent.591.com.tw/…", onBlur: () => checkWebsite(false), hint: "貼上 591 連結並離開欄位後，自動讀取刊登期限；其他網站可自行填日期。" })}
+          <div className="cr-wide cr-website-check"><button type="button" disabled={checkingWebsite || !isRental591Url(form.websiteUrl)} onClick={() => checkWebsite(true)}>{checkingWebsite ? "讀取 591 中…" : "讀取 591 期限／檢查網址"}</button>{websiteMessage && <p role="status">{websiteMessage}</p>}</div>
+          {field("websiteExpiresOn", "網站刊登到期日", { type: "date", hint: form.websiteExpirySource === "591" ? "已從 591 刊登資料讀取，可自行修正；當天仍可刊登，超過日期後顯示目前無網站。" : "可手動填寫；沒有可靠的日期時保留空白，不用猜。" })}
+          {field("mandateExpiresOn", "委託到期日", { type: "date", hint: "依實際委託填寫，提前 7 天在清單提醒；不會帶給客人。" })}
+          <label className="cr-check cr-wide"><input type="checkbox" checked={form.websiteUnavailable} onChange={event => change("websiteUnavailable", event.target.checked)} />目前無網站（手動標記，原網址仍會保留）</label><label className="cr-check cr-wide"><input type="checkbox" checked={form.shareWebsite} onChange={event => change("shareWebsite", event.target.checked)} />分享文字附上物件網址</label>{field("albumUrl", "雲端相簿連結", { wide: true, type: "url", placeholder: "貼上 Google Drive 或其他相簿網址", hint: "相簿需先設定客人可開啟的權限。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareAlbum} onChange={event => change("shareAlbum", event.target.checked)} />分享文字附上相簿連結</label></div>
         <div className="cr-photo-head"><div><h3>物件照片（{photos.length}／10）</h3><small>自動縮小至每張 300KB 內，重複照片會跳過。</small></div><button type="button" onClick={() => fileInput.current?.click()}>＋ 選擇照片</button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden onChange={addPhotos} /></div>
         <div className="cr-photo-grid">{photos.map(photo => <figure key={photo.id}><img src={photo.url} alt={photo.name} loading="lazy" /><figcaption>{Math.ceil(photo.size / 1000)} KB <button type="button" aria-label={`移除${photo.name}`} onClick={() => { dirty.current = true; setPhotos(current => current.filter(item => item.id !== photo.id)); if (photo.blob) { URL.revokeObjectURL(photo.url); localUrls.current.delete(photo.url); } }}>移除</button></figcaption></figure>)}</div>
         <div className="cr-internal"><h3>🔒 同事內部資料</h3><p>以下欄位只在平台內顯示，不會放進「分享給客人」文字。</p><div className="cr-form-grid">{field("landlordName", "屋主稱呼")}{field("landlordPhone", "屋主電話", { type: "tel" })}{field("parkingNumber", "汽車位編號")}{field("motorbikeParkingNumber", "機車位編號")}{field("viewingStatus", "帶看狀態", { options: ["待確認", "可預約帶看", "需先聯繫"] })}{textarea("viewingInstructions", "帶看方式＊", "例如：請提前一天聯繫負責同事。")}{textarea("keyInfo", "鑰匙／門禁資訊")}{textarea("internalNotes", "內部備註")}</div></div>

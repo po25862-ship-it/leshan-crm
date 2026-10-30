@@ -1,5 +1,6 @@
 import { MAIN_OWNER_UID, withAgid, withoutAgid } from "./url";
 import { visibleColleagueOptions } from "./colleagueVisibility";
+import { validRentalDay, rentalWebsiteKey, rentalWebsiteState, rentalCheckTime } from "./companyRentalWebsite";
 
 export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫停招租", draft: "草稿" };
 export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套房", "雅房", "店面", "辦公室", "車位"];
@@ -47,10 +48,11 @@ export const RENTAL_FORM_DEFAULTS = {
   motorbikeParking: "待確認", motorbikeParkMode: "待確認", motorbikeParkFee: "", motorbikeParkingNumber: "",
   minLease: "一年", moveIn: "待確認", availableDate: "", pets: "待確認", cook: "待確認", subsidy: "待確認",
   websiteUrl: "", albumUrl: "", shareWebsite: true, shareAlbum: false, furniture: [], equipmentCatalog: [], description: "", buyerServiceFee: "請洽負責同事確認", sellerServiceFee: "", legacyServiceFee: "",
+  mandateExpiresOn: "", websiteExpiresOn: "", websiteExpirySource: "", websiteCheckStatus: "unchecked", websiteCheckedUrl: "", websiteCheckedAt: 0, websiteUnavailable: false,
   agentUid: null, agentName: "", agentPhone: "", branch: "",
   viewingStatus: "待確認", doorAddress: "", landlordName: "", landlordPhone: "", keyInfo: "", internalNotes: "", viewingInstructions: "",
 };
-const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "motorbikeParking", "motorbikeParkMode", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "buyerServiceFee", "viewingStatus", "agentName", "agentPhone", "branch"];
+const textFields = ["title", "community", "type", "area", "city", "district", "street", "floor", "sizeBasis", "mgmtMode", "parking", "parkMode", "motorbikeParking", "motorbikeParkMode", "mandateExpiresOn", "websiteExpiresOn", "websiteExpirySource", "websiteCheckStatus", "websiteCheckedUrl", "minLease", "moveIn", "availableDate", "pets", "cook", "subsidy", "description", "buyerServiceFee", "viewingStatus", "agentName", "agentPhone", "branch"];
 const numericFields = ["rooms", "living", "baths", "size", "rent", "deposit", "mgmt", "parkFee", "motorbikeParkFee"];
 export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordPhone", "keyInfo", "internalNotes", "viewingInstructions", "parkingNumber", "motorbikeParkingNumber", "sellerServiceFee", "legacyServiceFee"];
 // Keep older unclassified fee notes internal until a colleague splits them explicitly.
@@ -136,6 +138,11 @@ export function validateCompanyRental(form, status, photos = []) {
   }
   if (form.motorbikeParking && !MOTORBIKE_PARKING_OPTIONS.includes(form.motorbikeParking)) return "請選擇有效的機車位狀況。";
   if (form.motorbikeParkMode && !RENTAL_PARKING_FEE_OPTIONS.includes(form.motorbikeParkMode)) return "請選擇有效的機車位費用方式。";
+  for (const [key, label] of [["mandateExpiresOn", "委託到期日"], ["websiteExpiresOn", "刊登到期日"]]) if (form[key] && !validRentalDay(form[key])) return `請填寫有效的${label}。`;
+  if (form.websiteExpirySource && !["591", "manual"].includes(form.websiteExpirySource)) return "刊登到期日來源不正確。";
+  if (form.websiteCheckStatus && !["unchecked", "live", "unlisted", "unknown"].includes(form.websiteCheckStatus)) return "網址檢查狀態不正確。";
+  if (form.websiteCheckedAt && rentalCheckTime(form.websiteCheckedAt) === null) return "網址檢查時間不正確。";
+  if (form.websiteCheckedUrl && !rentalWebsiteKey(form.websiteCheckedUrl)) return "網址檢查資料不正確。";
   if (form.furniture != null && (!Array.isArray(form.furniture) || form.furniture.some(item => typeof item !== "string"))) return "設備清單格式不正確，請重新勾選。";
   const furniture = normalizeRentalFurniture(form.furniture);
   if (furniture.length > MAX_RENTAL_FURNITURE) return "每間物件最多勾選 40 項設備。";
@@ -167,6 +174,9 @@ export function rentalSavePayload(form, status) {
   listing.title = listing.title || "未命名租賃草稿";
   listing.status = status;
   listing.websiteUrl = storedRentalUrl(form.websiteUrl);
+  listing.websiteUnavailable = form.websiteUnavailable === true;
+  listing.websiteCheckStatus = listing.websiteCheckStatus || "unchecked";
+  listing.websiteCheckedAt = rentalCheckTime(form.websiteCheckedAt) || 0;
   listing.albumUrl = safeRentalUrl(form.albumUrl);
   listing.shareWebsite = form.shareWebsite === true;
   listing.shareAlbum = form.shareAlbum === true;
@@ -176,8 +186,8 @@ export function rentalSavePayload(form, status) {
   INTERNAL_RENTAL_FIELDS.forEach(key => { internal[key] = String(form[key] || "").trim().slice(0, 6000); });
   return { listing, internal };
 }
-export function buildCompanyRentalShare(rental, agid = "") {
-  const cost = rentalMonthlyCost(rental), website = companyRentalUrl(rental.websiteUrl, agid), album = safeRentalUrl(rental.albumUrl), furniture = normalizeRentalFurniture(rental.furniture);
+export function buildCompanyRentalShare(rental, agid = "", now = Date.now()) {
+  const cost = rentalMonthlyCost(rental), website = rentalWebsiteState(rental, now).available ? companyRentalUrl(rental.websiteUrl, agid) : "", album = safeRentalUrl(rental.albumUrl), furniture = normalizeRentalFurniture(rental.furniture);
   return [rental.title, [rental.community, rentalPublicAddress(rental)].filter(Boolean).join("｜"),
     `${rental.rooms ?? "—"}房${rental.living ?? "—"}廳${rental.baths ?? "—"}衛｜${rental.size ? rentalMoney(rental.size) + " 坪（" + rental.sizeBasis + "）" : "面積待確認"}${rental.floor ? "｜" + rental.floor + " 樓" : ""}`, "",
     `月租：${rental.rent ? rentalMoney(rental.rent) + " 元" : "待確認"}`,
@@ -189,7 +199,7 @@ export function buildCompanyRentalShare(rental, agid = "") {
     `押金：${rental.deposit == null || !rental.rent ? "待確認" : rental.deposit + " 個月，" + rentalMoney(rental.rent * rental.deposit) + " 元"}`, "",
     `最短租期：${rental.minLease || "待確認"}｜入住：${rental.moveIn === "另約日期" ? rental.availableDate || "另約日期" : rental.moveIn || "待確認"}`,
     [`寵物：${rental.pets || "待確認"}`, `開伙：${rental.cook || "待確認"}`, `租補：${rental.subsidy || "待確認"}`].filter(Boolean).join("｜"), furniture.length ? `家具設備：${furniture.join("、")}` : "", rental.description || "",
-    ...(rental.shareWebsite && website ? ["物件網址：" + website] : []), ...(rental.shareAlbum && album ? ["照片相簿：" + album] : []),
+    ...(rental.shareWebsite ? [website ? "物件網址：" + website : "物件網站：目前無網站"] : []), ...(rental.shareAlbum && album ? ["照片相簿：" + album] : []),
     "", `買方服務費：${rental.buyerServiceFee || "請洽負責同事確認"}`, "有興趣可以聯繫我安排看屋。"].join("\n");
 }
 export function validRentalDate(value) {

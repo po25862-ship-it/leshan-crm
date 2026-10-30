@@ -5,6 +5,7 @@ import { canEditCompanyRental, rentalSavePayload, validateCompanyRental, normali
 import { normalizeTimeInput } from "./timeInput";
 import { todayTaipeiStr } from "./dates";
 import { updateReadCache } from "../hooks/firestoreReadCache";
+import { rentalWebsiteKey, rentalWebsitePatch, rentalCheckTime } from "./companyRentalWebsite";
 
 export const COMPANY_RENTAL_COLLECTION = "companyRentals";
 export const companyRentalCacheKey = uid => `companyRentals::${uid}`;
@@ -42,7 +43,17 @@ export async function saveCompanyRental({ original, form, status, photos, user, 
       if (nextPhotos.length > MAX_RENTAL_PHOTOS) throw new Error("每案最多 10 張照片。");
       const equipmentCatalog = normalizeRentalFurniture([...normalizeRentalFurniture(current?.equipmentCatalog), ...normalizeRentalFurniture(current?.furniture), ...listing.equipmentCatalog]);
       const equipmentError = validateCompanyRental({ ...form, equipmentCatalog }, status, photos); if (equipmentError) throw new Error(equipmentError);
-      const payload = { ...listing, equipmentCatalog, ownerUid, photos: nextPhotos, revision: (current?.revision || 0) + 1, createdAt: current?.createdAt || serverTimestamp(), updatedAt: serverTimestamp(), lastModifiedByUid: user.uid };
+      const website = { ...listing };
+      if (current && rentalWebsiteKey(current.websiteUrl) === rentalWebsiteKey(listing.websiteUrl)) {
+        if ((rentalCheckTime(current.websiteCheckedAt) || 0) > (rentalCheckTime(listing.websiteCheckedAt) || 0)) {
+          for (const key of ["websiteCheckStatus", "websiteCheckedUrl", "websiteCheckedAt"]) if (current[key] !== undefined) website[key] = current[key];
+          website.websiteCheckedAt = rentalCheckTime(current.websiteCheckedAt) || 0;
+        }
+        if (original && form.websiteExpiresOn === (original.websiteExpiresOn || "") && form.websiteExpirySource === (original.websiteExpirySource || "")) {
+          website.websiteExpiresOn = current.websiteExpiresOn || ""; website.websiteExpirySource = current.websiteExpirySource || "";
+        }
+      }
+      const payload = { ...website, equipmentCatalog, ownerUid, photos: nextPhotos, revision: (current?.revision || 0) + 1, createdAt: current?.createdAt || serverTimestamp(), updatedAt: serverTimestamp(), lastModifiedByUid: user.uid };
       transaction.set(target, payload);
       transaction.set(doc(db, COMPANY_RENTAL_COLLECTION, target.id, "internal", "details"), { ...internal, updatedAt: serverTimestamp() });
       saved = { id: target.id, ...payload, createdAt: current?.createdAt || new Date(), updatedAt: new Date() };
@@ -64,6 +75,21 @@ export async function saveCompanyRental({ original, form, status, photos, user, 
     }
     throw error;
   }
+}
+export async function saveRentalWebsiteCheck(rental, info, user) {
+  if (!canEditCompanyRental(rental, user.uid)) return null;
+  const target = doc(db, COMPANY_RENTAL_COLLECTION, rental.id); let saved = null;
+  await runTransaction(db, async transaction => {
+    const current = snapshotRow(await transaction.get(target));
+    if (!current || !canEditCompanyRental(current, user.uid) || rentalWebsiteKey(current.websiteUrl) !== rentalWebsiteKey(rental.websiteUrl)) return;
+    const patch = rentalWebsitePatch(current, info);
+    if (!patch || (rentalCheckTime(current.websiteCheckedAt) || 0) > Date.parse(info.checkedAt)) return;
+    // Source metadata does not reorder listings or invalidate a colleague's open edit form.
+    transaction.update(target, { ...patch, lastModifiedByUid: user.uid });
+    saved = { ...current, ...patch, lastModifiedByUid: user.uid };
+  });
+  if (saved) publishLocal(user.uid, saved);
+  return saved;
 }
 export async function setCompanyRentalStatus(rental, status, user) {
   if (!["available", "rented", "paused", "draft"].includes(status)) throw new Error("招租狀態不正確。");
