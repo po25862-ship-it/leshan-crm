@@ -28,3 +28,5 @@ test('binding inspects names and waits for explicit confirmation',async()=>{tena
 test('an invalid binding link cannot be confirmed',async()=>{tenantHelperRequest.mockRejectedValueOnce(new Error('連接網址已失效'));await render('/?tenantBind=expired');expect(button('連接我的小幫手').disabled).toBe(true);expect(container.textContent).toContain('連接網址已失效');});
 
 test('helper connection errors are shown instead of being mistaken for an unlinked account',async()=>{tenantHelperRequest.mockRejectedValueOnce(new Error('CRM 驗證失敗，請重新登入。'));await render();await click('小幫手連接／說明');expect(container.textContent).toContain('CRM 驗證失敗，請重新登入。');});
+
+test('template instructions include authorized company group input',async()=>{await render();await click('查看表格');expect(container.textContent).toContain('貼到已授權公司群組');expect(container.textContent).toContain('發訊息者的帳號');});
