@@ -97,7 +97,8 @@ function matchTenantRental(need, rental) {
     matched.push("社區／路段");
   }
   const rooms = countWords(need.roomText);
-  if (/套房|雅房/.test(rooms)) { if (!/套房|雅房/.test(rental.type || "")) return reject(); matched.push("房型"); }
+  if (/\d+\s*(?:\+|[-~–至到、])\s*\d+/.test(rooms)) uncertain.push("房數範圍／彈性房");
+  else if (/套房|雅房/.test(rooms)) { const kind=/雅房/.test(rooms)?"雅房":"套房"; if (!(rental.type || "").includes(kind)) return reject(); matched.push("房型"); }
   else if (rooms) {
     const match = rooms.match(/(\d+)\s*房/); const exact = match || rooms.match(/^(\d+)(?:\s*\/|$)/);
     if (exact) {
@@ -125,16 +126,17 @@ function matchTenantRental(need, rental) {
   const budget = parseRentalBudget(need.budgetText);
   let knownMonthly = Number(rental.rent) || 0;
   if (!knownMonthly) uncertain.push("租金");
-  const fees = normalize(need.includedFees);
+  const fees = normalize(need.includedFees), allFees = /全包|全部|全含|所有/.test(fees);
+  if (/水電|水費|電費|瓦斯|網路|第四台|清潔|服務費/.test(fees) || allFees) uncertain.push("預算內其他費用");
   const addFee = (condition, mode, amountValue, label) => {
     if (!condition) return;
     if (/已含租金|無需|無管理費|無車位|無機車位/.test(mode || "")) return;
     if (mode === "另計" && amountValue !== "" && amountValue != null && Number.isFinite(Number(amountValue))) knownMonthly += Number(amountValue);
     else uncertain.push(label);
   };
-  addFee(/管理/.test(fees), rental.mgmtMode, rental.mgmt, "管理費");
-  addFee(/汽車|平面|機械|(?<!機)車位/.test(fees) && !/^無車位$/.test(rental.parking || ""), rental.parkMode, rental.parkFee, "汽車位費");
-  addFee(/機車/.test(fees) && !/^無機車位$/.test(rental.motorbikeParking || ""), rental.motorbikeParkMode, rental.motorbikeParkFee, "機車位費");
+  addFee(allFees || /管理/.test(fees), rental.mgmtMode, rental.mgmt, "管理費");
+  addFee((allFees || /汽車|平面|機械|(?<!機)車位/.test(fees)) && !/^無車位$/.test(rental.parking || ""), rental.parkMode, rental.parkFee, "汽車位費");
+  addFee((allFees || /機車/.test(fees)) && !/^無機車位$/.test(rental.motorbikeParking || ""), rental.motorbikeParkMode, rental.motorbikeParkFee, "機車位費");
   if (budget?.max && knownMonthly > budget.max) return reject();
   if (!fees) uncertain.push("預算包含費用");
   if (requested(need.pets)) {

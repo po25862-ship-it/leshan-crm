@@ -31,3 +31,5 @@ test('negative needs do not become pet requirements; explicit restrictions rejec
  expect(f.matchTenantRental({...form,carParking:'平面1個'},{...listing,parking:'坡道機械'})).toBeNull();
  expect(f.matchTenantRental({...form,cook:'需要'},{...listing,cook:'不可開伙'})).toBeNull();
 });
+
+test('flexible room counts and all-inclusive fees are marked for clarification instead of guessed',()=>{expect(f.matchTenantRental({...form,roomText:'2+1房'},listing).uncertain).toContain('房數範圍／彈性房');expect(f.matchTenantRental({...form,includedFees:'全包'},listing).knownMonthly).toBe(30000);expect(f.matchTenantRental({...form,includedFees:'租金、水電'},listing).uncertain).toContain('預算內其他費用');expect(f.matchTenantRental({...form,roomText:'雅房'},{...listing,type:'獨立套房'})).toBeNull();});
