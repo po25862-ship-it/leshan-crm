@@ -1,0 +1,28 @@
+/** @jest-environment jsdom */
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {MemoryRouter} from 'react-router-dom';
+import TenantNeeds from './TenantNeeds';
+import {saveTenantNeed} from '../lib/tenantNeedRepository';
+import {tenantHelperRequest} from '../lib/tenantHelperClient';
+const mockUser={uid:'staff',displayName:'同事甲'};
+let mockRows=[];
+jest.mock('../AuthContext',()=>({useAuth:()=>({user:mockUser})}));
+jest.mock('../hooks/useDoc',()=>({useDoc:()=>({data:{name:'同事甲'}})}));
+jest.mock('../hooks/useTenantNeeds',()=>({useTenantNeeds:()=>({items:mockRows,loading:false,refresh:async()=>{}})}));
+jest.mock('../hooks/useCompanyRentals',()=>({useCompanyRentals:()=>({items:[{id:'a',title:'可租案件',area:'A7',status:'available',rent:20000},{id:'b',title:'已出租案件',area:'A7',status:'rented',rent:20000},{id:'c',title:'超預算案件',area:'A7',status:'available',rent:50000}],loading:false})}));
+jest.mock('../lib/tenantNeedRepository',()=>({saveTenantNeed:jest.fn(),canEditTenantNeed:(row,uid)=>row.ownerUid===uid}));
+jest.mock('../lib/tenantHelperClient',()=>({tenantHelperRequest:jest.fn()}));
+jest.mock('./ShareWithPicker',()=>()=> <div>同事分享選單</div>);
+let container,root;
+beforeEach(()=>{mockRows=[];global.IS_REACT_ACT_ENVIRONMENT=true;container=document.createElement('div');document.body.append(container);root=createRoot(container);saveTenantNeed.mockReset();tenantHelperRequest.mockReset();});
+afterEach(()=>{act(()=>root.unmount());container.remove();});
+const render=(url='/')=>act(async()=>root.render(<MemoryRouter initialEntries={[url]} future={{v7_startTransition:true,v7_relativeSplatPath:true}}><TenantNeeds/></MemoryRouter>));
+const button=text=>[...container.querySelectorAll('button')].find(node=>node.textContent===text);
+const click=text=>act(async()=>button(text).click());
+const need={id:'one',ownerUid:'staff',ownerName:'同事甲',name:'租客甲',areas:'A7',budgetText:'3萬',status:'searching',sharedWith:[]};
+test('empty form is blocked before saving and template has approved labels',async()=>{await render();await click('查看表格');expect(container.querySelector('textarea').value).toContain('租金預算：');expect(container.querySelector('textarea').value).not.toMatch(/電話|聯絡方式/);await click('＋ 新增需求');await click('儲存需求');expect(saveTenantNeed).not.toHaveBeenCalled();expect(container.querySelector('[role=alert]').textContent).toMatch(/姓名/);});
+test('detail opens inline and matches only available affordable listings',async()=>{mockRows=[need];await render();await click('查看需求');expect(container.querySelector('.cr-detail').textContent).toContain('未指定');await click('配對招租物件');expect(container.textContent).toContain('可租案件');expect(container.textContent).not.toContain('已出租案件');expect(container.textContent).not.toContain('超預算案件');});
+test('shared recipient can read but cannot edit',async()=>{mockRows=[{...need,ownerUid:'other',sharedWith:['staff']}];await render();const select=container.querySelector('.tn-filters select');await act(async()=>{select.value='all';select.dispatchEvent(new Event('change',{bubbles:true}));});await click('查看需求');expect(button('編輯條件／分享')).toBeUndefined();});
+test('binding inspects names and waits for explicit confirmation',async()=>{tenantHelperRequest.mockResolvedValueOnce({staffName:'LINE同事甲',bound:false}).mockResolvedValueOnce({bound:true,message:'已連接'});await render('/?tenantBind=abc');expect(container.textContent).toContain('LINE同事甲');expect(container.textContent).toContain('同事甲');expect(tenantHelperRequest.mock.calls.map(call=>call[1])).toEqual(['inspect']);await click('連接我的小幫手');expect(tenantHelperRequest.mock.calls.map(call=>call[1])).toEqual(['inspect','bind']);});
+test('an invalid binding link cannot be confirmed',async()=>{tenantHelperRequest.mockRejectedValueOnce(new Error('連接網址已失效'));await render('/?tenantBind=expired');expect(button('連接我的小幫手').disabled).toBe(true);expect(container.textContent).toContain('連接網址已失效');});

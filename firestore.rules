@@ -181,6 +181,31 @@ service cloud.firestore {
     }
 
     // 判斷是不是資料的擁有者、被分享的同事、或主要負責人
+    match /tenantNeeds/{needId} {
+      allow read: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid in resource.data.sharedWith || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid && request.resource.data.source == 'manual' && request.resource.data.sourceEventId == '' && validTenantNeed();
+      allow update: if request.auth != null && request.resource.data.ownerUid == resource.data.ownerUid &&
+        (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132") &&
+        request.resource.data.source == resource.data.source && request.resource.data.sourceEventId == resource.data.sourceEventId &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.revision == resource.data.revision + 1 && validTenantNeed();
+      allow delete: if false;
+    }
+    function tenantText(d,k,max) { return d[k] is string && d[k].size() <= max; }
+    function validTenantNeed() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['type','name','budgetText','includedFees','areas','communityStreet','roomText','minPingText','carParking','motorbikeParking','pets','subsidy','cook','equipment','moveIn','leaseTerm','requiredConditions','notes','status','sharedWith','budgetMin','budgetMax','budgetUnlimited','minPing','ownerUid','ownerName','source','sourceEventId','createdAt','updatedAt','revision','lastModifiedByUid']) &&
+        tenantText(d,'includedFees',500) && tenantText(d,'communityStreet',500) && tenantText(d,'roomText',500) && tenantText(d,'minPingText',500) && tenantText(d,'carParking',500) && tenantText(d,'motorbikeParking',500) && tenantText(d,'pets',500) && tenantText(d,'subsidy',500) && tenantText(d,'cook',500) && tenantText(d,'equipment',500) && tenantText(d,'moveIn',500) && tenantText(d,'leaseTerm',500) && tenantText(d,'notes',2000) && tenantText(d,'requiredConditions',2000) &&
+        d.type == '租屋' && d.name is string && d.name.size() > 0 && d.name.size() <= 500 && d.areas is string && d.areas.size() > 0 && d.areas.size() <= 500 &&
+        d.budgetText is string && d.budgetText.size() > 0 && d.budgetText.size() <= 500 &&
+        (d.budgetMax == null || (d.budgetMax is number && d.budgetMax > 0 && d.budgetMax <= 10000000)) &&
+        (d.budgetMin == null || (d.budgetMin is number && d.budgetMin > 0 && d.budgetMin <= 10000000)) &&
+        (d.budgetMax == null || d.budgetMin == null || d.budgetMin <= d.budgetMax) &&
+        d.budgetUnlimited is bool && (d.budgetUnlimited || d.budgetMax != null || d.budgetMin != null) &&
+        (d.minPing == null || (d.minPing is number && d.minPing >= 0)) &&
+        d.status in ['searching','viewing','rented','paused'] && d.source in ['manual','line'] &&
+        d.sharedWith is list && d.sharedWith.size() <= 50 && d.ownerUid is string && d.ownerName is string &&
+        d.revision is number && d.revision >= 1 && d.lastModifiedByUid == request.auth.uid;
+    }
     function isOwnerOrShared(data) {
       return request.auth != null && (
         request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||

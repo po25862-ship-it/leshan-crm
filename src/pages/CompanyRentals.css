@@ -14,3 +14,5 @@
 
 .cr-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.cr-row-actions .cr-link-button{gap:6px}
 @media(max-width:760px){.cr-row-end{flex-wrap:wrap;gap:12px}.cr-row-actions{margin-left:auto}}
+
+.cr-hub-tabs{display:flex;gap:8px;margin:0 0 20px;flex-wrap:wrap}.company-rentals .cr-hub-tabs button[aria-selected=true]{background:#265e49;color:#fff;border-color:#265e49}

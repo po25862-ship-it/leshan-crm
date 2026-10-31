@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { useDoc } from "../hooks/useDoc";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
@@ -11,8 +12,16 @@ import CompanyRentalEditor from "./CompanyRentalEditor";
 import CompanyRentalDetail from "./CompanyRentalDetail";
 import "./CompanyRentals.css";
 
+const TenantNeeds = lazy(() => import("./TenantNeeds"));
 export default function CompanyRentals() {
+  const [params,setParams] = useSearchParams();
+  const view = params.get("tab") === "needs" || params.has("tenantBind") ? "needs" : "listings";
+  const navigation = <nav className="cr-hub-tabs" aria-label="租賃功能">{[["listings","租賃物件"],["needs","租客需求"]].map(([key,label])=><button type="button" key={key} aria-selected={view===key} onClick={()=>{const next=new URLSearchParams(params);next.set("tab",key);next.delete("rentalOpen");next.delete("tenantBind");setParams(next);}}>{label}</button>)}</nav>;
+  return view === "needs" ? <Suspense fallback={<main className="company-rentals">正在載入租客需求…</main>}><TenantNeeds navigation={navigation}/></Suspense> : <CompanyRentalListings navigation={navigation}/>;
+}
+function CompanyRentalListings({ navigation }) {
   const { user } = useAuth();
+  const [params,setParams] = useSearchParams();
   const { data: profile } = useDoc(`colleagues/${user.uid}`, {});
   const { agid } = usePersonalAgid();
   const { items: storedItems, loading, error, refresh } = useCompanyRentals(user.uid);
@@ -20,6 +29,13 @@ export default function CompanyRentals() {
   const [openId, setOpenId] = useState(""), [editing, setEditing] = useState(null), [notice, setNotice] = useState("");
   const [now, setNow] = useState(Date.now), [expiryOnly, setExpiryOnly] = useState(false);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    const id=params.get("rentalOpen");
+    const row=id && storedItems.find(item=>item.id===id);
+    if (!row) return;
+    setStatus(row.status);setOpenId(id);
+    const next=new URLSearchParams(params);next.delete("rentalOpen");setParams(next,{replace:true});
+  }, [params,setParams,storedItems]);
   const checks = useRentalWebsiteChecks(storedItems, user, !editing && !loading);
   const items = useMemo(() => storedItems.map(row => { const patch = rentalWebsitePatch(row, checks[row.id]); return patch ? { ...row, ...patch } : row; }), [storedItems, checks]);
   const baseSearch = useMemo(() => rentalSearchRows(items, { keyword, area, colleague, uid: user.uid }), [items, keyword, area, colleague, user.uid]);
@@ -30,6 +46,7 @@ export default function CompanyRentals() {
   const colleagues = [...new Map(items.filter(row => !isHiddenColleague(rentalAgentKey(row))).map(row => [rentalAgentKey(row), row.agentName || "同事"])).entries()];
   const resetDetail = () => { setOpenId(""); setNotice(""); };
   return <main className="company-rentals"><div className="cr-page-heading"><div><small>同事一起找房、介紹、安排帶看</small><h1>公司租賃 <span>{filtered.length}</span></h1></div><div className="cr-actions"><button disabled={loading} onClick={() => { refresh().then(() => setNotice("已讀取最新租賃清單。")).catch(() => {}); }}>{loading ? "讀取中…" : "重新整理"}</button><button className="cr-primary" disabled={!!editing} onClick={() => { setEditing({ original: null, internal: {} }); setOpenId(""); setNotice(""); }}>＋ 新增租賃</button></div></div>
+    {!editing && navigation}
     {notice && <p className="cr-success" role="status">{notice}</p>}{error && <p className="cr-error" role="alert">租賃清單讀取失敗，請按重新整理再試一次。{error.code === "permission-denied" ? "目前帳號尚無公司租賃權限。" : ""}</p>}
     {!editing && (reminderCount > 0 || expiryOnly) && <div className="cr-expiry-banner"><div><strong>{reminderCount} 筆案件有到期提醒</strong><p>委託與刊登期限提前 7 天提醒，已到期的案件也會保留在清單內。</p></div><button type="button" onClick={() => { setExpiryOnly(value => !value); setStatus("available"); setOpenId(""); }}>{expiryOnly ? "顯示全部案件" : "只看到期提醒"}</button></div>}
     {editing ? <CompanyRentalEditor key={editing.original?.id || "new"} {...editing} sharedEquipment={sharedEquipment} user={user} profile={profile} onClose={() => setEditing(null)} onSaved={(rental, message) => { setEditing(null); setStatus(rental.status); setExpiryOnly(false); setKeyword(""); setArea(""); setColleague(""); setOpenId(rental.id); setNotice(message); }} /> : <>

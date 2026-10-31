@@ -1,0 +1,14 @@
+import {getDocs,query,runTransaction} from 'firebase/firestore';
+import {readTenantNeeds,saveTenantNeed,TENANT_ADMIN_UID} from './tenantNeedRepository';
+import tenantFields from './tenantNeedFields.cjs';
+jest.mock('../firebase',()=>({db:{}}));
+jest.mock('../hooks/firestoreReadCache',()=>({updateReadCache:jest.fn()}));
+jest.mock('firebase/firestore',()=>({collection:(_,path)=>({path}),doc:(...args)=>({id:args[2]||'new'}),where:(...args)=>args,query:jest.fn((root,...clauses)=>({root,clauses})),getDocs:jest.fn(),runTransaction:jest.fn(),serverTimestamp:()=> 'SERVER_TIME'}));
+const form={...tenantFields.tenantNeedForm(),name:'甲',areas:'A7',budgetText:'30000'};
+const original={...tenantFields.tenantNeedPayload(form),id:'one',ownerUid:'staff',ownerName:'同事',source:'line',sourceEventId:'event-hash',revision:1,createdAt:'ORIGINAL_TIME'};
+const tx={get:jest.fn(),set:jest.fn()};
+beforeEach(()=>{jest.clearAllMocks();runTransaction.mockImplementation(async(_,cb)=>cb(tx));tx.get.mockResolvedValue({exists:()=>true,data:()=>original});});
+test('read is scoped to owner and explicitly shared recipients and merges duplicate documents',async()=>{getDocs.mockResolvedValue({docs:[{id:'one',data:()=>original}]});const rows=await readTenantNeeds('staff');expect(query.mock.calls.map(args=>args[1])).toEqual([['ownerUid','==','staff'],['sharedWith','array-contains','staff']]);expect(rows).toHaveLength(1);await readTenantNeeds(TENANT_ADMIN_UID);expect(query).toHaveBeenCalledTimes(2);});
+test('shared recipient cannot edit and revision conflict cannot overwrite',async()=>{await expect(saveTenantNeed({original,form,user:{uid:'other'}})).rejects.toThrow('只有');expect(runTransaction).not.toHaveBeenCalled();tx.get.mockResolvedValue({exists:()=>true,data:()=>({...original,revision:2})});await expect(saveTenantNeed({original,form,user:{uid:'staff'}})).rejects.toThrow('已更新');expect(tx.set).not.toHaveBeenCalled();});
+test('editing keeps original owner and bot metadata, with new revision and editing actor',async()=>{await saveTenantNeed({original,form:{...form,name:'乙'},user:{uid:'staff'}});expect(tx.set.mock.calls[0][1]).toEqual(expect.objectContaining({name:'乙',ownerUid:'staff',source:'line',sourceEventId:'event-hash',revision:2,createdAt:'ORIGINAL_TIME',lastModifiedByUid:'staff'}));});
+test('manual creation derives owner from authenticated user and starts unshared',async()=>{tx.get.mockResolvedValue({exists:()=>false});await saveTenantNeed({form,user:{uid:'staff'},profile:{name:'同事甲'}});expect(tx.set.mock.calls[0][1]).toEqual(expect.objectContaining({ownerUid:'staff',ownerName:'同事甲',source:'manual',sharedWith:[],revision:1}));});
