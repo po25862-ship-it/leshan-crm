@@ -1,6 +1,6 @@
 import {getDocs,query,runTransaction} from 'firebase/firestore';
 import {readTenantNeeds,saveTenantNeed,TENANT_ADMIN_UID} from './tenantNeedRepository';
-import tenantFields from './tenantNeedFields.cjs';
+import tenantFields from './tenantNeedFields.js';
 jest.mock('../firebase',()=>({db:{}}));
 jest.mock('../hooks/firestoreReadCache',()=>({updateReadCache:jest.fn()}));
 jest.mock('firebase/firestore',()=>({collection:(_,path)=>({path}),doc:(...args)=>({id:args[2]||'new'}),where:(...args)=>args,query:jest.fn((root,...clauses)=>({root,clauses})),getDocs:jest.fn(),runTransaction:jest.fn(),serverTimestamp:()=> 'SERVER_TIME'}));

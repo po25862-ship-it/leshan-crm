@@ -1,4 +1,4 @@
-const f = require('./tenantNeedFields.cjs');
+const f = require('./tenantNeedFields.js');
 const form = { ...f.tenantNeedForm(), name:'小陳', budgetText:'3.5萬', areas:'A7' };
 const listing = { id:'a', status:'available', title:'A7兩房', area:'A7', rent:28000, rooms:2, parking:'坡道平面', parkMode:'已含租金', mgmtMode:'另計', mgmt:2000, pets:'不可養寵物', subsidy:'可申請', cook:'可開伙' };
 test('approved template round trips all fields and does not request contact details', () => {

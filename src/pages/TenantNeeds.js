@@ -4,7 +4,7 @@ import { useAuth } from "../AuthContext";
 import { useDoc } from "../hooks/useDoc";
 import { useTenantNeeds } from "../hooks/useTenantNeeds";
 import { useCompanyRentals } from "../hooks/useCompanyRentals";
-import tenantFields from "../lib/tenantNeedFields.cjs";
+import tenantFields from "../lib/tenantNeedFields.js";
 const { TENANT_NEED_FIELDS, TENANT_NEED_STATUSES, tenantNeedForm, tenantNeedErrors, tenantNeedTemplate, tenantNeedBudgetLabel, matchTenantRental } = tenantFields;
 import { canEditTenantNeed, saveTenantNeed } from "../lib/tenantNeedRepository";
 import { tenantHelperRequest } from "../lib/tenantHelperClient";

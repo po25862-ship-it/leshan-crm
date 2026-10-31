@@ -1,7 +1,7 @@
 import { collection, doc, getDocs, query, where, runTransaction, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { updateReadCache } from "../hooks/firestoreReadCache";
-import tenantFields from "./tenantNeedFields.cjs";
+import tenantFields from "./tenantNeedFields.js";
 const { tenantNeedPayload } = tenantFields;
 
 export const TENANT_NEEDS_COLLECTION = "tenantNeeds";

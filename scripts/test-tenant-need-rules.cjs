@@ -3,7 +3,7 @@ const fs=require('fs');
 const auth=require(process.env.FIREBASE_CLI_AUTH_MODULE || '/usr/local/lib/node_modules/firebase-tools/lib/auth.js');
 const root=require('path').resolve(__dirname,'..');
 const member='staff-a', other='staff-b';
-const f=require('../src/lib/tenantNeedFields.cjs');
+const f=require('../src/lib/tenantNeedFields.js');
 const data={...f.tenantNeedPayload({...f.tenantNeedForm(),name:'租客甲',areas:'A7',budgetText:'30000'}),ownerUid:member,ownerName:'同事甲',lastModifiedByUid:member,source:'manual',sourceEventId:'',revision:1,createdAt:1,updatedAt:1};
 const path='/databases/(default)/documents/tenantNeeds/test';
 const test=(expectation,method,uid,resource,next)=>({expectation,request:{path,method,auth:uid?{uid,token:{}}:null,...(next?{resource:{data:next}}:{})},...(resource?{resource:{data:resource}}:{})});
