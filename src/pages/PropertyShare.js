@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useSharedCollection } from "../hooks/useSharedCollection";
-import { buildPropertyShareText } from "../lib/propertyShareText";
+import { buildPropertyShareText, DEFAULT_PROPERTY_SHARE_INTRO } from "../lib/propertyShareText";
 import { todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
@@ -18,7 +18,7 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyers = contacts.filter((c) => (c.tags || []).includes("買方"));
 
-  const [intro, setIntro] = useState("下面有推薦你幾間物件，您看看有沒有合適的");
+  const [intro, setIntro] = useState(DEFAULT_PROPERTY_SHARE_INTRO);
   const [previewText, setPreviewText] = useState("");
   const [buyerId, setBuyerId] = useState(defaultBuyerId);
   const recipientId = selectedBuyerId !== undefined ? selectedBuyerId : buyerId;
@@ -107,7 +107,7 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
       <div className="form-field">
         <label>預覽（可以自己再修改，複製/記錄都是用這裡的內容）</label>
         <textarea
-          rows={Math.min(18, 4 + properties.length * (includeMaps ? 3 : 2))}
+          rows={Math.min(22, 6 + properties.length * (includeMaps ? 8 : 7))}
           value={previewText}
           onChange={(e) => setPreviewText(e.target.value)}
           style={{ fontFamily: "inherit", background: "#FAFAF8" }}
