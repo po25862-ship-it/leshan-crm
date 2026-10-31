@@ -243,7 +243,7 @@ function AppShell() {
     <HashRouter>
       <ScrollToTop />
       {isMobile ? (
-        <div className="mobile-shell">
+        <div className="mobile-shell mobile-floating-shell">
           <MobileTopBar />
           <AppRoutes />
           <MobileBottomNav />
