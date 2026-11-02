@@ -6,7 +6,7 @@ import OutreachLetters from './OutreachLetters';
 import { useAuth } from '../AuthContext';
 import { auth } from '../firebase';
 import { listOutreach } from '../lib/outreachRepository';
-jest.mock('./OutreachCases',()=>()=>null);
+jest.mock('./OutreachCases',()=>({onSaved})=>require('react').createElement('button',{onClick:()=>onSaved(['two'])},'測試加入收件人'));
 jest.mock('../AuthContext',()=>({useAuth:jest.fn()}));
 jest.mock('../firebase',()=>({auth:{currentUser:{uid:'a'}},db:{}}));
 jest.mock('../lib/outreachRepository',()=>({listOutreach:jest.fn(),saveOutreach:jest.fn(),saveOutreachSettings:jest.fn(),outreachHistory:jest.fn(),logOutreachBatch:jest.fn(),saveOutreachSelection:jest.fn(),uploadOutreachLetter:jest.fn(),readOutreachLetter:jest.fn(),archiveOutreachLetter:jest.fn(),saveOutreachTextLetter:jest.fn()}));
@@ -21,3 +21,5 @@ test('private work area starts without selecting anyone or registering sent mail
 test('hidden selections remain visible in batch review rather than silently omitted',async()=>{await render();const checkbox=container.querySelector('.ol-record-choice input');await act(async()=>Simulate.change(checkbox,{target:{checked:true}}));const search=container.querySelector('.ol-filters input');await act(async()=>Simulate.change(search,{target:{value:'另一件'}}));expect(container.textContent).toContain('其中 1 筆不在目前篩選畫面');expect(container.querySelector('.ol-selected-list').textContent).toContain('甲帳號私人案件');});
 test('missing files or sender details cannot produce incomplete print job',async()=>{await render();await act(async()=>findButton('全選篩選結果 2 筆').click());expect(container.textContent).toContain('2 筆需要確認');expect(findButton('製作整批 PDF').disabled).toBe(true);});
 test('changing signed-in account clears old private data while new data loads',async()=>{await render();useAuth.mockReturnValue({user:{uid:'b'}});auth.currentUser={uid:'b'};listOutreach.mockReturnValue(new Promise(()=>{}));await act(async()=>root.render(<MemoryRouter future={{v7_startTransition:true,v7_relativeSplatPath:true}}><OutreachLetters/></MemoryRouter>));expect(container.textContent).not.toContain('甲帳號私人案件');expect(container.textContent).toContain('載入你的私人開發信資料');});
+
+test('adding another case retains existing batch selections and deduplicates repeated additions',async()=>{await render();await act(async()=>Simulate.change(container.querySelector('.ol-record-choice input'),{target:{checked:true}}));await act(async()=>findButton('測試加入收件人').click());expect(container.textContent).toContain('本次名單 2 筆');await act(async()=>findButton('測試加入收件人').click());expect(container.textContent).toContain('本次名單 2 筆');});

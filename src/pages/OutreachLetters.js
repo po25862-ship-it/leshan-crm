@@ -38,6 +38,7 @@ export default function OutreachLetters() {
   const [history, setHistory] = useState(null), [logForm, setLogForm] = useState(null), [mode, setMode] = useState('both'), [start, setStart] = useState(1);
   const [result, setResult] = useState(null), [preview, setPreview] = useState(null), [sender, setSender] = useState(null), [textLetter, setTextLetter] = useState(null);
   const currentUid = useRef(uid); currentUid.current = uid;
+  const selectedRef = useRef(selected), busyRef = useRef(busy); selectedRef.current = selected; busyRef.current = busy;
   const resultUrls = useRef([]), previewUrl = useRef(''), formRef = useRef(null), generatedRef = useRef(null);
   const today = outreachToday();
   const refresh = useCallback(async () => { const value = await listOutreach(uid); if (currentUid.current === uid) setDataState({ uid, data: value }); return value; }, [uid]);
@@ -127,7 +128,7 @@ export default function OutreachLetters() {
     <header className="ol-heading"><div><h1>開發信</h1><p>我的私人工作區 · 其他同事無法讀取</p></div><div className="ol-actions"><button className="btn ghost" disabled={busy} onClick={() => act(refresh)}>重新整理</button><button className="btn ghost" disabled={busy} onClick={()=>setTab('cases')}>整合物件資料</button><button className="btn" disabled={busy} onClick={() => openDraft({ ...EMPTY_OUTREACH, letterId: data.settings.defaultLetter || '' })}>＋ 新增紀錄</button></div></header>
     <nav className="ol-tabs" aria-label="開發信功能">{[['records','寄送名單'],['cases','案件資料'],['letters','開發信檔案'],['settings','寄件設定']].map(([key,label]) => <button key={key} className={tab===key?'active':''} onClick={() => { setTab(key); if(key==='settings') setSender({ ...data.settings }); }}>{label}</button>)}</nav>
     {busy && <p role="status" className="ol-notice">處理中，請稍候…</p>}{error && <p role="alert" className="ol-error">{error}</p>}{notice && <p role="status" className="ol-notice">{notice}</p>}
-    <OutreachCases key={uid} uid={uid} active={tab==='cases'} records={data.records} letters={data.letters} settings={data.settings} onSaved={async ids=>{clearResult();await refresh();if(ids.length){setSelected(ids);setTab('records');setNotice(`已選取 ${ids.length} 位收件人，可套用開發信並製作 PDF。`);}}}/>
+    <OutreachCases key={uid} uid={uid} active={tab==='cases'} records={data.records} letters={data.letters} settings={data.settings} onSaved={async ids=>{await refresh();if(currentUid.current!==uid||!ids.length)return;if(busyRef.current){setNotice('案件與收件人已儲存，請在目前操作完成後再加入列印名單。');return;}const combined=[...new Set([...selectedRef.current,...ids])];setTab('records');if(combined.length>MAX_OUTREACH_SELECTION){setError('新收件紀錄已儲存；本批最多 200 位，請先整理原名單再加入。');return;}changeSelection(combined);setNotice(`已加入 ${ids.length} 位收件人，目前共 ${combined.length} 位，可套用開發信並製作 PDF。`);}}/>
     {tab==='records' && <>
       {draft && <section className="panel ol-editor" ref={formRef}><h2>{draft.id?'編輯收件資料':'新增開發紀錄'}</h2><form onSubmit={submitDraft}><div className="ol-form-grid">
         <Field label="案件名稱" value={draft.title} onChange={v=>updateDraft('title',v)} required maxLength={200}/><Field label="委託／自訂編號" value={draft.listingNo} onChange={v=>updateDraft('listingNo',v)}/>

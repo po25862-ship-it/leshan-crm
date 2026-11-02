@@ -93,7 +93,7 @@ export function matchingOutreachRecords(records, caseKey, propertyAddress, recip
   return records.filter(r=>(r.caseKey===caseKey || (normalizeCaseAddress(r.propertyAddress) && normalizeCaseAddress(r.propertyAddress)===normalizeCaseAddress(propertyAddress))) && normalizeCaseAddress(r.address)===normalizeCaseAddress(recipientAddress));
 }
 export function prepareIntegratedOwners(owners, records, caseKey, propertyAddress) {
-  return owners.map(o=>{const matches=matchingOutreachRecords(records,caseKey,propertyAddress,o.address);const linked=records.find(r=>r.id===o.recordId&&(!r.caseId||r.caseKey===caseKey));const r=linked||(matches.length===1?matches[0]:null);return {...o,recipient:r?.recipient || o.recipient || '屋主',address:r?.address || o.address,zip:r?.zip || o.zip || '',recordId:r?.id || o.recordId || '',recordRevision:r?.revision ?? o.recordRevision ?? null,selected:!!r,confirmed:false};});
+  return owners.map(o=>{const matches=matchingOutreachRecords(records,caseKey,propertyAddress,o.address);const linked=records.find(r=>r.id===o.recordId&&(!r.caseId||r.caseKey===caseKey));const r=linked||(matches.length===1?matches[0]:null);return {...o,recipient:r?.recipient || o.recipient || '屋主',address:r?.address || o.address,zip:r?.zip || o.zip || '',recordId:r?.id || o.recordId || '',recordRevision:r?.revision ?? o.recordRevision ?? null,selected:!!r&&o.present!==false,confirmed:false};});
 }
 export function printableArea(value) { return value == null || !Number.isFinite(Number(value)) ? '待確認' : `${Number(value).toFixed(2)} 坪`; }
 export function extractListingText(input) {
