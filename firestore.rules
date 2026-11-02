@@ -157,27 +157,30 @@ service cloud.firestore {
       }
     }
 
-    // 客需：擁有者、勾選「分享」之後任何登入帳號都能看，或你都能讀取
-    // 編輯：擁有者（或你）能改全部欄位；被分享到的同事只能動「推薦物件」那塊，其他欄位（需求/預算等）不能碰
+    // 共享客需只儲存找房條件；買方連結與私人備註放在受限子文件。
     match /needs/{needId} {
-      allow read: if request.auth != null && (
-        resource.data.ownerUid == request.auth.uid ||
-        resource.data.shared == true ||
-        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
-      );
-      allow update: if request.auth != null && (
-        resource.data.ownerUid == request.auth.uid ||
-        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132" ||
-        (
-          resource.data.shared == true &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["recommendedProperties", "lastModifiedByUid"])
-        )
-      );
-      allow delete: if request.auth != null && (
-        resource.data.ownerUid == request.auth.uid ||
-        request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"
-      );
-      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+      function manager() { return request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132"); }
+      allow read: if request.auth != null && (manager() || (resource.data.get('schemaVersion',0) == 2 && resource.data.shared == true));
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid && validSharedNeed();
+      allow update: if request.auth != null && request.resource.data.ownerUid == resource.data.ownerUid && validSharedNeed() &&
+        (manager() || (resource.data.shared == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recommendedProperties','updatedAt','lastModifiedByUid'])));
+      allow delete: if manager();
+      match /private/{documentId} {
+        allow read: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+        allow create, update: if request.auth != null && documentId == 'details' &&
+          (getAfter(/databases/$(database)/documents/needs/$(needId)).data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132") &&
+          request.resource.data.ownerUid == getAfter(/databases/$(database)/documents/needs/$(needId)).data.ownerUid &&
+          request.resource.data.keys().hasOnly(['ownerUid','contactId','contactName','privateTitle','notes','legacyFields']) &&
+          request.resource.data.contactId is string && request.resource.data.contactName is string && request.resource.data.privateTitle is string && request.resource.data.notes is string;
+        allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132");
+      }
+    }
+    function validSharedNeed() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['title','shareAlias','statusTag','areas','types','purposes','motivation','budgetMin','budgetMax','mainAreaMin','mainAreaMax','roomsMin','roomsMax','bathMin','bathMax','ageMin','ageMax','floorMin','floorMax','topFloorOnly','criteriaLevels','parkingRequired','preferredFeatures','excludeGroundFloor','excludeTopFloor','excludeMechanicalParking','excludedFeatures','shared','recommendedProperties','ownerUid','createdAt','updatedAt','lastModifiedByUid','schemaVersion']) &&
+        d.schemaVersion == 2 && d.title is string && d.title.size() > 0 && d.title.size() <= 1000 && d.shareAlias is string && d.shareAlias.size() <= 200 &&
+        d.shared is bool && d.ownerUid is string && d.recommendedProperties is list && d.get('areas',[]) is list &&
+        d.get('statusTag','正在找') in ['正在找','暫緩','已成交'];
     }
 
     // 判斷是不是資料的擁有者、被分享的同事、或主要負責人
@@ -254,7 +257,7 @@ service cloud.firestore {
     }
     // 排除開發信路徑，避免這條管理者規則覆蓋個人資料隔離。
     match /{topCollection}/{document=**} {
-      allow read, write: if topCollection != 'outreachPrivate' && request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
+      allow read, write: if !(topCollection in ['outreachPrivate','needs']) && request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useSharedCollection } from "../hooks/useSharedCollection";
@@ -12,7 +12,7 @@ import PropertyShareMap from "./PropertyShareMap";
 
 // defaultBuyerId（選填）：從客需的「推薦物件」開啟分享時，該客需本來就綁定買方，
 // 直接預選起來，不用再選一次；其他呼叫端（例如物件列表的多選分享）不傳就跟原本一樣要自己選。
-export default function PropertyShare({ properties, onClose, defaultBuyerId = "", selectedBuyerId }) {
+export default function PropertyShare({ properties, onClose, defaultBuyerId = "", selectedBuyerId, onIntroduced }) {
   const { user } = useAuth();
   const { agid } = usePersonalAgid();
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
@@ -25,6 +25,11 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const [logging, setLogging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [includeMaps, setIncludeMaps] = useState(false);
+  const introductionEvent = useRef(`intro-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const [introductionDone, setIntroductionDone] = useState(false);
+  const [introductionError, setIntroductionError] = useState("");
+  const canIntroduce = !!onIntroduced && !!defaultBuyerId && recipientId === defaultBuyerId;
+  useEffect(() => { setBuyerId(defaultBuyerId); setIntroductionDone(false); setIntroductionError(""); }, [defaultBuyerId]);
 
   // 開頭文字或選取的物件變動時，重新產生預覽文字（產生後你還是可以自己再手動調整）
   useEffect(() => {
@@ -74,6 +79,14 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
       alert("記錄失敗，請再試一次");
     }
     setLogging(false);
+  };
+
+  const confirmIntroduction = async () => {
+    if (!canIntroduce || logging || introductionDone) return;
+    setLogging(true); setIntroductionError("");
+    try { await onIntroduced({ recipientId, properties, communication: previewText, eventId: introductionEvent.current, day: todayStr() }); setIntroductionDone(true); }
+    catch (error) { setIntroductionError(error.message || "記錄失敗，請重試。"); }
+    finally { setLogging(false); }
   };
 
   return (
@@ -132,9 +145,8 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
         ) : (
           <div style={{ fontSize: 13, marginBottom: 12 }}>介紹對象：<strong>{buyers.find((buyer) => buyer.id === recipientId)?.name || "尚未指定客戶"}</strong>（可在上方更改）</div>
         )}
-        <button className="btn ghost" onClick={onLogToBuyer} disabled={logging || !recipientId}>
-          {logging ? "記錄中…" : "記錄到互動紀錄"}
-        </button>
+        {canIntroduce ? <><p className="need-help">實際傳送給客人後，按下方按鈕，同時更新客需與買方互動紀錄。複製文字不會自動標記已介紹。</p><button className="btn" onClick={confirmIntroduction} disabled={logging || introductionDone}>{introductionDone ? "已記錄本次介紹" : logging ? "記錄中…" : "已實際傳送，記錄本次介紹"}</button></> : <button className="btn ghost" onClick={onLogToBuyer} disabled={logging || !recipientId}>{logging ? "記錄中…" : "記錄到互動紀錄"}</button>}
+        {introductionError && <p role="alert" className="need-error">{introductionError}</p>}
       </div>
       </div>
       <PropertyShareMap key={properties.map((property) => property.id).join("|")} properties={properties} />

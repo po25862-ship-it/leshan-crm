@@ -130,7 +130,7 @@ export default function Buyers() {
     if (editingId) {
       await update(editingId, { ...dataToSave, lastModifiedByUid: user.uid });
     } else {
-      await add({ ...dataToSave, ownerUid: user.uid, lastModifiedByUid: user.uid, sharedWith: [] });
+      await add({ ...dataToSave, ownerUid: user.uid, lastModifiedByUid: user.uid, sharedWith: dataToSave.sharedWith || [] });
     }
     if (editingId) setEditMode(false);
     else setShowForm(false);

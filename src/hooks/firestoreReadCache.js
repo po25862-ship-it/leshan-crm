@@ -18,6 +18,7 @@ function snapshot(entry) {
     data: entry.data,
     error: entry.error,
     loading: entry.loading,
+    loadedAt: entry.loadedAt || null,
   };
 }
 
@@ -48,6 +49,7 @@ export function loadReadCache(key, loader, force = false) {
     .then(loader)
     .then((data) => {
       entry.data = data;
+      entry.loadedAt = Date.now();
       entry.error = null;
       return data;
     })
@@ -71,4 +73,8 @@ export function updateReadCache(key, updater) {
   entry.error = null;
   notify(entry);
   return entry.data;
+}
+
+export function updateExistingReadCache(key, updater) {
+  if (ensureEntry(key).data !== undefined) return updateReadCache(key, updater);
 }

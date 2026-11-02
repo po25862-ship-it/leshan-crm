@@ -51,3 +51,13 @@ test("選取物件產生面積與試算單價，複製和互動紀錄採用使�
   await act(async () => button("記錄到互動紀錄").click());
   expect(addDoc).toHaveBeenCalledWith("contacts/buyer1/interactions", expect.objectContaining({ communication: finalText, properties: [{ label: "兩房車", propertyId: "p1" }] }));
 });
+
+test('copying does not mark an introduction; explicit confirmation records the final preview once',async()=>{
+ const onIntroduced=jest.fn(async()=>{});
+ act(()=>root.render(<PropertyShare properties={properties} defaultBuyerId="buyer1" onIntroduced={onIntroduced} onClose={jest.fn()}/>));
+ await act(async()=>button('複製文字').click());expect(onIntroduced).not.toHaveBeenCalled();
+ const preview=host.querySelectorAll('textarea')[1];act(()=>Simulate.change(preview,{target:{value:'確認實際傳送的文字'}}));
+ await act(async()=>button('已實際傳送，記錄本次介紹').click());
+ expect(onIntroduced).toHaveBeenCalledWith(expect.objectContaining({recipientId:'buyer1',communication:'確認實際傳送的文字'}));
+ expect(addDoc).not.toHaveBeenCalled();expect(button('已記錄本次介紹').disabled).toBe(true);
+});

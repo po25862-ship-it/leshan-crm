@@ -8,7 +8,7 @@ import { getRecommendationStatus, isActiveRecommendation, RECOMMENDATION_STATUS_
 
 function MatchBadge({ percent }) {
   const value = Number.isFinite(percent) ? percent : null;
-  return <span className={`match-badge ${value >= 90 ? "excellent" : value >= 80 ? "good" : "neutral"}`}>{value === null ? "手動" : `${value}%`}</span>;
+  return <span title="僅依已填條件計算，未填項目不參與評分" className={`match-badge ${value >= 90 ? "excellent" : value >= 80 ? "good" : "neutral"}`}>{value === null ? "手動" : value === 100 ? "已填條件皆符合" : `${value}% 條件相符`}</span>;
 }
 
 function PropertyMatchCard({ property, match, action, selected, onSelect, status, onStatus, onRemove }) {
@@ -27,7 +27,7 @@ function PropertyMatchCard({ property, match, action, selected, onSelect, status
         </div>
         <div className="property-price">{property.totalPrice ? Number(property.totalPrice).toLocaleString() : "—"}<small> 萬</small></div>
         <div className="property-facts">
-          <span>{property.titlePing || property.mainBuildingPing || "—"} 坪</span>
+          <span>權狀 {property.titlePing || "—"} 坪</span><span>主建 {property.mainBuildingPing || "待確認"}{property.mainBuildingPing ? " 坪" : ""}</span>
           <span>{property.layout || "格局未填"}</span>
           <span>{property.floor || "樓層未填"}</span>
           <span>{propertyParkingText(property)}</span>
@@ -49,8 +49,16 @@ function PropertyMatchCard({ property, match, action, selected, onSelect, status
   );
 }
 
-export default function RecommendedProperties({ value, onChange, need }) {
-  const { items: properties } = useCollection("properties", "title");
+export default function RecommendedProperties(props) {
+  return <RecommendationWorkspace key={props.need?.id || props.need?.contactId || "new"} {...props} />;
+}
+
+function RecommendationWorkspace({ value, onChange, onIntroduced, need }) {
+  const { items: properties, loading, error: loadError, refresh, loadedAt } = useCollection("properties", "title");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [changing, setChanging] = useState(false);
+  const applyChange = async next => { if (changing) return; setChanging(true); setError(""); try { await onChange(next); } catch { setError("推薦紀錄儲存失敗，請重試；原紀錄仍保留。"); } finally { setChanging(false); } };
   const recommended = value || [];
   const recommendedIds = recommended.map((item) => item.propertyId);
   const [showAll, setShowAll] = useState(false);
@@ -71,28 +79,33 @@ export default function RecommendedProperties({ value, onChange, need }) {
   const activeRecommendations = recommended.filter(isActiveRecommendation);
   const recommendationHistory = recommended.filter((item) => !isActiveRecommendation(item));
 
-  const addProperty = (propertyId) => onChange([...recommended, { propertyId, status: "pending", introduced: false, addedAt: new Date().toISOString().slice(0, 10) }]);
-  const removeProperty = (propertyId) => onChange(recommended.filter((item) => item.propertyId !== propertyId));
-  const updateStatus = (propertyId, status) => onChange(recommended.map((item) => item.propertyId === propertyId ? { ...item, status, introduced: status === "introduced", statusUpdatedAt: new Date().toISOString() } : item));
+  const addProperty = (propertyId) => applyChange([...recommended, { propertyId, status: "pending", introduced: false, addedAt: new Date().toISOString().slice(0, 10) }]);
+  const removeProperty = (propertyId) => applyChange(recommended.filter((item) => item.propertyId !== propertyId));
+  const updateStatus = (propertyId, status) => applyChange(recommended.map((item) => item.propertyId === propertyId ? { ...item, status, introduced: status === "introduced", statusUpdatedAt: new Date().toISOString() } : item));
   const toggleSelect = (propertyId) => setSelectedIds((current) => {
     const next = new Set(current);
     if (next.has(propertyId)) next.delete(propertyId); else next.add(propertyId);
     return next;
   });
-  const filtered = properties.filter((property) => !recommendedIds.includes(property.id) && (!keyword.trim() || `${property.title} ${property.communityName || ""} ${property.area || ""} ${property.address || ""}`.includes(keyword.trim())));
+  const filtered = properties.filter((property) => (property.status || "active") === "active" && !recommendedIds.includes(property.id) && (!keyword.trim() || `${property.title} ${property.communityName || ""} ${property.area || ""} ${property.address || ""}`.includes(keyword.trim())));
 
   return (
-    <div className="recommended-properties-v2">
+    <div className="recommended-properties-v2" aria-busy={!!loading || changing}>
+      <div className="need-list-status"><span>{loadedAt ? `物件最後讀取：${new Date(loadedAt).toLocaleTimeString("zh-TW", { hour12: false })}` : "可手動重新讀取最新物件"}</span><button type="button" className="btn ghost" disabled={loading} onClick={async () => { try { await refresh?.(); setError(""); } catch { setError("更新物件失敗，請重試。"); } }}>重新整理推薦物件</button></div>
+      {notice && <p role="status">{notice}</p>}
+      {(error || loadError) && <p role="alert" className="need-error">{error || "物件讀取失敗，請重試。"}</p>}
+      {(loadError || error) && <button className="btn ghost" type="button" onClick={async () => { try { await refresh?.(); setError(""); } catch { setError("物件仍無法讀取，請稍後重試。"); } }}>重新讀取物件</button>}
+      {changing && <p role="status">儲存推薦中…</p>}
       <div className="recommendation-heading">
-        <div><span>MATCHING ENGINE V2</span><h3>系統推薦物件</h3><p>區域硬篩、預算 10% 容忍，依必要與偏好條件加權排序。</p></div>
+        <div><h3>符合找房條件的物件</h3><p>依已填條件比較，未填項目不計分。預算最多放寬 10%；主建物資料不足時會註明待確認。</p></div>
         <div className="recommendation-count"><strong>{strongSuggestions.length}</strong><span>筆 80%+</span></div>
       </div>
 
-      {visibleSuggestions.length > 0 ? (
+      {loading ? <p role="status">正在讀取物件，請稍候…</p> : loadError ? null : visibleSuggestions.length > 0 ? (
         <div className="property-match-grid">
           {visibleSuggestions.map((match) => <PropertyMatchCard key={match.property.id} property={match.property} match={match} action={<button type="button" className="btn" onClick={() => addProperty(match.property.id)}>＋ 加入推薦</button>} />)}
         </div>
-      ) : <div className="match-empty">目前沒有 80% 以上的新配對；可調整必要條件或從物件清單手動加入。</div>}
+      ) : <div className="match-empty">目前沒有達到推薦條件的新物件；可調整條件或從在售物件清單挑選。</div>}
       {strongSuggestions.length > 6 && <button type="button" className="btn ghost" onClick={() => setShowAll((current) => !current)}>{showAll ? "收合推薦" : `查看全部 ${strongSuggestions.length} 筆`}</button>}
 
       <div className="recommended-list-heading">
@@ -100,11 +113,11 @@ export default function RecommendedProperties({ value, onChange, need }) {
         {activeRecommendations.length > 0 && <button type="button" className={selectionMode ? "btn" : "btn ghost"} onClick={() => { setSelectionMode((current) => !current); setSelectedIds(new Set()); setShowShare(false); }}>{selectionMode ? "結束勾選" : "勾選傳送"}</button>}
       </div>
       {selectedIds.size > 0 && <div className="share-selection-bar"><strong>已選 {selectedIds.size} 筆</strong><button type="button" className="btn" onClick={() => setShowShare(true)}>分享給客人</button><button type="button" className="btn ghost" onClick={() => setSelectedIds(new Set())}>清除</button></div>}
-      {showShare && <PropertyShare properties={Array.from(selectedIds, (id) => propertyMap[id]).filter(Boolean)} onClose={() => setShowShare(false)} defaultBuyerId={need?.contactId || ""} />}
+      {showShare && <PropertyShare properties={Array.from(selectedIds, (id) => propertyMap[id]).filter(Boolean)} onClose={() => setShowShare(false)} defaultBuyerId={need?.contactId || ""} onIntroduced={onIntroduced ? async data => { await onIntroduced(data); setShowShare(false); setSelectionMode(false); setSelectedIds(new Set()); setNotice("已記錄本次介紹，客需與買方互動紀錄已一起更新。"); } : undefined} />}
       <div className="property-match-grid recommended-grid">
         {activeRecommendations.map((item) => {
           const property = propertyMap[item.propertyId];
-          if (!property) return <div className="match-empty" key={item.propertyId}>物件已刪除或無法讀取 <button type="button" onClick={() => removeProperty(item.propertyId)}>移除</button></div>;
+          if (!property) return loading ? <div className="match-empty" key={item.propertyId}>物件資料載入中…</div> : loadError ? <div className="match-empty" key={item.propertyId}>物件暫時無法讀取，請重試。</div> : <div className="match-empty" key={item.propertyId}>目前清單找不到此物件 <button type="button" onClick={() => removeProperty(item.propertyId)}>移除</button></div>;
           return <PropertyMatchCard key={item.propertyId} property={property} match={matchMap[item.propertyId]} selected={selectedIds.has(item.propertyId)} onSelect={selectionMode ? () => toggleSelect(item.propertyId) : null} status={getRecommendationStatus(item)} onStatus={(status) => updateStatus(item.propertyId, status)} onRemove={() => removeProperty(item.propertyId)} />;
         })}
       </div>

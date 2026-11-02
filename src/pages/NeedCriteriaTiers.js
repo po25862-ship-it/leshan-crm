@@ -1,4 +1,5 @@
 import React from "react";
+import { normalizeNeedRanges } from "../lib/needsFields";
 
 const CRITERIA = [
   ["type", "物件類型"], ["mainArea", "主建物坪數"], ["rooms", "房數"],
@@ -8,9 +9,15 @@ const CRITERIA = [
 const LEVEL_LABELS = { required: "必要", preferred: "偏好", ignored: "不計分" };
 
 export function NeedTierSummary({ need }) {
-  const required = ["區域", "預算（含 10% 容忍）"];
+  const ranges = normalizeNeedRanges(need);
+  const filled = v => v !== "" && v !== null && v !== undefined;
+  const active = key => key === "type" ? need.types?.length : key === "topFloor" ? need.topFloorOnly : filled((key === "floor" ? need : ranges)[`${key}Min`]) || filled((key === "floor" ? need : ranges)[`${key}Max`]);
+  const required = [];
+  if (need.areas?.some(a => a.city || a.district || a.community)) required.push("區域");
+  if (filled(ranges.budgetMin) || filled(ranges.budgetMax)) required.push("預算（含 10% 容忍）");
   const preferred = [];
   CRITERIA.forEach(([key, label]) => {
+    if (!active(key)) return;
     const level = need.criteriaLevels?.[key] || "preferred";
     if (level === "required") required.push(label);
     if (level === "preferred") preferred.push(label);
@@ -25,7 +32,7 @@ export function NeedTierSummary({ need }) {
   ].filter(Boolean);
   return (
     <div className="need-tier-summary">
-      <div><span>必要</span><strong>{required.join("・")}</strong></div>
+      <div><span>必要</span><strong>{required.length ? required.join("・") : "尚未指定"}</strong></div>
       <div><span>偏好</span><strong>{preferred.length ? preferred.join("・") : "尚未指定"}</strong></div>
       <div><span>排除</span><strong>{excluded.length ? excluded.join("・") : "尚未指定"}</strong></div>
     </div>

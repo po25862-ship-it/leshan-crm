@@ -34,6 +34,8 @@ export function useCollection(name, orderField = "createdAt", enabled = true) {
   const key = useMemo(() => `collection::${name}`, [name]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState(null);
+  const [loadedAt, setLoadedAt] = useState(null);
 
   const load = useCallback((force = false) => {
     if (!enabled) return Promise.resolve([]);
@@ -46,7 +48,7 @@ export function useCollection(name, orderField = "createdAt", enabled = true) {
       force
     ).catch((error) => {
       console.error(`讀取 ${name} 失敗`, error);
-      return [];
+      throw error;
     });
   }, [enabled, key, name]);
 
@@ -60,8 +62,10 @@ export function useCollection(name, orderField = "createdAt", enabled = true) {
     const unsubscribe = subscribeReadCache(key, (state) => {
       if (state.data !== undefined) setItems(sortItems(state.data, orderField));
       setLoading(state.loading && state.data === undefined);
+      setError(state.error);
+      setLoadedAt(state.loadedAt);
     });
-    load(false);
+    load(false).catch(() => {});
     return unsubscribe;
   }, [enabled, key, load, orderField]);
 
@@ -89,6 +93,8 @@ export function useCollection(name, orderField = "createdAt", enabled = true) {
   return {
     items,
     loading,
+    error,
+    loadedAt,
     add,
     update,
     remove,

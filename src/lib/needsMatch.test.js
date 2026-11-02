@@ -46,3 +46,13 @@ test("反向配對回傳買方客需與解釋理由", () => {
   expect(matches[0].percent).toBeGreaterThanOrEqual(90);
   expect(matches[0].reasons).toContain("區域相符");
 });
+
+test('required main-building area never falls back to title area when the main area is unknown', () => {
+ const need={...baseNeed,mainAreaMin:15,criteriaLevels:{mainArea:'required'}};
+ expect(matchPropertiesForNeed(need,[property({titlePing:30,mainBuildingPing:''})])).toHaveLength(0);
+ expect(matchPropertiesForNeed(need,[property({titlePing:30,mainBuildingPing:12})])).toHaveLength(0);
+ expect(matchPropertiesForNeed(need,[property({titlePing:30,mainBuildingPing:16})])).toHaveLength(1);
+ const [preferred]=matchPropertiesForNeed({...need,criteriaLevels:{mainArea:'preferred'}},[property({titlePing:30})]);
+ expect(preferred.missedReasons).toContain('主建物坪數待確認');
+ expect(preferred.reasons).not.toContain('主建物坪數符合');
+});

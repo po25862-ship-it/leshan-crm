@@ -136,7 +136,7 @@ export function matchPropertiesForNeed(need, properties) {
     }
 
     addCriterion({ key: "type", active: wantedCategories.length > 0, matched: wantedCategories.includes(property.category), label: "類型相符", missedLabel: "物件類型不同" });
-    addCriterion({ key: "mainArea", active: mainAreaMin !== null || mainAreaMax !== null, matched: inRange(toNum(property.mainBuildingPing) ?? toNum(property.titlePing), mainAreaMin, mainAreaMax), label: "坪數符合", missedLabel: "坪數未達偏好" });
+    addCriterion({ key: "mainArea", active: mainAreaMin !== null || mainAreaMax !== null, matched: inRange(toNum(property.mainBuildingPing), mainAreaMin, mainAreaMax), label: "主建物坪數符合", missedLabel: toNum(property.mainBuildingPing) === null ? "主建物坪數待確認" : "主建物坪數未達偏好" });
     addCriterion({ key: "rooms", active: roomsMin !== null || roomsMax !== null, matched: inRange(parseLayoutPart(property.layout, 0), roomsMin, roomsMax), label: "房數符合", missedLabel: "房數不符" });
     addCriterion({ key: "bath", active: bathMin !== null || bathMax !== null, matched: inRange(parseLayoutPart(property.layout, 2), bathMin, bathMax), label: "衛浴符合", missedLabel: "衛浴數不符" });
     addCriterion({ key: "age", active: ageMin !== null || ageMax !== null, matched: inRange(parseAge(property.age), ageMin, ageMax), label: "屋齡符合", missedLabel: "屋齡超出偏好" });

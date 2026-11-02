@@ -95,3 +95,48 @@
     flex: 1 1 auto;
   }
 }
+
+.needs-page h3{margin:0 0 8px;font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+.needs-page p{font-size:13px;line-height:1.7;margin:8px 0;overflow-wrap:anywhere}
+.needs-page .needs-stats{display:grid;gap:12px;background:#f7f8f5;border-radius:12px;text-align:center;padding:14px 8px;margin:12px 0}
+.needs-stats strong,.needs-stats small{display:block}.needs-stats strong{font-size:17px}.needs-stats small{color:var(--muted);font-size:12px;margin-top:5px}
+.need-list-tools,.need-list-status{grid-column:1/-1;min-width:0}
+.need-list-tools{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.need-list-tools label{display:grid;gap:6px;font-size:12px;flex:1;min-width:160px}
+.need-list-tools input,.need-list-tools select{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff;min-width:0}
+.need-list-status{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:10px 0}
+.need-editor{display:grid;gap:16px}.need-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.need-field{display:grid;gap:7px;min-width:0;font-size:13px}.need-field>span{font-weight:700}
+.need-field input,.need-field select,.need-field textarea,.need-area-row input,.need-area-row select{width:100%;min-width:0;padding:11px 10px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit;color:var(--ink)}
+.need-basic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.need-range{display:flex;gap:6px;align-items:center}.need-range input{flex:1;width:0}
+.need-areas,.need-type-options{border:1px solid var(--border);border-radius:12px;margin:0;padding:12px;min-width:0}
+.need-areas legend,.need-type-options legend{font-size:13px;font-weight:700}
+.need-area-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.need-area-row>input{grid-column:1/-1}
+.need-type-options{display:flex;gap:14px;flex-wrap:wrap}.need-type-options label,.need-check{display:flex;gap:8px;align-items:center;font-size:13px;line-height:1.6}
+.need-check input,.need-type-options input{flex-shrink:0}
+.need-advanced{display:grid;gap:16px;border-top:1px solid var(--border);padding-top:16px}
+.need-share-settings{border-radius:12px;background:#f0f5f1;padding:14px;display:grid;gap:12px}
+.need-share-preview{font-size:13px;line-height:1.7}.need-share-preview summary{cursor:pointer;font-weight:700;margin-bottom:10px}
+.need-help,.need-owner-line{font-size:12px!important;color:var(--muted)}
+.need-error{color:var(--danger)!important;font-weight:700}
+.needs-form-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;bottom:12px;background:#fff;padding:12px;border:1px solid var(--border);border-radius:12px;z-index:12;box-shadow:0 4px 18px #17231f16}
+.needs-form-actions>span{font-size:11px;color:var(--muted);flex:1 1 100%}
+.need-delete{margin:18px 0;color:var(--muted);font-size:12px}.need-delete button{margin-top:12px}
+.needs-detail{scroll-margin-top:90px}
+.needs-embedded{display:block!important;width:100%;min-width:0}.needs-embedded>.board{display:flex!important;flex-direction:column;overflow:visible!important}.needs-embedded>.panel{margin:14px 0!important}.needs-embedded>.top-actions .section-title{font-size:14px}
+@media(min-width:761px){
+ .desktop-content .needs-page>.board,.desktop-content .needs-page>.panel{grid-row:4}
+ .desktop-content .needs-page>.need-list-tools{grid-row:2}
+ .desktop-content .needs-page>.need-list-status{grid-row:3}
+}
+@media(max-width:760px){
+ .need-list-tools{display:grid;grid-template-columns:1fr;width:100%}.need-scope-tabs{margin:0}
+ .need-list-tools label{min-width:0}.need-basic-grid{grid-template-columns:1fr}
+ .need-editor input,.need-editor select,.need-editor textarea{font-size:16px}
+ .needs-form-actions{bottom:calc(94px + env(safe-area-inset-bottom));padding:10px}
+ .needs-form-actions>.btn{min-height:44px}.needs-page>.top-actions>.needs-detail-actions{width:100%}
+ .needs-page>.top-actions>.needs-detail-actions .btn{flex:1;width:auto}
+ .needs-page .card h3{font-size:17px}.needs-embedded .top-actions{margin-bottom:14px}
+ .needs-detail{scroll-margin-top:76px}
+}
