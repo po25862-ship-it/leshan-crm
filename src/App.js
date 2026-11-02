@@ -9,6 +9,7 @@ import SellerDetail from "./pages/SellerDetail";
 import Buyers from "./pages/Buyers";
 import Rentals from "./pages/Rentals";
 const CompanyRentals = lazy(() => import("./pages/CompanyRentals"));
+const OutreachLetters = lazy(() => import("./pages/OutreachLetters"));
 import RentalDetail from "./pages/RentalDetail";
 import QuickNotes from "./pages/QuickNotes";
 import Cases from "./pages/Cases";
@@ -52,6 +53,7 @@ import {
   ShieldCheck,
   Send,
   ScanText,
+  Mail,
 } from "lucide-react";
 import "./mobile.css";
 
@@ -61,6 +63,7 @@ const desktopNavItems = [
   { to: "/needs", label: "客需管理", icon: SearchCheck },
   { to: "/properties", label: "物件管理", icon: Building2 },
   { to: "/company-rentals", label: "公司租賃", icon: KeyRound },
+  { to: "/outreach", label: "開發信", icon: Mail },
   { to: "/matching", label: "推薦配對", icon: WandSparkles },
 ];
 
@@ -150,6 +153,7 @@ function AppRoutes() {
       <Route path="/activity" element={<Buyers />} />
       <Route path="/rentals" element={<Rentals />} />
       <Route path="/company-rentals" element={<Suspense fallback={<main>載入公司租賃…</main>}><CompanyRentals /></Suspense>} />
+      <Route path="/outreach" element={<Suspense fallback={<main>載入私人開發信…</main>}><OutreachLetters /></Suspense>} />
       <Route path="/rentals/:rentalId" element={<RentalDetail />} />
       <Route path="/quicknotes" element={<QuickNotes />} />
       <Route path="/cases" element={<Cases />} />

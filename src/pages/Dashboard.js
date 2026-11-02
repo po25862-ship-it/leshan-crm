@@ -9,6 +9,7 @@ import { useAuth } from "../AuthContext";
 import { daysSince, todayStr } from "../lib/dates";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { getPropertyImage, getRecentPriceDrop, timestampToMillis } from "../lib/propertyPresentation";
+import OutreachReminder from './OutreachReminder';
 
 const isRecent = (value, days = 7) => timestampToMillis(value) >= Date.now() - days * 86400000;
 
@@ -51,6 +52,7 @@ export default function Dashboard() {
 
   return (
     <main className="deal-workbench">
+      <OutreachReminder uid={user.uid} />
       <section className="workbench-hero">
         <div><div className="eyebrow">DEAL WORKBENCH</div><h2>今天最接近成交的機會</h2><p>先聯絡高機會買方，再處理新物件與降價後的重新配對。</p></div>
         <div className="workbench-date"><span>{new Intl.DateTimeFormat("zh-TW", { weekday: "long" }).format(new Date())}</span><strong>{new Intl.DateTimeFormat("zh-TW", { month: "2-digit", day: "2-digit" }).format(new Date())}</strong></div>

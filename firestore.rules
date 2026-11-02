@@ -214,9 +214,47 @@ service cloud.firestore {
       );
     }
 
-    // 其他所有資料維持只有本人可以讀寫
-    match /{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
+    // 開發信完全私有，主要管理者也沒有應用程式層級的跨帳號例外。
+    match /outreachPrivate/{uid} {
+      function own() { return request.auth != null && request.auth.uid == uid; }
+      match /records/{recordId} {
+        allow read: if own();
+        allow create: if own() && validOutreachRecord(uid) && request.resource.data.revision == 1 && request.resource.data.sentCount == 0;
+        allow update: if own() && validOutreachRecord(uid) && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.revision == resource.data.revision + 1 && request.resource.data.sentCount >= resource.data.sentCount;
+        match /events/{eventId} {
+          allow read: if own();
+          allow create: if own() && request.resource.data.ownerUid == uid && request.resource.data.keys().hasOnly(['ownerUid','type','day','note','followOn','batchId','letterId','letterName','recipient','address','zip','createdAt']) && request.resource.data.type in ['已產生','已列印','已寄出','追蹤','退件'] && request.resource.data.note is string && request.resource.data.note.size() <= 3000 && request.resource.data.day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+        }
+      }
+      match /letters/{letterId} {
+        allow read: if own();
+        allow create: if own() && validOutreachLetter(uid, letterId);
+        allow update: if own() && validOutreachLetter(uid, letterId) && (!resource.data.get('usedInHistory', false) || request.resource.data.get('usedInHistory', false));
+        allow delete: if own() && !resource.data.get('usedInHistory', false);
+      }
+      match /batches/{batchId} {
+        allow read: if own();
+        allow create, update: if own() && request.resource.data.ownerUid == uid && request.resource.data.keys().hasOnly(['ownerUid','name','recordIds','updatedAt']) && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100 && request.resource.data.recordIds is list && request.resource.data.recordIds.size() <= 200;
+      }
+      match /settings/{settingId} {
+        allow read: if own();
+        allow create, update: if own() && settingId == 'main' && request.resource.data.ownerUid == uid && request.resource.data.keys().hasOnly(['ownerUid','senderAddress','senderZip','senderZipVerifiedAddress','defaultLetter','updatedAt']) && request.resource.data.get('senderAddress','') is string && request.resource.data.get('senderAddress','').size() <= 500 && request.resource.data.get('senderZip','').matches('^([0-9]{6})?$') && request.resource.data.get('senderZipVerifiedAddress','') is string && request.resource.data.get('senderZipVerifiedAddress','').size() <= 500 && request.resource.data.get('defaultLetter','') is string;
+      }
+    }
+    function validOutreachRecord(uid) {
+      let d = request.resource.data;
+      return d.ownerUid == uid && d.keys().hasOnly(['title','listingNo','propertyId','propertyAddress','url','recipient','address','zip','zipVerifiedAddress','letterId','status','followOn','notes','ownerUid','revision','createdAt','updatedAt','sentCount','lastSentOn']) &&
+        d.title is string && d.title.size() > 0 && d.title.size() <= 200 && d.recipient is string && d.recipient.size() > 0 && d.recipient.size() <= 100 && d.address is string && d.address.size() > 0 && d.address.size() <= 500 && d.notes is string && d.notes.size() <= 3000 &&
+        d.zip is string && d.zip.matches('^([0-9]{6})?$') && d.zipVerifiedAddress is string && d.zipVerifiedAddress.size() <= 500 && d.propertyAddress is string && d.propertyAddress.size() <= 500 && d.url is string && d.url.size() <= 2000 && (d.url == '' || d.url.matches('^https?://.*')) && d.status in ['待寄出','已寄出','已聯繫','退件待處理','暫停追蹤','不再寄送'] && rentalDayField(d.followOn) && rentalDayField(d.lastSentOn) && d.letterId is string && d.letterId.size() <= 100 && d.listingNo is string && d.propertyId is string && d.revision is int && d.revision > 0 && d.sentCount is int && d.sentCount >= 0 && d.createdAt is number && d.updatedAt is number;
+    }
+    function validOutreachLetter(uid, letterId) {
+      let d = request.resource.data;
+      return d.ownerUid == uid && letterId.matches('^[a-f0-9]{64}$') && d.keys().hasOnly(['ownerUid','name','text','type','size','pages','storagePath','archived','usedInHistory','createdAt','updatedAt']) && d.name is string && d.name.size() > 0 && d.name.size() <= 200 && d.archived is bool && d.get('usedInHistory',false) is bool && d.createdAt is number && d.updatedAt is number &&
+        ((d.type == 'text/plain' && d.text is string && d.text.size() > 0 && d.text.size() <= 6000 && d.size == 0 && d.pages == 0 && d.storagePath == '') || (d.type in ['application/pdf','image/jpeg','image/png'] && d.size is int && d.size > 0 && d.size <= 5 * 1024 * 1024 && d.pages is int && d.pages > 0 && d.pages <= 50 && d.storagePath == 'outreachPrivate/' + uid + '/' + letterId));
+    }
+    // 排除開發信路徑，避免這條管理者規則覆蓋個人資料隔離。
+    match /{topCollection}/{document=**} {
+      allow read, write: if topCollection != 'outreachPrivate' && request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }
   }
 }
