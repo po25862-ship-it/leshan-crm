@@ -10,6 +10,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { mobileFontSize } from "../lib/mobileFont";
 import NeedCriteriaTiers, { NeedTierSummary } from "./NeedCriteriaTiers";
 import { recommendationCounts } from "../lib/recommendationStatus";
+import "./Needs.css";
 
 const PROPERTY_TYPES = ["公寓", "大樓", "廠房", "透天", "土地", "車位"];
 const PURPOSES = ["辦公", "住宅", "店面"];
@@ -206,11 +207,11 @@ export default function Needs() {
       </div>
 
       {showForm && (
-        <div className="panel" style={{ marginBottom: 24, maxWidth: 620 }}>
+        <div className="panel needs-detail" style={{ marginBottom: 24, maxWidth: 620 }}>
           {editingId && !editMode ? (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <div>
+              <div className="needs-detail-header">
+                <div className="needs-detail-heading">
                   <div style={{ fontWeight: 700, fontSize: mfs(16) }}>{form.title}</div>
                   {form.contactName && <div style={{ fontSize: mfs(12), color: "var(--muted)", marginTop: 4 }}>買方：{form.contactName}</div>}
                   <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
@@ -229,7 +230,7 @@ export default function Needs() {
                     {form.shared && <span style={{ fontSize: mfs(11), color: "var(--muted)" }}>已分享</span>}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <div className="needs-detail-actions">
                   {canEditFull && (
                     <button className="btn ghost" type="button" style={{ fontSize: mfs(12) }} onClick={() => setEditMode(true)}>
                       編輯
@@ -243,9 +244,9 @@ export default function Needs() {
 
               {viewStats.length > 0 && (
                 <div
+                  className="needs-stats"
                   style={{
                     display: "grid",
-                    gridTemplateColumns: `repeat(${viewStats.length}, 1fr)`,
                     gap: 8,
                     textAlign: "center",
                     background: "#FAFAF8",
@@ -308,7 +309,7 @@ export default function Needs() {
           <form onSubmit={onSubmit}>
             <div style={{ opacity: canEditFull ? 1 : 0.55, pointerEvents: canEditFull ? "auto" : "none" }}>
 
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div className="needs-edit-heading">
                 <input
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -426,7 +427,7 @@ export default function Needs() {
               />
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+            <div className="needs-form-actions" style={{ display: "flex", gap: 10, marginTop: 14 }}>
               <button className="btn" type="submit">{editingId ? "儲存變更" : "新增客需"}</button>
               <button className="btn ghost" type="button" onClick={() => (editingId ? setEditMode(false) : setShowForm(false))}>取消</button>
               {editingId && canEditFull && (
@@ -487,9 +488,9 @@ export default function Needs() {
 
                     {stats.length > 0 && (
                       <div
+                        className="needs-stats"
                         style={{
                           display: "grid",
-                          gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
                           gap: 6,
                           textAlign: "center",
                           background: "#FAFAF8",
