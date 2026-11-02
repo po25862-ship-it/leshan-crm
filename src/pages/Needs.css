@@ -134,7 +134,8 @@
  .need-list-tools{display:grid;grid-template-columns:1fr;width:100%}.need-scope-tabs{margin:0}
  .need-list-tools label{min-width:0}.need-basic-grid{grid-template-columns:1fr}
  .need-editor input,.need-editor select,.need-editor textarea{font-size:16px}
- .needs-form-actions{bottom:calc(94px + env(safe-area-inset-bottom));padding:10px}
+ .need-editor{padding-bottom:120px}
+ .needs-form-actions{position:fixed;left:16px;right:16px;bottom:calc(104px + env(safe-area-inset-bottom));padding:10px;margin:0;z-index:60}
  .needs-form-actions>.btn{min-height:44px}.needs-page>.top-actions>.needs-detail-actions{width:100%}
  .needs-page>.top-actions>.needs-detail-actions .btn{flex:1;width:auto}
  .needs-page .card h3{font-size:17px}.needs-embedded .top-actions{margin-bottom:14px}
