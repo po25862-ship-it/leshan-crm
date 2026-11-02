@@ -229,6 +229,16 @@ service cloud.firestore {
           allow create: if own() && request.resource.data.ownerUid == uid && request.resource.data.keys().hasOnly(['ownerUid','type','day','note','followOn','batchId','letterId','letterName','recipient','address','zip','createdAt']) && request.resource.data.type in ['已產生','已列印','已寄出','追蹤','退件'] && request.resource.data.note is string && request.resource.data.note.size() <= 3000 && request.resource.data.day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
         }
       }
+      match /cases/{caseId} {
+        allow read: if own();
+        allow create: if own() && validOutreachCase(uid, caseId) && request.resource.data.revision == 1;
+        allow update: if own() && validOutreachCase(uid, caseId) && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.key == resource.data.key && request.resource.data.revision == resource.data.revision + 1;
+      }
+      match /sourceFiles/{sourceId} {
+        allow read: if own();
+        allow create: if own() && sourceId.matches('^[a-f0-9]{64}$') && request.resource.data.ownerUid == uid && request.resource.data.keys().hasOnly(['ownerUid','name','type','size','storagePath','usedInCase','createdAt']) && request.resource.data.name is string && request.resource.data.name.size() <= 200 && request.resource.data.type == 'application/json' && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 5 * 1024 * 1024 && request.resource.data.storagePath == 'outreachPrivate/' + uid + '/sources/' + sourceId && request.resource.data.usedInCase == false && request.resource.data.createdAt is number;
+        allow update: if own() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedInCase']) && request.resource.data.usedInCase == true;
+      }
       match /letters/{letterId} {
         allow read: if own();
         allow create: if own() && validOutreachLetter(uid, letterId);
@@ -244,11 +254,15 @@ service cloud.firestore {
         allow create, update: if own() && settingId == 'main' && request.resource.data.ownerUid == uid && request.resource.data.keys().hasOnly(['ownerUid','senderAddress','senderZip','senderZipVerifiedAddress','defaultLetter','updatedAt']) && request.resource.data.get('senderAddress','') is string && request.resource.data.get('senderAddress','').size() <= 500 && request.resource.data.get('senderZip','').matches('^([0-9]{6})?$') && request.resource.data.get('senderZipVerifiedAddress','') is string && request.resource.data.get('senderZipVerifiedAddress','').size() <= 500 && request.resource.data.get('defaultLetter','') is string;
       }
     }
+    function validOutreachCase(uid, caseId) {
+      let d = request.resource.data;
+      return caseId.matches('^[a-f0-9]{64}$') && d.ownerUid == uid && d.keys().hasOnly(['ownerUid','key','title','details','owners','sourceIds','priceHistory','revision','createdAt','updatedAt']) && d.key is string && d.key.size() > 0 && d.key.size() <= 300 && d.title is string && d.title.size() > 0 && d.title.size() <= 200 && d.details is map && d.details.keys().hasOnly(['propertyAddress','buildingNo','landNo','completedOn','mainArea','accessoryArea','balconyArea','canopyArea','commonArea','parkingArea','totalArea','netArea','parkingNo','parkingType','floor','totalFloors','purpose','material','title','listingNo','url','price','layout','parkingPrice','managementFee','listingArea','listingAddress','listingFloor']) && d.details.propertyAddress is string && d.details.propertyAddress.size() > 0 && d.details.propertyAddress.size() <= 500 && d.details.buildingNo is string && d.details.buildingNo.size() > 0 && d.details.buildingNo.size() <= 500 && d.owners is list && d.owners.size() <= 50 && d.sourceIds is list && d.sourceIds.size() <= 50 && d.priceHistory is list && d.priceHistory.size() <= 100 && d.revision is int && d.revision > 0 && d.createdAt is number && d.updatedAt is number;
+    }
     function validOutreachRecord(uid) {
       let d = request.resource.data;
-      return d.ownerUid == uid && d.keys().hasOnly(['title','listingNo','propertyId','propertyAddress','url','recipient','address','zip','zipVerifiedAddress','letterId','status','followOn','notes','ownerUid','revision','createdAt','updatedAt','sentCount','lastSentOn']) &&
+      return d.ownerUid == uid && d.keys().hasOnly(['title','listingNo','propertyId','propertyAddress','url','recipient','address','zip','zipVerifiedAddress','letterId','status','followOn','notes','ownerUid','revision','createdAt','updatedAt','sentCount','lastSentOn','caseId','caseKey','sourceOwnerKey']) &&
         d.title is string && d.title.size() > 0 && d.title.size() <= 200 && d.recipient is string && d.recipient.size() > 0 && d.recipient.size() <= 100 && d.address is string && d.address.size() > 0 && d.address.size() <= 500 && d.notes is string && d.notes.size() <= 3000 &&
-        d.zip is string && d.zip.matches('^([0-9]{6})?$') && d.zipVerifiedAddress is string && d.zipVerifiedAddress.size() <= 500 && d.propertyAddress is string && d.propertyAddress.size() <= 500 && d.url is string && d.url.size() <= 2000 && (d.url == '' || d.url.matches('^https?://.*')) && d.status in ['待寄出','已寄出','已聯繫','退件待處理','暫停追蹤','不再寄送'] && rentalDayField(d.followOn) && rentalDayField(d.lastSentOn) && d.letterId is string && d.letterId.size() <= 100 && d.listingNo is string && d.propertyId is string && d.revision is int && d.revision > 0 && d.sentCount is int && d.sentCount >= 0 && d.createdAt is number && d.updatedAt is number;
+        d.zip is string && d.zip.matches('^([0-9]{6})?$') && d.zipVerifiedAddress is string && d.zipVerifiedAddress.size() <= 500 && d.propertyAddress is string && d.propertyAddress.size() <= 500 && d.url is string && d.url.size() <= 2000 && (d.url == '' || d.url.matches('^https?://.*')) && d.status in ['待寄出','已寄出','已聯繫','退件待處理','暫停追蹤','不再寄送'] && rentalDayField(d.followOn) && rentalDayField(d.lastSentOn) && d.letterId is string && d.letterId.size() <= 100 && d.listingNo is string && d.propertyId is string && d.get('caseId','').matches('^([a-f0-9]{64})?$') && d.get('caseKey','') is string && d.get('caseKey','').size() <= 300 && d.get('sourceOwnerKey','') is string && d.get('sourceOwnerKey','').size() <= 40 && d.revision is int && d.revision > 0 && d.sentCount is int && d.sentCount >= 0 && d.createdAt is number && d.updatedAt is number;
     }
     function validOutreachLetter(uid, letterId) {
       let d = request.resource.data;

@@ -1,0 +1,27 @@
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {Simulate} from 'react-dom/test-utils';
+import OutreachCases from './OutreachCases';
+import {auth} from '../firebase';
+import {readDeedFiles} from '../lib/outreachDeed';
+import {listOutreachCases,saveIntegratedCase,uploadDeedSource,validateCaseDraft} from '../lib/outreachCaseRepository';
+import {lookupOutreachPostal} from '../lib/outreachPostal';
+jest.mock('../firebase',()=>({auth:{currentUser:{uid:'a'}}}));
+jest.mock('../lib/outreachCaseRepository',()=>({listOutreachCases:jest.fn(),saveIntegratedCase:jest.fn(),uploadDeedSource:jest.fn(),validateCaseDraft:jest.fn()}));
+jest.mock('../lib/outreachPostal',()=>({lookupOutreachPostal:jest.fn()}));
+jest.mock('../lib/outreachDeed',()=>({...jest.requireActual('../lib/outreachDeed'),readDeedFiles:jest.fn()}));
+const owner=(key,address)=>({key,address,originalAddress:address,maskedName:'林＊＊',recipient:'屋主',share:'1/3',imageRefs:[],confirmed:false,selected:false,recordId:'',recordRevision:null,zip:''});
+const bundle={key:'桃園市/龜山區/測試段/04901000',details:{propertyAddress:'桃園市龜山區測試路13號6樓',buildingNo:'測試段04901-000',totalArea:49.46},owners:[owner('0004','新北市三重區測試街10號'),owner('0002','新北市三重區測試街20號'),owner('0003','台北市內湖區測試路30號')],images:[],deedText:'測試電傳',sourceName:'deed.html',calculations:{}};
+const record={id:'legacy',revision:8,title:'原有案件',propertyAddress:bundle.details.propertyAddress,address:bundle.owners[0].address,recipient:'原本稱呼',zip:'241001',sentCount:5};
+let el,root,onSaved;
+beforeEach(()=>{global.IS_REACT_ACT_ENVIRONMENT=true;auth.currentUser={uid:'a'};el=document.createElement('div');document.body.append(el);root=createRoot(el);onSaved=jest.fn();listOutreachCases.mockResolvedValue({cases:[],sources:[]});readDeedFiles.mockResolvedValue(bundle);uploadDeedSource.mockResolvedValue({id:'a'.repeat(64)});saveIntegratedCase.mockResolvedValue({id:'case',recordIds:['legacy']});validateCaseDraft.mockImplementation(x=>x);window.confirm=jest.fn(()=>true);});
+afterEach(async()=>{await act(async()=>root.unmount());el.remove();jest.clearAllMocks();});
+const props=()=>({uid:'a',active:true,records:[record],letters:[],settings:{},onSaved});
+const render=async()=>act(async()=>root.render(<OutreachCases {...props()}/>));
+const button=text=>[...el.querySelectorAll('button')].find(b=>b.textContent===text);
+async function upload(){await act(async()=>Simulate.change(el.querySelector('input[aria-label="匯入電傳檔與地址圖片"]'),{target:{files:[{name:'deed.html'}],value:''}}));}
+test('a failed read does not loop and repeatedly charge database reads',async()=>{listOutreachCases.mockRejectedValue(Error('offline'));await render();await act(async()=>Promise.resolve());expect(listOutreachCases).toHaveBeenCalledTimes(1);expect(el.textContent).toContain('offline');});
+test('only a unique matching legacy recipient is selected; other masked owners stay separate',async()=>{await render();await upload();const choices=[...el.querySelectorAll('input[aria-label^="加入寄送名單"]')];expect(choices).toHaveLength(3);expect(choices.map(c=>c.checked)).toEqual([true,false,false]);expect(el.querySelector('input[aria-label="收件稱呼 0004"]').value).toBe('原本稱呼');expect(el.textContent).toContain('沿用原收件紀錄');expect(button('儲存並加入 1 位寄送名單').disabled).toBe(true);});
+test('same-unit and recipient confirmations are required before an import can save',async()=>{await render();await upload();const same=[...el.querySelectorAll('label')].find(l=>l.textContent.startsWith('我確認電傳')).querySelector('input');await act(async()=>Simulate.change(same,{target:{checked:true}}));expect(button('儲存並加入 1 位寄送名單').disabled).toBe(true);await act(async()=>Simulate.change(el.querySelector('input[aria-label="已核對收件資料 0004"]'),{target:{checked:true}}));await act(async()=>button('儲存並加入 1 位寄送名單').click());expect(saveIntegratedCase).toHaveBeenCalledTimes(1);expect(saveIntegratedCase.mock.calls[0][1].owners[0]).toMatchObject({recordId:'legacy',recordRevision:8,recipient:'原本稱呼',confirmed:true});expect(onSaved).toHaveBeenCalledWith(['legacy']);});
+test('address editing invalidates a previous confirmation and postal code',async()=>{await render();await upload();await act(async()=>Simulate.change(el.querySelector('input[aria-label="已核對收件資料 0004"]'),{target:{checked:true}}));await act(async()=>Simulate.change(el.querySelector('input[aria-label="實際收件地址 0004"]'),{target:{value:'新的地址30號'}}));expect(el.querySelector('input[aria-label="已核對收件資料 0004"]').checked).toBe(false);expect(el.querySelector('input[aria-label="六碼郵遞區號 0004"]').value).toBe('');});
+test('a postal response for an older address cannot overwrite a newly typed address',async()=>{let resolve;lookupOutreachPostal.mockReturnValue(new Promise(done=>{resolve=done;}));await render();await upload();await act(async()=>{button('查詢六碼').click();});await act(async()=>Simulate.change(el.querySelector('input[aria-label="實際收件地址 0004"]'),{target:{value:'新的地址30號'}}));await act(async()=>resolve({zip:'241999'}));expect(el.querySelector('input[aria-label="六碼郵遞區號 0004"]').value).toBe('');});

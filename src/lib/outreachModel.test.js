@@ -15,3 +15,9 @@ test('eight actual 105 by 74 mm labels fit an A4 page',()=>{const p=createLabelG
 test('per-recipient template substitutes only declared fields',()=>{expect(fillOutreachTemplate('{{姓名}} {{案名}} {{地址}} {{其他}}',good)).toBe('林先生 測試 桃園市龜山區樂善一路6號 {{其他}}');});
 test('multi-page originals preserve page order and download shared file once',async()=>{const source=await PDFDocument.create();source.addPage([300,400]);source.addPage([301,401]);const bytes=await source.save(),load=jest.fn(async()=>({size:bytes.length,arrayBuffer:async()=>bytes.buffer}));const result=await createOutreachLetters([{...good,id:'a'},{...good,id:'b'}],[{id:'one',name:'兩頁.pdf',type:'application/pdf'}],load);expect(result.pages).toBe(4);expect(result.manifest.map(m=>[m.firstPage,m.lastPage])).toEqual([[1,2],[3,4]]);expect(load).toHaveBeenCalledTimes(1);});
 test('label continuation produces next A4 without duplicating recipients',async()=>{const pixel=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));const render=jest.fn(async()=>pixel);const result=await createOutreachLabels([good,good,good],sender,{start:7},render);expect(result.pages).toBe(2);expect(render).toHaveBeenCalledTimes(3);});
+test('integrated co-owners and separate properties are not treated as duplicate mail records',()=>{
+  const first={id:'a',recipient:'屋主',address:'測試地址10號',caseId:'a'.repeat(64),sourceOwnerKey:'0004'};
+  expect(duplicateOutreach([first],{...first,id:'b',sourceOwnerKey:'0002'})).toBeUndefined();
+  expect(duplicateOutreach([first],{...first,id:'b',caseId:'b'.repeat(64)})).toBeUndefined();
+  expect(duplicateOutreach([first],{...first,id:'b'})).toEqual(first);
+});

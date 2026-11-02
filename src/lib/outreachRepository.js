@@ -68,7 +68,7 @@ export async function saveOutreachSelection(uid, name, ids, id) {
   await setDoc(target, { ownerUid: uid, name: name.trim(), recordIds: ids, updatedAt: Date.now() });
   return target.id;
 }
-export async function uploadOutreachLetter(uid, file, existing) {
+export async function uploadOutreachLetter(uid, file, existing, sourceBytes = 0) {
   owner(uid);
   if (!file.size || file.size > MAX_LETTER_BYTES) throw new Error('每份開發信限 5MB，請先縮小檔案。');
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -79,7 +79,7 @@ export async function uploadOutreachLetter(uid, file, existing) {
   if (type === 'application/pdf') { const pdf = await PDFDocument.load(bytes); pages = pdf.getPageCount(); if (!pages || pages > 50) throw new Error('每份 PDF 請保留 1 至 50 頁。'); }
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
   const duplicate = existing.find(l => l.id === hash); if (duplicate) return { ...duplicate, duplicate: true };
-  if (existing.reduce((n, l) => n + l.size, 0) + bytes.length > MAX_LIBRARY_BYTES) throw new Error('你的開發信檔案庫已達 50MB 上限，請先整理檔案。');
+  if (existing.reduce((n, l) => n + l.size, 0) + sourceBytes + bytes.length > MAX_LIBRARY_BYTES) throw new Error('你的開發信檔案庫已達 50MB 上限，請先整理檔案。');
   const path = `outreachPrivate/${uid}/${hash}`, fileRef = ref(storage, path);
   await uploadBytes(fileRef, bytes, { contentType: type, customMetadata: { ownerUid: uid, sha256: hash }, cacheControl: 'private, no-store' });
   owner(uid);

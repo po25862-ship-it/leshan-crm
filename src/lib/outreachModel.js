@@ -2,7 +2,7 @@ export const OUTREACH_STATUSES = ['待寄出', '已寄出', '已聯繫', '退件
 export const MAX_OUTREACH_SELECTION = 200;
 export const MAX_LETTER_BYTES = 5 * 1024 * 1024;
 export const MAX_LIBRARY_BYTES = 50 * 1024 * 1024;
-export const EMPTY_OUTREACH = { title: '', listingNo: '', propertyId: '', propertyAddress: '', url: '', recipient: '', address: '', zip: '', zipVerifiedAddress: '', letterId: '', status: '待寄出', followOn: '', notes: '' };
+export const EMPTY_OUTREACH = { title: '', listingNo: '', propertyId: '', propertyAddress: '', url: '', recipient: '', address: '', zip: '', zipVerifiedAddress: '', letterId: '', status: '待寄出', followOn: '', notes: '', caseId: '', caseKey: '', sourceOwnerKey: '' };
 export function outreachToday(now = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei' }).format(now);
 }
@@ -22,10 +22,18 @@ export function validateOutreach(input) {
   if (d.url) { let url; try { url = new URL(d.url); } catch { throw new Error('請填完整案件網址。'); } if (!['https:', 'http:'].includes(url.protocol) || d.url.length > 2000) throw new Error('案件網址只支援 http 或 https。'); }
   if (!OUTREACH_STATUSES.includes(d.status)) throw new Error('案件狀態不正確。');
   if (d.followOn && !validOutreachDay(d.followOn)) throw new Error('請填正確追蹤日期。');
+  if (d.caseId && !/^[a-f0-9]{64}$/.test(d.caseId)) throw new Error('案件連結格式不正確。');
+  if (d.caseKey.length > 300 || d.sourceOwnerKey.length > 40) throw new Error('案件來源資料過長。');
   return d;
 }
 export function duplicateOutreach(records, candidate) {
-  return records.find(r => r.id !== candidate.id && normalizeOutreachAddress(r.address) === normalizeOutreachAddress(candidate.address) && normalizeOutreachAddress(r.recipient) === normalizeOutreachAddress(candidate.recipient));
+  return records.find(r => {
+    if (r.id === candidate.id) return false;
+    if (r.caseId && candidate.caseId && r.caseId !== candidate.caseId) return false;
+    if (r.caseId && r.caseId === candidate.caseId && r.sourceOwnerKey && candidate.sourceOwnerKey && r.sourceOwnerKey !== candidate.sourceOwnerKey) return false;
+    if ((r.caseId || candidate.caseId) && r.propertyAddress && candidate.propertyAddress && normalizeOutreachAddress(r.propertyAddress) !== normalizeOutreachAddress(candidate.propertyAddress)) return false;
+    return normalizeOutreachAddress(r.address) === normalizeOutreachAddress(candidate.address) && normalizeOutreachAddress(r.recipient) === normalizeOutreachAddress(candidate.recipient);
+  });
 }
 export function followLabel(record, today = outreachToday()) {
   if (['不再寄送', '暫停追蹤'].includes(record.status)) return record.status;

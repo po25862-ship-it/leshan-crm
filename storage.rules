@@ -28,6 +28,11 @@ service firebase.storage {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid && fileId.matches('^[a-f0-9]{64}$') && request.resource.metadata.ownerUid == uid && request.resource.metadata.sha256 == fileId && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024 && request.resource.contentType in ['application/pdf','image/jpeg','image/png'];
     }
+    // 電傳文字與地址圖合併為惰性 JSON，僅本人驗證下載，不提供公開網址。
+    match /outreachPrivate/{uid}/sources/{fileId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid && fileId.matches('^[a-f0-9]{64}$') && request.resource.metadata.ownerUid == uid && request.resource.metadata.sha256 == fileId && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024 && request.resource.contentType == 'application/json';
+    }
     match /{topFolder}/{allPaths=**} {
       allow read, write: if topFolder != 'outreachPrivate' && request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }

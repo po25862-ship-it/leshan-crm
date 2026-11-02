@@ -6,6 +6,7 @@ import OutreachLetters from './OutreachLetters';
 import { useAuth } from '../AuthContext';
 import { auth } from '../firebase';
 import { listOutreach } from '../lib/outreachRepository';
+jest.mock('./OutreachCases',()=>()=>null);
 jest.mock('../AuthContext',()=>({useAuth:jest.fn()}));
 jest.mock('../firebase',()=>({auth:{currentUser:{uid:'a'}},db:{}}));
 jest.mock('../lib/outreachRepository',()=>({listOutreach:jest.fn(),saveOutreach:jest.fn(),saveOutreachSettings:jest.fn(),outreachHistory:jest.fn(),logOutreachBatch:jest.fn(),saveOutreachSelection:jest.fn(),uploadOutreachLetter:jest.fn(),readOutreachLetter:jest.fn(),archiveOutreachLetter:jest.fn(),saveOutreachTextLetter:jest.fn()}));

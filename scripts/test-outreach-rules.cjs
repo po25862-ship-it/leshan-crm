@@ -40,6 +40,26 @@ cases.push(request('DENY',path('records/test/events/sent-2026-11-02'),'create',o
 cases.push(request('ALLOW','/databases/(default)/documents/legacyAdmin/test','get',admin,{x:1}));
 cases.push(request('DENY','/databases/(default)/documents/legacyAdmin/test','get',other,{x:1}));
 cases.push(request('ALLOW','/databases/(default)/documents/properties/test','get',other,{x:1}));
+const privateCase={ownerUid:uid,key:'桃園市/龜山區/測試段/04901000',title:'整合測試',details:{propertyAddress:'桃園市龜山區測試路13號6樓',buildingNo:'測試段04901-000',totalArea:49.46},owners:[{key:'0004',address:'測試地址',share:'1/3'}],sourceIds:[hash],priceHistory:[],revision:1,createdAt:1,updatedAt:1};
+const source={ownerUid:uid,name:'deed.html',type:'application/json',size:100,storagePath:`outreachPrivate/${uid}/sources/${hash}`,usedInCase:false,createdAt:1};
+for(const kind of ['cases','sourceFiles']){for(const who of [null,other,admin])cases.push(request('DENY',path(kind+'/'+hash),'get',who,kind==='cases'?privateCase:source));cases.push(request('ALLOW',path(kind+'/'+hash),'get',uid,kind==='cases'?privateCase:source));}
+cases.push(request('ALLOW',path('cases/'+hash),'create',uid,null,privateCase));
+for(const who of [null,other,admin])cases.push(request('DENY',path('cases/'+hash),'create',who,null,privateCase));
+cases.push(request('DENY',path('cases/'+hash),'create',uid,null,{...privateCase,ownerUid:other}));
+cases.push(request('DENY',path('cases/'+hash),'create',uid,null,{...privateCase,sharedWith:[other]}));
+cases.push(request('ALLOW',path('cases/'+hash),'update',uid,privateCase,{...privateCase,revision:2,title:'修改'}));
+cases.push(request('DENY',path('cases/'+hash),'update',uid,privateCase,{...privateCase,title:'未增加版號'}));
+cases.push(request('DENY',path('cases/'+hash),'update',uid,privateCase,{...privateCase,key:'其他建號',revision:2}));
+cases.push(request('ALLOW',path('sourceFiles/'+hash),'create',uid,null,source));
+cases.push(request('DENY',path('sourceFiles/'+hash),'create',admin,null,source));
+cases.push(request('DENY',path('sourceFiles/'+hash),'create',uid,null,{...source,storagePath:`outreachPrivate/${other}/sources/${hash}`}));
+cases.push(request('DENY',path('sourceFiles/'+hash),'create',uid,null,{...source,type:'text/html'}));
+cases.push(request('DENY',path('sourceFiles/'+hash),'create',uid,null,{...source,size:5242881}));
+cases.push(request('ALLOW',path('sourceFiles/'+hash),'update',uid,source,{...source,usedInCase:true}));
+cases.push(request('DENY',path('sourceFiles/'+hash),'update',uid,{...source,usedInCase:true},source));
+cases.push(request('DENY',path('sourceFiles/'+hash),'update',uid,source,{...source,name:'overwrite'}));
+cases.push(request('ALLOW',path('records/integrated'),'create',uid,null,{...record,caseId:hash,caseKey:privateCase.key,sourceOwnerKey:'0004'}));
+cases.push(request('DENY',path('records/integrated'),'create',uid,null,{...record,caseId:'../other'}));
 async function run(token,name,testCases) {
   const r=await fetch('https://firebaserules.googleapis.com/v1/projects/leshan-crm:test',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({source:{files:[{name,content:fs.readFileSync(root+'/'+name,'utf8')}]},testSuite:{testCases}})});
   const data=await r.json();const failed=(data.testResults||[]).map((r,i)=>({...r,index:i,request:testCases[i]?.request})).filter(r=>r.state!=='SUCCESS');
@@ -52,4 +72,6 @@ storageCases.push(make('ALLOW','create',uid));
 for(const who of [other,admin,null]) {storageCases.push(make('DENY','create',who));storageCases.push(make('DENY','get',who));}
 storageCases.push(make('ALLOW','delete',uid),make('DENY','delete',other),make('DENY','delete',admin),make('ALLOW','get',uid),make('DENY','update',uid),make('DENY','create',uid,5242881),make('DENY','create',uid,0),make('DENY','create',uid,100,'text/html'),make('DENY','create',uid,100,'application/pdf',{ownerUid:other,sha256:hash}),make('DENY','create',uid,100,'application/pdf',{ownerUid:uid,sha256:hash},'bad-path'));
 storageCases.push({expectation:'ALLOW',request:{path:'/b/leshan-crm.firebasestorage.app/o/properties/test/sheet.pdf',method:'get',auth:{uid:other,token:{}}}});
+for(const who of [uid,other,admin,null]){const mine=who===uid;storageCases.push({expectation:mine?'ALLOW':'DENY',request:{path:`/b/leshan-crm.firebasestorage.app/o/outreachPrivate/${uid}/sources/${hash}`,method:'get',auth:who?{uid:who,token:{}}:null}});storageCases.push({...make(mine?'ALLOW':'DENY','create',who,100,'application/json'),request:{...make(mine?'ALLOW':'DENY','create',who,100,'application/json').request,path:`/b/leshan-crm.firebasestorage.app/o/outreachPrivate/${uid}/sources/${hash}`}});}
+for(const [size,type]of [[5242881,'application/json'],[0,'application/json'],[100,'text/html']]){const c=make('DENY','create',uid,size,type);c.request.path=`/b/leshan-crm.firebasestorage.app/o/outreachPrivate/${uid}/sources/${hash}`;storageCases.push(c);}
 await run(t.access_token,'storage.rules',storageCases);})().catch(e=>{console.error(e.message);process.exitCode=1;});
