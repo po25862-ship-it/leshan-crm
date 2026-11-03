@@ -30,6 +30,9 @@ export function normalizeCaseAddress(value) {
   return compact(value).replace(/[，,。．.]/g,'').replace(/([零〇一二兩三四五六七八九十百]+)(?=[段巷弄號樓層鄰])/g, chineseNumber)
     .replace(/([市縣][^市縣路街]{1,6}[區鄉鎮市])([^路街道段巷弄號]{1,12}[里村])?(?:[\d]+鄰)?/, '$1');
 }
+export function hasMailingDoorNumber(value) {
+  return /[\d零〇一二兩三四五六七八九十百千]+(?:[-之][\d零〇一二兩三四五六七八九十百千]+)?號/.test(compact(value));
+}
 export function parseDeedHtml(html) {
   if (!html || html.length > MAX_SOURCE_BYTES) throw new Error('電傳 HTML 為空或超過 5MB。');
   // parse5 builds an inert tree: never executes imported scripts or loads image/link URLs.
