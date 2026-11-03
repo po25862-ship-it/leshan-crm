@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
-import {useGoogleAuth} from '../GoogleAuthContext';
+import {useMarketDrive} from '../lib/useMarketDrive';
 import {useAuth} from '../AuthContext';
 import {visibleColleagueOptions} from '../lib/colleagueVisibility';
 import {MARKET_PUBLISHER_UID,MARKET_STATES,marketRequest,marketBlob,marketFacts,filterMarketCases} from '../lib/marketCases';
@@ -22,7 +22,7 @@ function CloudImage({query,alt,onClick}){
 }
 function FactGrid({details}){return <div className="mc-facts">{marketFacts.map(([key,label])=><div key={key}><span>{label}</span><strong>{printableArea(details[key])}</strong></div>)}</div>;}
 export default function MarketCases(){
- const google=useGoogleAuth(),{user}=useAuth(),[params,setParams]=useSearchParams(),isPublisher=user?.uid===MARKET_PUBLISHER_UID;
+ const google=useMarketDrive(),{user}=useAuth(),[params,setParams]=useSearchParams(),isPublisher=user?.uid===MARKET_PUBLISHER_UID;
  const sourceCaseId=params.get('source')||'',requestedId=params.get('case')||'';
  const [cases,setCases]=useState([]),[cursor,setCursor]=useState(null),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [query,setQuery]=useState(''),[status,setStatus]=useState(''),[mine,setMine]=useState(false),[due,setDue]=useState(false),[archived,setArchived]=useState(false);
@@ -81,7 +81,8 @@ export default function MarketCases(){
    <p className="mc-muted">原始資料不搬走，私人筆記不分享。照片壓縮後存到共用 Drive；每張照片只保存一份。</p>
    {storage&&<p className="mc-muted">共享檔案庫：{(storage.usedBytes/1024/1024).toFixed(1)}／{(storage.limit/1024/1024).toFixed(0)} MB（程式保護上限）</p>}
    {driveStorage?.limit&&<p className="mc-muted">Google Drive 已使用 {(Number(driveStorage.usage||0)/1024**3).toFixed(2)}／{(Number(driveStorage.limit)/1024**3).toFixed(0)} GB。這次沿用既有空間，沒有新增儲存方案。</p>}
-   {(!driveStorage||driveError)&&<div className="mc-banner"><b>分享照片前，先連結你的 Google Drive</b><p>{driveError||'沿用你的雲端硬碟。只有分享人上傳時需要連結；同仁查看時不用。'}</p><button className="btn" disabled={!google?.gsiReady} onClick={()=>google?.connect()}>連結 Google Drive</button></div>}
+   {(!driveStorage||driveError)&&<div className="mc-banner"><b>分享照片前，先連結你的 Google Drive</b><p>{google?.error||driveError||'只連結此程式建立的 Drive 檔案，不讀取你的其他檔案。只有分享人上傳時需要連結；同仁查看時不用。'}</p><button className="btn" disabled={!google?.gsiReady||google?.connecting} onClick={()=>google?.connect()}>連結 Google Drive</button></div>}
+   {driveStorage&&!driveError&&<button className="btn ghost" disabled={busy} onClick={()=>act(async()=>{await marketRequest('verifyDrive',{},'POST',google.getDriveAccessToken());setNotice('雲端上傳與讀取檢查通過。已分享的照片不需要開啟本機程式也能查看。');})}>檢查雲端連線</button>}
    <h3>分享給哪些同仁？</h3><div className="mc-person-options">{directory.filter(p=>p.id!==user.uid).map(person=><label key={person.id}><input type="checkbox" checked={sharedWith.includes(person.id)} onChange={()=>{toggle(setSharedWith,person.id);if(assignee===person.id)setAssignee('');setConfirmed(false);}}/>{person.name}</label>)}</div>
    <label>負責同仁<select value={assignee} onChange={e=>{setAssignee(e.target.value);setConfirmed(false);}}><option value="">待認領，由收到分享的同仁接手</option><option value={user.uid}>由我負責</option>{directory.filter(p=>sharedWith.includes(p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
    <h3>要分享的照片（{photoIds.length}／10）</h3><p className="mc-muted">可取消不需要的照片；原圖保留在市場開發。</p><div className="mc-photo-grid">{source.photos.map(photo=><article key={photo.id}><CloudImage query={{action:'sourceAsset',sourceCaseId:source.sourceCaseId,sourceRevision:source.sourceRevision,photoId:photo.id}} alt={photo.name} onClick={setLightbox}/><label><input type="checkbox" checked={photoIds.includes(photo.id)} disabled={!photoIds.includes(photo.id)&&photoIds.length>=10} onChange={()=>{toggle(setPhotoIds,photo.id);setConfirmed(false);}}/>{photo.kind==='plan'?'格局圖':photo.kind==='shot'?'截圖':'照片'} · {photo.name}</label></article>)}</div>{!source.photos.length&&<p>此案目前沒有可分享的照片，仍可分享案件資料。</p>}

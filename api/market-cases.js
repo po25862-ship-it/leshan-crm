@@ -19,6 +19,7 @@ function createHandler(deps={}){
    limit(user.uid,body.action);
    if(JSON.stringify(body).length>20000)throw model.fail(413,'輸入內容過大。');
    if(req.method==='POST'){
+    if(body.action==='verifyDrive')return res.status(200).json(await service.verifyDrive(user));
     if(body.action==='publish')return res.status(200).json(await service.publish(user,body,token));
     if(body.action==='update')return res.status(200).json(await service.update(user,body));
     throw model.fail(400,'操作不正確。');

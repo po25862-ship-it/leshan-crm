@@ -17,6 +17,7 @@ function createMarketCaseService({db,drive,source,now=()=>Date.now()}){
   if(existing)return {...existing,id:sha};
   try{
    const file=await drive.uploadPrivate(bytes,type);
+   if(m.hash(await drive.downloadPrivate(file))!==sha)throw m.fail(503,'雲端檔案尚未能由系統讀取，尚未發布案件，請稍後重試。');
    await db.runTransaction(async tx=>{const [a,b]=await Promise.all([tx.get(ar),tx.get(budget)]);if(a.data()?.lease!==lease)throw m.fail(409,'檔案處理已更新，請重試。');const s=b.data()||{};tx.set(ar,{...file,status:'ready',createdAt:time});tx.set(budget,{...s,usedBytes:(s.usedBytes||0)+bytes.length,reservedBytes:Math.max(0,(s.reservedBytes||0)-bytes.length),updatedAt:now()});});
    return {...file,id:sha};
   }catch(error){
@@ -89,6 +90,7 @@ function createMarketCaseService({db,drive,source,now=()=>Date.now()}){
   const id=body.id,doc=ref(id),time=now(),profile=await db.collection('colleagues').doc(user.uid).get(),byName=profile.data()?.name||'同仁';
   await db.runTransaction(async tx=>{
    const s=await tx.get(doc),c=m.assertRead(s.exists?s.data():null,user.uid);
+   if(c.archived&&body.op!=='revoke')throw m.fail(409,'案件已撤回分享，請先重新發布。');
    if(c.revision!==body.expectedRevision)throw m.fail(409,'有同仁剛更新這筆案件，請重新整理。');
    let patch={},type='',note='';
    if(body.op==='claim'){
@@ -117,6 +119,7 @@ function createMarketCaseService({db,drive,source,now=()=>Date.now()}){
   let driveStorage=null,driveError='';try{driveStorage=await drive.quota();}catch(error){driveError=error.statusCode?error.message:'Google Drive 目前未連結。';}
   return {driveStorage,driveError,colleagues:r.docs.map(s=>({id:s.id,name:m.text(s.data().name||s.data().email||'同仁',100)})),storage:{usedBytes:storage.data()?.usedBytes||0,reservedBytes:storage.data()?.reservedBytes||0,limit:m.LIBRARY_BYTES}};
  }
- return {preview,publish,list,detail,media,update,directory};
+ async function verifyDrive(user){if(user.uid!==m.PUBLISHER_UID)throw m.fail(403,'只有分享人可以檢查雲端連線。');const bytes=Buffer.from(JSON.stringify({format:'leshan-market-cloud-check',version:1,note:'Connection check only. No case or personal data.'}));const file=await drive.uploadPrivate(bytes,'application/json');if(m.hash(await drive.downloadPrivate(file))!==m.hash(bytes))throw m.fail(503,'雲端檔案讀取檢查未通過。');return {ok:true};}
+ return {preview,publish,list,detail,media,update,directory,verifyDrive};
 }
 module.exports={createMarketCaseService};

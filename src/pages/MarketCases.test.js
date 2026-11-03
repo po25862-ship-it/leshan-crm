@@ -5,7 +5,7 @@ import {MemoryRouter,Routes,Route} from 'react-router-dom';
 import MarketCases from './MarketCases';
 import {useAuth} from '../AuthContext';
 import {marketRequest,marketBlob,MARKET_PUBLISHER_UID} from '../lib/marketCases';
-jest.mock('../GoogleAuthContext',()=>({useGoogleAuth:()=>({isConnected:false,gsiReady:true,connect:jest.fn()})}));
+jest.mock('../lib/useMarketDrive',()=>({useMarketDrive:()=>({isConnected:false,gsiReady:true,connect:jest.fn()})}));
 jest.mock('../AuthContext',()=>({useAuth:jest.fn()}));
 jest.mock('../firebase',()=>({auth:{currentUser:{uid:'staff'}}}));
 jest.mock('../lib/marketCases',()=>({...jest.requireActual('../lib/marketCases'),marketRequest:jest.fn(),marketBlob:jest.fn()}));
