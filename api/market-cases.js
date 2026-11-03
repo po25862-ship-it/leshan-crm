@@ -35,7 +35,7 @@ function createHandler(deps={}){
    }
    if(body.action==='media'){const file=await service.media(user,body.id,body.mediaId);res.setHeader('Content-Type',file.type);return res.status(200).send(file.bytes);}
    throw model.fail(400,'操作不正確。');
-  }catch(error){const status=error.statusCode===401||error.statusCode===403?error.statusCode:error.statusCode||500;return res.status(status).json({error:status===401?'請重新登入 CRM。':status===500?'處理暫時失敗，請稍後重試。':error.message});}
+  }catch(error){if(!error.statusCode||error.statusCode>=500)console.error('market_cases_failed',JSON.stringify({action:(req.body||req.query||{}).action||'list',name:error.name,code:error.code,status:error.statusCode,frames:String(error.stack||'').split('\n').filter(line=>line.trim().startsWith('at ')).slice(0,4)}));const status=error.statusCode===401||error.statusCode===403?error.statusCode:error.statusCode||500;return res.status(status).json({error:status===401?'請重新登入 CRM。':status===500?'處理暫時失敗，請稍後重試。':error.message});}
  };
 }
 module.exports=createHandler();module.exports.createHandler=createHandler;
