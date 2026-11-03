@@ -14,7 +14,7 @@ function createMarketCaseService({db,drive,source,now=()=>Date.now()}){
    tx.set(budget,{usedBytes:storage.usedBytes||0,reservedBytes:held+bytes.length,limit:m.LIBRARY_BYTES,updatedAt:time});
    tx.set(ar,{status:'pending',size:bytes.length,lease,expiresAt:time+15*60000});return null;
   });
-  if(existing)return {...existing,id:sha};
+  if(existing){if(m.hash(await drive.downloadPrivate(existing))!==sha)throw m.fail(503,'既有雲端檔案無法讀取，請先確認 Drive 專用資料夾及原檔仍存在。');return {...existing,id:sha};}
   try{
    const file=await drive.uploadPrivate(bytes,type);
    if(m.hash(await drive.downloadPrivate(file))!==sha)throw m.fail(503,'雲端檔案尚未能由系統讀取，尚未發布案件，請稍後重試。');
