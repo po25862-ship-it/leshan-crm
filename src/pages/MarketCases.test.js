@@ -38,3 +38,10 @@ test('an expired Drive connection still shows source preview but prevents photo 
  await render('/market-cases?source=sourceA');expect(el.textContent).toContain(data.title);expect(button('連結 Google Drive')).toBeTruthy();
  await act(async()=>Simulate.change(el.querySelector('.mc-person-options input'),{target:{checked:true}}));await act(async()=>Simulate.change(el.querySelector('.mc-save input'),{target:{checked:true}}));expect(button('保存到雲端並分享').disabled).toBe(true);expect(marketRequest.mock.calls.some(c=>c[0]==='publish')).toBe(false);
 });
+test('a failed photo can retry without discarding the chosen colleague or review confirmation',async()=>{
+ useAuth.mockReturnValue({user:{uid:MARKET_PUBLISHER_UID}});
+ const source={sourceCaseId:'sourceA',sourceRevision:'b'.repeat(64),title:data.title,details:data.details,photos:[{id:'photo',name:'重試測試照片',kind:'photo'}],owners:[]};
+ marketRequest.mockImplementation(async action=>action==='source'?{snapshot:source,existing:null}:{colleagues:[{id:'staff',name:'示範同仁'}],storage:{usedBytes:0,limit:1024},driveStorage:{limit:'10000',usage:'1'}});
+ const original=URL.createObjectURL;URL.createObjectURL=jest.fn(()=>'blob:retry-photo');URL.revokeObjectURL=jest.fn();marketBlob.mockRejectedValueOnce(Error('暫時離線')).mockResolvedValue(new Blob());
+ try{await render('/market-cases?source=sourceA');await act(async()=>Simulate.change(el.querySelector('.mc-person-options input'),{target:{checked:true}}));await act(async()=>Simulate.change(el.querySelector('.mc-save input'),{target:{checked:true}}));await act(async()=>button('重試照片').click());expect(el.querySelector('.mc-person-options input').checked).toBe(true);expect(el.querySelector('.mc-save input').checked).toBe(true);expect(el.querySelector('.mc-photo img').getAttribute('src')).toBe('blob:retry-photo');}finally{URL.createObjectURL=original;}
+});

@@ -13,12 +13,12 @@ const wan=v=>v==null?'待確認':`${Number(v).toLocaleString()} 萬`;
 const date=v=>v?new Date(v).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
 const values=v=>v==null||v===''?'待確認':String(v);
 function CloudImage({query,alt,onClick}){
- const [src,setSrc]=useState(''),[error,setError]=useState(''),box=useRef(null);
+ const [src,setSrc]=useState(''),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),box=useRef(null);
  const key=JSON.stringify(query);
  useEffect(()=>{let alive=true,url='',started=false;setSrc('');setError('');const load=()=>{if(started)return;started=true;marketBlob(JSON.parse(key)).then(blob=>{url=URL.createObjectURL(blob);if(alive)setSrc(url);else URL.revokeObjectURL(url);}).catch(e=>{if(alive)setError(e.message);});};
  const observer=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();load();}},{rootMargin:'120px'}):null;
- if(observer&&box.current)observer.observe(box.current);else load();return()=>{alive=false;observer?.disconnect();if(url)URL.revokeObjectURL(url);};},[key]);
- return <div className="mc-photo" ref={box}>{src?<button type="button" className="mc-photo-open" onClick={()=>onClick?.(src)} aria-label={`放大${alt}`}><img src={src} alt={alt} loading="lazy"/></button>:<span>{error||'照片載入中…'}</span>}</div>;
+ if(observer&&box.current)observer.observe(box.current);else load();return()=>{alive=false;observer?.disconnect();if(url)URL.revokeObjectURL(url);};},[key,attempt]);
+ return <div className="mc-photo" ref={box}>{src?<button type="button" className="mc-photo-open" onClick={()=>onClick?.(src)} aria-label={`放大${alt}`}><img src={src} alt={alt} loading="lazy"/></button>:<span>{error||'照片載入中…'}{error&&<button type="button" className="btn ghost" aria-label={`重新載入${alt}`} onClick={()=>setAttempt(n=>n+1)}>重試照片</button>}</span>}</div>;
 }
 function FactGrid({details}){return <div className="mc-facts">{marketFacts.map(([key,label])=><div key={key}><span>{label}</span><strong>{printableArea(details[key])}</strong></div>)}</div>;}
 export default function MarketCases(){
