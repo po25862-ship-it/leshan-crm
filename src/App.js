@@ -9,6 +9,7 @@ import SellerDetail from "./pages/SellerDetail";
 import Buyers from "./pages/Buyers";
 import Rentals from "./pages/Rentals";
 const CompanyRentals = lazy(() => import("./pages/CompanyRentals"));
+const MarketCases = lazy(() => import("./pages/MarketCases"));
 const OutreachLetters = lazy(() => import("./pages/OutreachLetters"));
 import RentalDetail from "./pages/RentalDetail";
 import QuickNotes from "./pages/QuickNotes";
@@ -64,6 +65,7 @@ const desktopNavItems = [
   { to: "/properties", label: "物件管理", icon: Building2 },
   { to: "/company-rentals", label: "公司租賃", icon: KeyRound },
   { to: "/outreach", label: "開發信", icon: Mail },
+  { to: "/market-cases", label: "市場案件", icon: SearchCheck },
   { to: "/matching", label: "推薦配對", icon: WandSparkles },
 ];
 
@@ -153,6 +155,7 @@ function AppRoutes() {
       <Route path="/activity" element={<Buyers />} />
       <Route path="/rentals" element={<Rentals />} />
       <Route path="/company-rentals" element={<Suspense fallback={<main>載入公司租賃…</main>}><CompanyRentals /></Suspense>} />
+      <Route path="/market-cases" element={<Suspense fallback={<main>載入市場案件…</main>}><MarketCases /></Suspense>} />
       <Route path="/outreach" element={<Suspense fallback={<main>載入私人開發信…</main>}><OutreachLetters /></Suspense>} />
       <Route path="/rentals/:rentalId" element={<RentalDetail />} />
       <Route path="/quicknotes" element={<QuickNotes />} />

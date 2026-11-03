@@ -269,9 +269,22 @@ service cloud.firestore {
       return d.ownerUid == uid && letterId.matches('^[a-f0-9]{64}$') && d.keys().hasOnly(['ownerUid','name','text','type','size','pages','storagePath','archived','usedInHistory','createdAt','updatedAt']) && d.name is string && d.name.size() > 0 && d.name.size() <= 200 && d.archived is bool && d.get('usedInHistory',false) is bool && d.createdAt is number && d.updatedAt is number &&
         ((d.type == 'text/plain' && d.text is string && d.text.size() > 0 && d.text.size() <= 6000 && d.size == 0 && d.pages == 0 && d.storagePath == '') || (d.type in ['application/pdf','image/jpeg','image/png'] && d.size is int && d.size > 0 && d.size <= 5 * 1024 * 1024 && d.pages is int && d.pages > 0 && d.pages <= 50 && d.storagePath == 'outreachPrivate/' + uid + '/' + letterId));
     }
+    // 市場案件由受驗證的 API 建立；只分享給指定同仁。Drive 檔案索引不讓客戶端直接讀取。
+    match /marketCases/{caseId} {
+      function visible() { return request.auth != null && (resource.data.publisherUid == request.auth.uid || (resource.data.archived == false && request.auth.uid in resource.data.sharedWith)); }
+      allow read: if visible();
+      allow write: if false;
+      match /activities/{eventId} {
+        allow read: if request.auth != null && (get(/databases/$(database)/documents/marketCases/$(caseId)).data.publisherUid == request.auth.uid || (get(/databases/$(database)/documents/marketCases/$(caseId)).data.archived == false && request.auth.uid in get(/databases/$(database)/documents/marketCases/$(caseId)).data.sharedWith));
+        allow write: if false;
+      }
+      match /private/{documentId} { allow read, write: if false; }
+    }
+    match /marketCaseAssets/{id} { allow read, write: if false; }
+    match /marketCaseSystem/{id} { allow read, write: if false; }
     // 排除開發信路徑，避免這條管理者規則覆蓋個人資料隔離。
     match /{topCollection}/{document=**} {
-      allow read, write: if !(topCollection in ['outreachPrivate','needs']) && request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
+      allow read, write: if !(topCollection in ['outreachPrivate','needs','marketCases','marketCaseAssets','marketCaseSystem']) && request.auth != null && request.auth.uid == "KiYlsnWcChW5muRkG167r7Mi1132";
     }
   }
 }

@@ -30,4 +30,4 @@ async function downloadDriveFile(fileId) {
   });
 }
 
-module.exports = { downloadDriveFile };
+module.exports = { downloadDriveFile, googleAccessToken };

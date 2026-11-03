@@ -60,6 +60,16 @@ cases.push(request('DENY',path('sourceFiles/'+hash),'update',uid,{...source,used
 cases.push(request('DENY',path('sourceFiles/'+hash),'update',uid,source,{...source,name:'overwrite'}));
 cases.push(request('ALLOW',path('records/integrated'),'create',uid,null,{...record,caseId:hash,caseKey:privateCase.key,sourceOwnerKey:'0004'}));
 cases.push(request('DENY',path('records/integrated'),'create',uid,null,{...record,caseId:'../other'}));
+const sharedCase={publisherUid:admin,sharedWith:[admin,uid],assigneeUid:uid,archived:false};
+for(const who of [uid,admin,other,null]){
+ const allowed=who===uid||who===admin;
+ cases.push(request(allowed?'ALLOW':'DENY','/databases/(default)/documents/marketCases/'+hash,'get',who,sharedCase));
+ cases.push(request('DENY','/databases/(default)/documents/marketCases/'+hash,'create',who,null,sharedCase));
+ cases.push(request('DENY','/databases/(default)/documents/marketCases/'+hash+'/private/owners','get',who,{owners:['sensitive']}));
+ for(const top of ['marketCaseAssets','marketCaseSystem'])cases.push(request('DENY','/databases/(default)/documents/'+top+'/'+hash,'get',who,{fileId:'private'}));
+}
+cases.push(request('DENY','/databases/(default)/documents/marketCases/'+hash,'get',uid,{...sharedCase,archived:true}));
+cases.push(request('ALLOW','/databases/(default)/documents/marketCases/'+hash,'get',admin,{...sharedCase,archived:true}));
 async function run(token,name,testCases) {
   const r=await fetch('https://firebaserules.googleapis.com/v1/projects/leshan-crm:test',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({source:{files:[{name,content:fs.readFileSync(root+'/'+name,'utf8')}]},testSuite:{testCases}})});
   const data=await r.json();const failed=(data.testResults||[]).map((r,i)=>({...r,index:i,request:testCases[i]?.request})).filter(r=>r.state!=='SUCCESS');
