@@ -228,6 +228,8 @@ export function GoogleAuthProvider({ children }) {
     <GoogleAuthContext.Provider
       value={{
         isConnected,
+        connectionExpiresAt: session?.expiresAt || 0,
+        getDriveAccessToken: () => { if (!session || session.expiresAt <= Date.now()) throw new Error("Google 連線已過期，請重新連結。"); return session.accessToken; },
         email: session?.email || "",
         connect,
         disconnect,

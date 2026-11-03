@@ -5,6 +5,7 @@ import {MemoryRouter,Routes,Route} from 'react-router-dom';
 import MarketCases from './MarketCases';
 import {useAuth} from '../AuthContext';
 import {marketRequest,marketBlob,MARKET_PUBLISHER_UID} from '../lib/marketCases';
+jest.mock('../GoogleAuthContext',()=>({useGoogleAuth:()=>({isConnected:false,gsiReady:true,connect:jest.fn()})}));
 jest.mock('../AuthContext',()=>({useAuth:jest.fn()}));
 jest.mock('../firebase',()=>({auth:{currentUser:{uid:'staff'}}}));
 jest.mock('../lib/marketCases',()=>({...jest.requireActual('../lib/marketCases'),marketRequest:jest.fn(),marketBlob:jest.fn()}));
@@ -26,6 +27,14 @@ test('publisher must choose colleague and confirm selection; owners and deed def
  expect(el.querySelector('.mc-owner-options input').checked).toBe(false);expect([...el.querySelectorAll('label')].find(x=>x.textContent.startsWith('分享電傳整理資料')).querySelector('input').checked).toBe(false);
  await act(async()=>Simulate.change(el.querySelector('.mc-person-options input'),{target:{checked:true}}));expect(save.disabled).toBe(true);
  await act(async()=>Simulate.change(el.querySelector('.mc-save input'),{target:{checked:true}}));expect(save.disabled).toBe(false);
- await act(async()=>save.click());expect(marketRequest).toHaveBeenCalledWith('publish',expect.objectContaining({sharedWith:['staff'],ownerKeys:[],photoIds:[],includeDeed:false}),'POST');
+ await act(async()=>save.click());expect(marketRequest).toHaveBeenCalledWith('publish',expect.objectContaining({sharedWith:['staff'],ownerKeys:[],photoIds:[],includeDeed:false}),'POST','');
 });
 test('source failure is visible and does not trigger repeated reads or cloud writes',async()=>{useAuth.mockReturnValue({user:{uid:MARKET_PUBLISHER_UID}});marketRequest.mockRejectedValue(Error('本機離線'));await render('/market-cases?source=sourceA');expect(el.textContent).toContain('本機離線');expect(marketRequest.mock.calls.filter(c=>c[0]==='source')).toHaveLength(1);expect(marketRequest.mock.calls.some(c=>c[2]==='POST')).toBe(false);});
+
+test('an expired Drive connection still shows source preview but prevents photo publication until connected',async()=>{
+ useAuth.mockReturnValue({user:{uid:MARKET_PUBLISHER_UID}});
+ const source={sourceCaseId:'sourceA',sourceRevision:'b'.repeat(64),title:data.title,details:data.details,photos:[{id:'p',name:'照片',kind:'photo'}],owners:[]};
+ marketRequest.mockImplementation(async(action)=>action==='source'?{snapshot:source,existing:null}:{colleagues:[{id:'staff',name:'示範同仁'}],storage:{usedBytes:0,limit:1024},driveStorage:null,driveError:'請先連結 Google Drive'});
+ await render('/market-cases?source=sourceA');expect(el.textContent).toContain(data.title);expect(button('連結 Google Drive')).toBeTruthy();
+ await act(async()=>Simulate.change(el.querySelector('.mc-person-options input'),{target:{checked:true}}));await act(async()=>Simulate.change(el.querySelector('.mc-save input'),{target:{checked:true}}));expect(button('保存到雲端並分享').disabled).toBe(true);expect(marketRequest.mock.calls.some(c=>c[0]==='publish')).toBe(false);
+});

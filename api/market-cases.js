@@ -8,13 +8,13 @@ function createHandler(deps={}){
 
  return async function handler(req,res){
   const origin=req.headers.origin;if(origin&&!ORIGINS.includes(origin))return res.status(403).json({error:'此來源未開放。'});
-  if(origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');}
+  if(origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type, X-Drive-Authorization');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');}
   res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff');
   if(req.method==='OPTIONS')return res.status(204).end();
   if(!['GET','POST'].includes(req.method))return res.status(405).json({error:'操作不支援。'});
   try{
    const user=await(deps.authenticate||requireFirebaseUser)(req),token=String(req.headers.authorization||'').slice(7);
-   const service=deps.service||createMarketCaseService({db:ensureFirebaseAdmin().firestore,drive:require('./_lib/market-case-drive'),source:require('./_lib/market-case-source')});
+   const service=deps.service||createMarketCaseService({db:ensureFirebaseAdmin().firestore,drive:require('./_lib/market-case-drive').createDriveClient(user.uid===model.PUBLISHER_UID?String(req.headers['x-drive-authorization']||''):''),source:require('./_lib/market-case-source')});
    const body=req.method==='POST'?req.body||{}:req.query||{};
    limit(user.uid,body.action);
    if(JSON.stringify(body).length>20000)throw model.fail(413,'輸入內容過大。');

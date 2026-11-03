@@ -114,8 +114,8 @@ function createMarketCaseService({db,drive,source,now=()=>Date.now()}){
  async function directory(user){
   if(user.uid!==m.PUBLISHER_UID)throw m.fail(403,'只有分享人可設定分享名單。');
   const r=await db.collection('colleagues').get(),storage=await budget.get();
-  const driveStorage=await drive.quota();
-  return {driveStorage,colleagues:r.docs.map(s=>({id:s.id,name:m.text(s.data().name||s.data().email||'同仁',100)})),storage:{usedBytes:storage.data()?.usedBytes||0,reservedBytes:storage.data()?.reservedBytes||0,limit:m.LIBRARY_BYTES}};
+  let driveStorage=null,driveError='';try{driveStorage=await drive.quota();}catch(error){driveError=error.statusCode?error.message:'Google Drive 目前未連結。';}
+  return {driveStorage,driveError,colleagues:r.docs.map(s=>({id:s.id,name:m.text(s.data().name||s.data().email||'同仁',100)})),storage:{usedBytes:storage.data()?.usedBytes||0,reservedBytes:storage.data()?.reservedBytes||0,limit:m.LIBRARY_BYTES}};
  }
  return {preview,publish,list,detail,media,update,directory};
 }

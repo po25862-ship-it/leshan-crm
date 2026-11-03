@@ -1,5 +1,6 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
+import {useGoogleAuth} from '../GoogleAuthContext';
 import {useAuth} from '../AuthContext';
 import {visibleColleagueOptions} from '../lib/colleagueVisibility';
 import {MARKET_PUBLISHER_UID,MARKET_STATES,marketRequest,marketBlob,marketFacts,filterMarketCases} from '../lib/marketCases';
@@ -21,10 +22,11 @@ function CloudImage({query,alt,onClick}){
 }
 function FactGrid({details}){return <div className="mc-facts">{marketFacts.map(([key,label])=><div key={key}><span>{label}</span><strong>{printableArea(details[key])}</strong></div>)}</div>;}
 export default function MarketCases(){
- const {user}=useAuth(),[params,setParams]=useSearchParams(),isPublisher=user?.uid===MARKET_PUBLISHER_UID;
+ const google=useGoogleAuth(),{user}=useAuth(),[params,setParams]=useSearchParams(),isPublisher=user?.uid===MARKET_PUBLISHER_UID;
  const sourceCaseId=params.get('source')||'',requestedId=params.get('case')||'';
  const [cases,setCases]=useState([]),[cursor,setCursor]=useState(null),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [query,setQuery]=useState(''),[status,setStatus]=useState(''),[mine,setMine]=useState(false),[due,setDue]=useState(false),[archived,setArchived]=useState(false);
+ const [driveError,setDriveError]=useState('');
  const [driveStorage,setDriveStorage]=useState(null);
  const [source,setSource]=useState(null),[existing,setExisting]=useState(null),[directory,setDirectory]=useState([]),[storage,setStorage]=useState(null);
  const [sharedWith,setSharedWith]=useState([]),[assignee,setAssignee]=useState(''),[photoIds,setPhotoIds]=useState([]),[ownerKeys,setOwnerKeys]=useState([]),[includeDeed,setIncludeDeed]=useState(false),[confirmed,setConfirmed]=useState(false);
@@ -35,20 +37,22 @@ export default function MarketCases(){
  const act=async fn=>{if(busy)return;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){if(alive.current)setError(e.message||'處理失敗。');}finally{if(alive.current)setBusy(false);}};
  const load=useCallback(async(more=false)=>{const data=await marketRequest('list',more&&cursor?{cursor}:{});if(alive.current){setCases(old=>more?[...old,...data.cases.filter(c=>!old.some(o=>o.id===c.id))]:data.cases);setCursor(data.nextCursor);setLoaded(true);}},[cursor]);
  const readDetail=async id=>{const version=++generation.current;const value=await marketRequest('detail',{id});if(!value?.details||!Array.isArray(value.photos))throw new Error('案件資料不完整，請重新整理。');if(alive.current&&version===generation.current){setDetail(value);setNextFollow(value.nextFollowOn||'');setProgress(value.status||'追蹤中');setDeed(null);setRecipients(null);}return value;};
+ const driveAuthorization=()=>{try{return google?.isConnected?google.getDriveAccessToken():'';}catch{return '';}};
  const importSource=async id=>{
   const version=++generation.current;setSource(null);setDetail(null);setConfirmed(false);
-  const [data,people]=await Promise.all([marketRequest('source',{sourceCaseId:id}),marketRequest('directory')]);
+  const [data,people]=await Promise.all([marketRequest('source',{sourceCaseId:id}),marketRequest('directory',{},'GET',driveAuthorization())]);
   if(!alive.current||version!==generation.current)return;
-  setSource(data.snapshot);setExisting(data.existing);setDirectory(visibleColleagueOptions(people.colleagues));setStorage(people.storage);setDriveStorage(people.driveStorage);
+  setSource(data.snapshot);setExisting(data.existing);setDirectory(visibleColleagueOptions(people.colleagues));setStorage(people.storage);setDriveStorage(people.driveStorage);setDriveError(people.driveError||'');
   const old=data.existing,valid=new Set(people.colleagues.map(p=>p.id));
   setSharedWith((old?.sharedWith||[]).filter(uid=>uid!==user.uid&&valid.has(uid)));setAssignee(old?.assigneeUid||'');
   setPhotoIds((old?.sourceSelection?.photoIds||data.snapshot.photos.filter(p=>!['shot','plan'].includes(p.kind)).slice(0,6).map(p=>p.id)).filter(id=>data.snapshot.photos.some(p=>p.id===id)));
   setOwnerKeys(old?.sourceSelection?.ownerKeys||[]);setIncludeDeed(old?.includesDeed||false);
  };
  useEffect(()=>{alive.current=true;const version=++routeRun.current;setBusy(true);setError('');setSource(null);setDetail(null);setTab('basic');setDeed(null);setRecipients(null);setCases([]);setLoaded(false);(sourceCaseId?importSource(sourceCaseId):requestedId?readDetail(requestedId):load()).catch(e=>{if(alive.current&&routeRun.current===version)setError(e.message);}).finally(()=>{if(alive.current&&routeRun.current===version)setBusy(false);});return()=>{generation.current++;routeRun.current++;};},[user.uid,sourceCaseId,requestedId]); // Route changes explicitly read once; no live collection listener.
+ useEffect(()=>{if(!source||!google?.isConnected||driveStorage)return;let active=true;marketRequest('directory',{},'GET',google.getDriveAccessToken()).then(people=>{if(active){setDriveStorage(people.driveStorage);setDriveError(people.driveError||'');}}).catch(e=>{if(active)setDriveError(e.message);});return()=>{active=false;};},[google?.isConnected,google?.connectionExpiresAt,source?.sourceCaseId]);
  const publish=()=>act(async()=>{
   if(!confirmed)throw new Error('請先確認本次分享內容與同仁。');
-  const result=await marketRequest('publish',{sourceCaseId:source.sourceCaseId,sourceRevision:source.sourceRevision,expectedRevision:existing?.revision||null,sharedWith,assigneeUid:assignee,photoIds,ownerKeys,includeDeed},'POST');
+  const result=await marketRequest('publish',{sourceCaseId:source.sourceCaseId,sourceRevision:source.sourceRevision,expectedRevision:existing?.revision||null,sharedWith,assigneeUid:assignee,photoIds,ownerKeys,includeDeed},'POST',(photoIds.length||includeDeed)?google?.getDriveAccessToken(): '');
   setSource(null);setParams({case:result.id});setNotice('已保存到雲端並分享。同仁不需要開啟市場開發本機程式。');
  });
  const update=(op,extra={})=>act(async()=>{await marketRequest('update',{id:detail.id,expectedRevision:detail.revision,op,...extra},'POST');await readDetail(detail.id);if(op==='note')setNote('');setNotice('已更新案件紀錄。');});
@@ -77,6 +81,7 @@ export default function MarketCases(){
    <p className="mc-muted">原始資料不搬走，私人筆記不分享。照片壓縮後存到共用 Drive；每張照片只保存一份。</p>
    {storage&&<p className="mc-muted">共享檔案庫：{(storage.usedBytes/1024/1024).toFixed(1)}／{(storage.limit/1024/1024).toFixed(0)} MB（程式保護上限）</p>}
    {driveStorage?.limit&&<p className="mc-muted">Google Drive 已使用 {(Number(driveStorage.usage||0)/1024**3).toFixed(2)}／{(Number(driveStorage.limit)/1024**3).toFixed(0)} GB。這次沿用既有空間，沒有新增儲存方案。</p>}
+   {(!driveStorage||driveError)&&<div className="mc-banner"><b>分享照片前，先連結你的 Google Drive</b><p>{driveError||'沿用你的雲端硬碟。只有分享人上傳時需要連結；同仁查看時不用。'}</p><button className="btn" disabled={!google?.gsiReady} onClick={()=>google?.connect()}>連結 Google Drive</button></div>}
    <h3>分享給哪些同仁？</h3><div className="mc-person-options">{directory.filter(p=>p.id!==user.uid).map(person=><label key={person.id}><input type="checkbox" checked={sharedWith.includes(person.id)} onChange={()=>{toggle(setSharedWith,person.id);if(assignee===person.id)setAssignee('');setConfirmed(false);}}/>{person.name}</label>)}</div>
    <label>負責同仁<select value={assignee} onChange={e=>{setAssignee(e.target.value);setConfirmed(false);}}><option value="">待認領，由收到分享的同仁接手</option><option value={user.uid}>由我負責</option>{directory.filter(p=>sharedWith.includes(p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
    <h3>要分享的照片（{photoIds.length}／10）</h3><p className="mc-muted">可取消不需要的照片；原圖保留在市場開發。</p><div className="mc-photo-grid">{source.photos.map(photo=><article key={photo.id}><CloudImage query={{action:'sourceAsset',sourceCaseId:source.sourceCaseId,sourceRevision:source.sourceRevision,photoId:photo.id}} alt={photo.name} onClick={setLightbox}/><label><input type="checkbox" checked={photoIds.includes(photo.id)} disabled={!photoIds.includes(photo.id)&&photoIds.length>=10} onChange={()=>{toggle(setPhotoIds,photo.id);setConfirmed(false);}}/>{photo.kind==='plan'?'格局圖':photo.kind==='shot'?'截圖':'照片'} · {photo.name}</label></article>)}</div>{!source.photos.length&&<p>此案目前沒有可分享的照片，仍可分享案件資料。</p>}
@@ -84,7 +89,7 @@ export default function MarketCases(){
    <div className="mc-owner-options">{source.owners.map(o=><label key={o.key}><input type="checkbox" checked={ownerKeys.includes(o.key)} onChange={()=>{toggle(setOwnerKeys,o.key);setConfirmed(false);}}/><span>{o.maskedName||'屋主'} · {o.address||'地址待補'}{o.noContact?' · 已註記不聯繫':''}</span></label>)}</div>
    <label className="mc-check"><input type="checkbox" checked={includeDeed} onChange={e=>{setIncludeDeed(e.target.checked);setConfirmed(false);}}/>分享電傳整理資料（面積重點＋本次勾選的屋主，不包含抵押權及未選屋主）</label>
    {existing&&<p className="mc-banner">本次只更新來源與分享名單，保留同仁的追蹤、寄信及聯繫紀錄。{existing.details.price!==source.details.price?` 售價：${wan(existing.details.price)} → ${wan(source.details.price)}。`:''}</p>}
-   <div className="mc-save"><label className="mc-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>我已核對物件、照片、屋主資料及本次分享名單</label><button className="btn" disabled={busy||!confirmed||!sharedWith.length} onClick={publish}>{existing?'同步並更新分享':'保存到雲端並分享'}</button><button className="btn ghost" disabled={busy} onClick={()=>{setSource(null);setParams({});}}>取消</button></div>
+   <div className="mc-save"><label className="mc-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>我已核對物件、照片、屋主資料及本次分享名單</label><button className="btn" disabled={busy||!confirmed||!sharedWith.length||((photoIds.length>0||includeDeed)&&(!driveStorage||!!driveError))} onClick={publish}>{existing?'同步並更新分享':'保存到雲端並分享'}</button><button className="btn ghost" disabled={busy} onClick={()=>{setSource(null);setParams({});}}>取消</button></div>
   </section>:detail?<section className="panel mc-detail"><div className="mc-heading"><div><button className="btn ghost" onClick={()=>{setDetail(null);setTab('basic');setParams({});}}>← 回案件清單</button><h2>{detail.title}</h2><p>{detail.details.propertyAddress}</p><span className="mc-chip">{detail.archived?'已撤回分享':!detail.assigneeUid?'待認領':detail.status}</span></div><div className="mc-actions">{detail.details.url&&<a className="btn ghost" href={detail.details.url} target="_blank" rel="noreferrer">原刊登網頁</a>}{!detail.archived&&!detail.assigneeUid&&<button className="btn" disabled={busy} onClick={()=>update('claim')}>接手追蹤</button>}{isPublisher&&<button className="btn ghost" disabled={busy} onClick={()=>setParams({source:detail.sourceCaseId})}>同步來源／調整分享</button>}</div></div>
    <p className="mc-muted">分享人：{detail.publisherName} · 負責同仁：{detail.assigneeUid?detail.assigneeName||'已指定同仁':'待認領'} · 來源更新：{date(detail.sourceUpdatedAt)}</p>
    <nav className="mc-tabs" aria-label="案件資料分頁">{[['basic','基本資料'],['photos',`照片／格局圖（${detail.photos.length}）`],['owners','屋主／電傳'],['follow','追案紀錄']].map(([key,label])=><button className={tab===key?'active':''} key={key} onClick={()=>setTab(key)}>{label}</button>)}</nav>
