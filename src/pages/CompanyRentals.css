@@ -16,3 +16,6 @@
 @media(max-width:760px){.cr-row-end{flex-wrap:wrap;gap:12px}.cr-row-actions{margin-left:auto}}
 
 .cr-hub-tabs{display:flex;gap:8px;margin:0 0 20px;flex-wrap:wrap}.company-rentals .cr-hub-tabs button[aria-selected=true]{background:#265e49;color:#fff;border-color:#265e49}
+
+.cr-row-actions{align-items:flex-end}.cr-row-status{display:flex;flex-direction:column;gap:5px;flex:0 0 132px;max-width:100%;font-weight:700}.cr-row-status>span{font-size:12px;color:var(--cr-muted);line-height:1.5}.company-rentals .cr-row-status select{min-height:44px;font-size:15px;padding:10px 12px}.company-rentals .cr-row-status select:disabled{opacity:.65;cursor:wait}.company-rentals .cr-row-status select:focus-visible{outline:3px solid #eeb78b;outline-offset:3px}.company-rentals .cr-row-status-error{margin:0 24px 16px}.cr-readonly-status{align-self:center;background:#edf3ee;color:var(--cr-green)}
+@media(max-width:760px){.cr-row-actions{width:100%;margin-left:0;justify-content:flex-start}.cr-row-status{flex:1 1 120px}.cr-row-actions>button,.cr-row-actions>.cr-link-button{flex:1 1 auto}.company-rentals .cr-row-status-error{margin:0 14px 16px}}

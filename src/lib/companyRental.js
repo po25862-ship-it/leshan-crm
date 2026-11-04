@@ -2,7 +2,7 @@ import { MAIN_OWNER_UID, withAgid, withoutAgid } from "./url";
 import { visibleColleagueOptions } from "./colleagueVisibility";
 import { validRentalDay, rentalWebsiteKey, rentalWebsiteState, rentalCheckTime } from "./companyRentalWebsite";
 
-export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫停招租", draft: "草稿" };
+export const COMPANY_RENTAL_STATUSES = { available: "招租中", rented: "已出租", paused: "暫時不租", draft: "草稿" };
 export const COMPANY_RENTAL_TYPES = ["整層住家", "獨立套房", "分租套房", "雅房", "店面", "辦公室", "車位"];
 export const MOTORBIKE_PARKING_OPTIONS = ["待確認", "無機車位", "有機車位", "社區先到先停", "其他"];
 export const RENTAL_PARKING_FEE_OPTIONS = ["待確認", "已含租金", "另計"];

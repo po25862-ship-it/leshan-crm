@@ -3,24 +3,25 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import CompanyRentals from "./CompanyRentals";
-import { readRentalInternal, saveCompanyRental } from "../lib/companyRentalRepository";
+import { readRentalInternal, saveCompanyRental, setCompanyRentalStatus } from "../lib/companyRentalRepository";
 import { rentalToday } from "../lib/companyRentalWebsite";
 const mockRows = [
   { id: "a", title: "金捷市兩房", community: "金捷市", street: "樂善二路", area: "A7", status: "available", ownerUid: "staff", rent: 28000, photos: [], revision: 1 },
   { id: "b", title: "林口三房", area: "A9", status: "rented", ownerUid: "other", rent: 35000, photos: [] },
   { id: "c", title: "其他同事套房", area: "A7", status: "available", ownerUid: "other", rent: 15000, photos: [] },
 ];
+let mockStoredRows = mockRows;
 jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "staff" } }) }));
 jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [{ id: "staff", name: "小林" }, { id: "staff-b", name: "同事乙", phone: "02-12345678" }, { id: "mTfncojmWcgx3XN3JYceTJFJtw03", name: "我會寫扣" }, { id: "Qv7tWXKV07M5UL0UA6Ug8eWeJOF3", name: "po25862z" }], loading: false }) }));
 jest.mock("../hooks/useDoc", () => ({ useDoc: () => ({ data: { name: "小林" } }) }));
 jest.mock("../hooks/usePersonalAgid", () => ({ usePersonalAgid: () => ({ agid: "67890" }) }));
-jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ items: mockRows, loading: false, error: null, refresh: jest.fn() }) }));
+jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ items: mockStoredRows, loading: false, error: null, refresh: jest.fn() }) }));
 jest.mock("../hooks/useRentalWebsiteChecks", () => ({ useRentalWebsiteChecks: () => ({}) }));
 jest.mock("../lib/rentalWebsiteClient", () => ({ loadRentalWebsiteInfo: jest.fn(), needsRentalWebsiteCheck: jest.fn(() => false) }));
 jest.mock("../lib/companyRentalRepository", () => ({ readRentalInternal: jest.fn(), saveCompanyRental: jest.fn(), setCompanyRentalStatus: jest.fn() }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [], loading: false }) }));
 let container, root;
-beforeEach(() => { mockRows.forEach(row => { row.furniture = []; for (const key of ["equipmentCatalog", "agentUid", "agentName", "websiteUrl", "websiteExpiresOn", "mandateExpiresOn", "websiteCheckStatus", "websiteCheckedUrl", "websiteUnavailable"]) delete row[key]; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
+beforeEach(() => { mockStoredRows = mockRows; setCompanyRentalStatus.mockReset(); mockRows.forEach(row => { row.furniture = []; for (const key of ["equipmentCatalog", "agentUid", "agentName", "websiteUrl", "websiteExpiresOn", "mandateExpiresOn", "websiteCheckStatus", "websiteCheckedUrl", "websiteUnavailable"]) delete row[key]; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
@@ -194,4 +195,50 @@ test("new equipment remains remembered when unchecked before saving without incl
   act(() => equipmentCheckbox("除濕機").click()); await click("存成草稿");
   const savedForm = saveCompanyRental.mock.calls[0][0].form;
   expect(savedForm.furniture).toEqual([]); expect(savedForm.equipmentCatalog).toEqual(["除濕機"]);
+});
+
+
+test("the list offers status editing only for an authorized rental without opening its details", () => {
+  render();
+  const rows = container.querySelectorAll("article");
+  expect(rows[0].querySelector("select[aria-label='金捷市兩房的招租狀態']").value).toBe("available");
+  expect(rows[1].querySelector(".cr-row-status select")).toBeNull();
+  expect(rows[1].querySelector(".cr-readonly-status").textContent).toBe("招租中");
+  expect(container.querySelector(".cr-detail")).toBeNull();
+  expect(readRentalInternal).not.toHaveBeenCalled();
+});
+
+test.each([["paused", "暫時不租"], ["rented", "已出租"]])("changing a listing to %s saves once, prevents repeat changes, and moves it to its status tab", async (nextStatus, label) => {
+  let finish;
+  setCompanyRentalStatus.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  render();
+  const picker = container.querySelector("select[aria-label='金捷市兩房的招租狀態']");
+  select(picker, nextStatus);
+  expect(picker.disabled).toBe(true);
+  expect(container.textContent).toContain("狀態儲存中");
+  expect(setCompanyRentalStatus).toHaveBeenCalledTimes(1);
+  expect(setCompanyRentalStatus).toHaveBeenCalledWith(mockRows[0], nextStatus, { uid: "staff" });
+  await act(async () => {
+    const saved = { ...mockRows[0], status: nextStatus, revision: 2 };
+    mockStoredRows = mockRows.map(row => row.id === saved.id ? saved : row);
+    finish(saved);
+  });
+  expect(container.querySelectorAll("article")).toHaveLength(1);
+  expect(container.querySelector("[role=status]").textContent).toContain(`已改為「${label}」`);
+  const tab = [...container.querySelectorAll(".cr-tabs button")].find(node => node.textContent.startsWith(label));
+  await act(async () => tab.click());
+  expect(container.querySelector("select[aria-label='金捷市兩房的招租狀態']").value).toBe(nextStatus);
+  expect(readRentalInternal).not.toHaveBeenCalled();
+});
+
+test("a failed list status save keeps the rental in its original tab and restores the control", async () => {
+  setCompanyRentalStatus.mockRejectedValue(Object.assign(new Error("denied"), { code: "permission-denied" }));
+  render();
+  const picker = container.querySelector("select[aria-label='金捷市兩房的招租狀態']");
+  await act(async () => select(picker, "rented"));
+  expect(picker.value).toBe("available"); expect(picker.disabled).toBe(false);
+  expect(container.querySelectorAll("article")).toHaveLength(2);
+  expect(container.querySelector("[role=alert]").textContent).toContain("狀態尚未更新");
+  expect(container.querySelector("[role=alert]").textContent).toContain("目前帳號無法修改");
+  expect(container.querySelector(".cr-success")).toBeNull();
 });
