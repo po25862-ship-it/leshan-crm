@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -1565,7 +1565,6 @@ export default function Properties() {
                     {uploadingFloorplan ? "格局圖上傳中…" : "＋ 上傳格局圖"}
                   </label>
                   <button type="button" className="btn" onClick={() => openPropertyEditor()}>編輯資料</button>
-                  <Link className="btn ghost" to={`/outreach?property=${encodeURIComponent(editingId)}`}>建立私人開發信</Link>
                   <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>關閉</button>
                 </div>
               </div>
