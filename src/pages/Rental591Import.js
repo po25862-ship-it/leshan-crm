@@ -15,7 +15,7 @@ export default function Rental591Import({ form, user, disabled, onApply, onBusyC
   useEffect(() => () => { request.current++; }, []);
   async function read() {
     if (busy || disabled) return;
-    if (!isRental591Url(url)) { setError("請貼上完整的 591 租屋網址。"); return; }
+    if (!isRental591Url(url)) { setError("請貼上完整的 591 租屋或店面出租網址。"); return; }
     const id = ++request.current; setBusy(true); onBusyChange(true); setError(""); setPreview(null);
     try {
       const info = await loadRentalListingInfo(user, url);
@@ -30,8 +30,8 @@ export default function Rental591Import({ form, user, disabled, onApply, onBusyC
   return <section className="cr-import" aria-label="從 591 帶入資料">
     <h3><button className="cr-import-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}><span>貼上 591 網址，快速帶入資料</span><small>{expanded ? "收起" : "展開"}</small></button></h3>
     {expanded && <>
-    <p>可讀取案名、租金、社區、格局、坪數與租屋條件。帶入後仍可修改，按儲存才會建立案件。</p>
-    <div className="cr-import-input"><label className="cr-field"><span>591 租屋網址</span><input type="url" value={url} disabled={disabled} placeholder="https://rent.591.com.tw/…" onChange={event => { request.current++; setUrl(event.target.value); setPreview(null); setError(""); setBusy(false); onBusyChange(false); }} onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); read(); } }} /></label><button type="button" disabled={busy || disabled} onClick={read}>{busy ? "讀取 591 中…" : "讀取 591 資料"}</button></div>
+    <p>支援住宅與店面出租，可讀取案名、租金、社區、格局、坪數與刊登條件。帶入後仍可修改，按儲存才會建立案件。</p>
+    <div className="cr-import-input"><label className="cr-field"><span>591 租屋網址</span><input type="url" value={url} disabled={disabled} placeholder="住宅或店面出租的 591 網址" onChange={event => { request.current++; setUrl(event.target.value); setPreview(null); setError(""); setBusy(false); onBusyChange(false); }} onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); read(); } }} /></label><button type="button" disabled={busy || disabled} onClick={read}>{busy ? "讀取 591 中…" : "讀取 591 資料"}</button></div>
     {error && <p className="cr-error" role="alert">{error}</p>}
     {preview && <div className="cr-import-preview">
       <strong>{preview.listing.title || "591 物件資料"}</strong>

@@ -78,3 +78,42 @@ test("listing data is opt-in so daily website checks remain small", async () => 
   await handler({method:"POST",headers:{},body:{url,includeListing:"true"}},response());
   assert.deepEqual(options,[{includeListing:true},{includeListing:false}]);
 });
+
+const businessUrl = "https://business.591.com.tw/rent/22209235";
+const businessDetail = overrides => ({
+  basicData:{id:"22209235",type:1,kind:5,kindStr:"店面",region:"桃園市",section:"龜山區"},
+  baseInfo:{title:"大湖匯漂亮店面",status:"open",price:{value:"42,000",unit:"元/月"},deposit:"押金二個月",endTime:0,
+    mainInfo:[{keyName:"area",label:"使用坪數",value:"30"},{keyName:"floor",value:"1F/13F"},{keyName:"storeType",value:"路邊/臨街門面"}],
+    labelInfo:{left:[{label:"最短租期",keyName:"leaseTime",value:"一年"}],right:[{label:"遷入時間",keyName:"cometime",value:"隨時可遷入"},{label:"登記",keyName:"businessRegistration",value:"可工商登記"}],bottom:[{label:"規格",keyName:"HouseDesc",value:"面寬5.6米·層高6.8米·進深11米"}]}},
+  mapInfo:{address:{desc:"龜山區文三一街53號"}},otherInfo:{communityInfo:{community_name:"富堡大湖滙"}},remark:"暫未添加說明",
+  linkInfo:{linkman:"來源刊登人",mobile:"來源聯絡電話"},...overrides,
+});
+const businessHtml = detail => `<script>window.__NUXT__=(function(){return ${JSON.stringify({pinia:{"business-rent-detail":{detailInfo:detail,isOnline:false}},recommendations:[businessDetail()] }).replaceAll("<","\\u003c")};}());</script>`;
+test("commercial rentals keep their own host and accept only the explicit rent detail path", () => {
+  assert.equal(rental591Url(businessUrl+"/?track=1#photo"),businessUrl);
+  for(const bad of ["https://business.591.com.tw/sale/22209235","https://business.591.com.tw/list?type=1","https://business.591.com.tw.evil.test/rent/22209235","https://business.591.com.tw:8877/rent/22209235","https://pass@business.591.com.tw/rent/22209235"])assert.equal(rental591Url(bad),"");
+});
+test("reads commercial facts, distinguishes availability from agent online status and retains shop specifications", () => {
+  const result=inspectRentalHtml(businessHtml(businessDetail()),businessUrl,200,{includeListing:true});
+  assert.equal(result.status,"live");assert.equal(result.expiresOn,"");
+  assert.equal(result.listing.type,"店面");assert.equal(result.listing.rent,42000);assert.equal(result.listing.deposit,2);assert.equal(result.listing.floor,"1/13");assert.equal(result.listing.size,30);
+  assert.equal(result.listing.community,"富堡大湖滙");assert.equal(result.listing.street,"文三一街");assert.equal(result.listing.doorAddress,"桃園市龜山區文三一街53號");
+  assert.equal(result.listing.minLease,"一年");assert.equal(result.listing.moveIn,"隨時入住");assert.match(result.listing.description,/面寬5.6米/);assert.match(result.listing.description,/可工商登記/);
+  for(const absent of ["rooms","mgmt","parking","agentName","landlordPhone","photos"])assert.equal(result.listing[absent],undefined);
+  assert.doesNotMatch(JSON.stringify(result.listing),/來源刊登人|來源聯絡電話/);
+});
+test("commercial mismatches, sale records and unknown statuses cannot import recommendations", () => {
+  const detail=businessDetail();
+  for(const basicData of [{...detail.basicData,id:"12345678"},{...detail.basicData,type:2}])assert.equal(inspectRentalHtml(businessHtml({...detail,basicData}),businessUrl,200,{includeListing:true}).listing,undefined);
+  assert.equal(inspectRentalHtml(businessHtml({...detail,baseInfo:{...detail.baseInfo,status:"close"}}),businessUrl,200,{includeListing:true}).status,"unlisted");
+  assert.equal(inspectRentalHtml(businessHtml({...detail,baseInfo:{...detail.baseInfo,status:"unknown"}}),businessUrl,200,{includeListing:true}).status,"unknown");
+  assert.equal(inspectRentalHtml(businessHtml(detail),businessUrl).listing,undefined);
+  assert.equal(inspectRentalHtml(businessHtml(detail),url,200,{includeListing:true}).listing,undefined);
+});
+test("commercial per-ping prices are not imported as monthly totals, and explicit wan/month totals are converted", async () => {
+  const detail=businessDetail();
+  const perPing=inspectRentalHtml(businessHtml({...detail,baseInfo:{...detail.baseInfo,price:{value:"1,400",unit:"元/坪/月"}}}),businessUrl,200,{includeListing:true});
+  assert.equal(perPing.listing.rent,undefined);assert.match(perPing.listing.description,/1,400 元\/坪\/月/);
+  const wan=inspectRentalHtml(businessHtml({...detail,baseInfo:{...detail.baseInfo,price:{value:"4.2",unit:"萬元/月"}}}),businessUrl,200,{includeListing:true});assert.equal(wan.listing.rent,42000);
+  const checked=await checkRentalWebsite(businessUrl,{includeListing:true,fetcher:async(request,options)=>{assert.equal(request,businessUrl);assert.equal(options.redirect,"manual");return new Response(businessHtml(detail));}});assert.equal(checked.listing.rent,42000);
+});

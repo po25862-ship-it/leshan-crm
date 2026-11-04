@@ -25,3 +25,11 @@ test("a new URL resets unrelated website dates but preserves mandate dates; same
   expect(applyRentalListingImport({ ...form, websiteUrl: info.url }, info, ["title"]).websiteExpiresOn).toBe("2027-01-01");
   expect(applyRentalListingImport(form, info, [])).toBe(form);
 });
+
+test("shop imports use the shop URL and type, retaining private street numbers separately", () => {
+  const shop={...info,url:"https://business.591.com.tw/rent/22209235",expiresOn:"",listing:{title:"大湖匯漂亮店面",type:"店面",rent:42000,size:30,floor:"1/13",street:"文三一街",doorAddress:"桃園市龜山區文三一街53號"}};
+  const fields=rentalImportFields(shop);expect(fields.map(field=>field.key)).toContain("type");
+  const next=applyRentalListingImport({...RENTAL_FORM_DEFAULTS},shop,defaultRentalImportKeys(RENTAL_FORM_DEFAULTS,shop));
+  expect(next).toEqual(expect.objectContaining({type:"店面",rent:42000,size:30,floor:"1/13",websiteUrl:shop.url,doorAddress:"桃園市龜山區文三一街53號"}));
+  expect(next.websiteExpiresOn).toBe("");
+});

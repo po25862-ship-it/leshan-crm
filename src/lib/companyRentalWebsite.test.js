@@ -1,4 +1,4 @@
-import { rentalExpiryReminders, rentalToday, rentalWebsiteKey, rentalWebsitePatch, rentalWebsiteState } from "./companyRentalWebsite";
+import { isRental591Url, rentalExpiryReminders, rentalToday, rentalWebsiteKey, rentalWebsitePatch, rentalWebsiteState } from "./companyRentalWebsite";
 import { buildCompanyRentalShare, companyRentalForm, rentalSavePayload, validateCompanyRental } from "./companyRental";
 const url = "https://rent.591.com.tw/22258856", now = Date.parse("2026-10-31T04:00:00Z");
 const rental = { status: "available", websiteUrl: url, shareWebsite: true, mandateExpiresOn: "2026-11-07", websiteExpiresOn: "2026-10-31" };
@@ -36,4 +36,15 @@ test("unknown checks preserve data; renewed source dates refresh; explicit manua
   expect(rentalWebsitePatch({ ...current, websiteCheckedUrl: url, websiteCheckedAt: now + 1000 }, info)).toBeNull();
   expect(rentalWebsiteKey("https://www.591.com.tw/rent-detail-22258856.html?tracking=1")).toBe(url);
   expect(validateCompanyRental({ mandateExpiresOn: "2026-02-30" }, "draft")).toContain("委託到期日");
+});
+
+test("commercial 591 rentals are supported without mixing their source and check records with residential URLs", () => {
+  const commercial="https://business.591.com.tw/rent/22209235";
+  expect(rentalWebsiteKey(commercial+"/?tracking=1#photo")).toBe(commercial);
+  expect(isRental591Url(commercial)).toBe(true);
+  for(const bad of ["https://business.591.com.tw/sale/22209235","https://business.591.com.tw.evil.test/rent/22209235","https://business.591.com.tw:8877/rent/22209235"])expect(isRental591Url(bad)).toBe(false);
+  const row={status:"available",websiteUrl:commercial};
+  const patch=rentalWebsitePatch(row,{url:commercial,status:"live",checkedAt:new Date(now).toISOString(),expiresOn:""});
+  expect(patch.websiteCheckedUrl).toBe(commercial);expect(rentalWebsiteState({...row,...patch},now).label).toBe("網站刊登中");
+  expect(rentalWebsitePatch(row,{url:"https://rent.591.com.tw/22209235",status:"live",checkedAt:new Date(now).toISOString()})).toBeNull();
 });

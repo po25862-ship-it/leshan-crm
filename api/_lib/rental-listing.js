@@ -102,4 +102,35 @@ function rentalListingFields(ctx) {
   put("description", [description, moveIn && !fields.moveIn ? `591 刊登入住時間：${moveIn}` : ""].filter(Boolean).join("\n\n"), 4000);
   return fields;
 }
-module.exports = { rentalListingFields };
+// The commercial site publishes a different schema. Convert only visible listing facts;
+// source accounts, recommendations and contact details are never imported.
+function businessRentalListingFields(detail) {
+  const basic = detail.basicData || {}, base = detail.baseInfo || {};
+  const labels = [...rows(base.labelInfo?.left), ...rows(base.labelInfo?.right), ...rows(base.labelInfo?.bottom)];
+  const label = key => plain(labels.find(item => item?.keyName === key)?.value);
+  const main = key => rows(base.mainInfo).find(item => item?.keyName === key);
+  const size = main("area"), rawSize = plain(size?.value), price = base.price || {}, unit = plain(price.unit).replace(/\s/g, "");
+  const monthly = /^(?:元|萬元)\/月$/.test(unit) ? number(price.value) : undefined;
+  const types = { 店面: "店面", 辦公: "辦公室", 辦公室: "辦公室", 住辦: "辦公室", 車位: "車位" }, kind = plain(basic.kindStr);
+  const type = Object.hasOwn(types, kind) ? types[kind] : "";
+  if (!type) return null;
+  const description = plain(detail.remark, 3500), storeType = plain(main("storeType")?.value);
+  const usefulLabels = new Set(["shape", "registration", "freePeriod", "priceIncludeUtilities", "businessRegistration", "compartment", "decoration", "HouseDesc"]);
+  const extra = labels.filter(item => usefulLabels.has(item?.keyName) && plain(item.value)).map(item => `${plain(item.label, 30)}：${plain(item.value, 200)}`);
+  const fields = rentalListingFields({
+    title: base.title,
+    breadcrumb: [{ query: "kind", name: type }, { query: "region", name: basic.region }, { query: "section", name: basic.section }],
+    positionRound: { communityName: detail.otherInfo?.communityInfo?.community_name, address: detail.mapInfo?.address?.desc },
+    info: [{ key: "area", name: size?.label, value: number(rawSize) !== undefined ? `${rawSize}坪` : rawSize }, { key: "floor", value: main("floor")?.value }],
+    price: monthly === undefined ? undefined : monthly * (unit.startsWith("萬") ? 10000 : 1), priceUnit: "元/月",
+    deposit: plain(base.deposit).replace(/^押金\s*/, ""),
+    service: { descData: [{ label: "最短租期", value: label("leaseTime") }, { label: "可遷入日", value: label("cometime") }] },
+    remark: { content: "" },
+  });
+  // Keep commercial specifications readable without inventing residential room counts.
+  fields.description = [description && description !== "暫未添加說明" ? description : "", storeType ? `店面類型：${storeType}` : "", ...extra,
+    monthly === undefined && plain(price.value) ? `591 刊登租金：${plain(price.value)} ${plain(price.unit)}` : ""].filter(Boolean).join("\n").slice(0, 4000);
+  if (!fields.description) delete fields.description;
+  return fields;
+}
+module.exports = { rentalListingFields, businessRentalListingFields };

@@ -9,7 +9,7 @@ export function needsRentalWebsiteCheck(rental, now = Date.now()) {
 }
 export async function loadRentalWebsiteInfo(user, url, force = false, { includeListing = false } = {}) {
   const normalized = rentalWebsiteKey(url), key = `${user.uid}:${normalized}:${includeListing ? "listing" : "website"}`;
-  if (!isRental591Url(normalized)) throw new Error("目前只支援自動讀取 591 租屋網址。");
+  if (!isRental591Url(normalized)) throw new Error("目前支援自動讀取 591 住宅租屋與店面出租網址。");
   const cached = cache.get(key);
   if (!force && cached && Date.now() - cached.at < cached.ttl) return cached.promise;
   const entry = { at: Date.now(), ttl: RENTAL_WEBSITE_CHECK_INTERVAL };

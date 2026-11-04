@@ -294,3 +294,15 @@ test("after a 591 import only missing private details are requested, and shortcu
   await click("儲存並招租");
   expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({title:"591案名",street:"牛角坡路",floor:"6/15",rent:29000,doorAddress:"測試完整門牌",viewingInstructions:"請先聯繫負責同事"}));
 });
+
+test("commercial 591 URLs can be read, reviewed and applied without creating a residential listing", async () => {
+  const shop={...imported591,url:"https://business.591.com.tw/rent/22209235",expiresOn:"",listing:{title:"大湖匯漂亮店面",type:"店面",rent:42000,size:30,street:"文三一街",doorAddress:"桃園市龜山區文三一街53號",floor:"1/13",deposit:2,description:"規格：面寬5.6米·層高6.8米·進深11米"}};
+  loadRentalListingInfo.mockResolvedValue(shop);render();await click("＋ 新增租賃");
+  input(fieldLabel("591 租屋網址").querySelector("input"),shop.url);await click("讀取 591 資料");
+  expect(loadRentalListingInfo).toHaveBeenCalledWith(expect.objectContaining({uid:"staff"}),shop.url);
+  expect(container.textContent).toContain("大湖匯漂亮店面");expect(saveCompanyRental).not.toHaveBeenCalled();
+  const apply=[...container.querySelectorAll("button")].find(node=>node.textContent.startsWith("帶入表單"));await act(async()=>apply.click());
+  expect(fieldLabel("租賃類型").querySelector("select").value).toBe("店面");expect(fieldLabel("樓層").querySelector("input").value).toBe("1/13");
+  expect(container.querySelector('[data-rental-field="doorAddress"]').value).toBe("桃園市龜山區文三一街53號");
+  await click("存成草稿");expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({type:"店面",rent:42000,size:30,websiteUrl:shop.url,websiteExpiresOn:"",description:"規格：面寬5.6米·層高6.8米·進深11米"}));
+});

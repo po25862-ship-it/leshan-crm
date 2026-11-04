@@ -1,5 +1,5 @@
 const { parse } = require("acorn");
-const { rentalListingFields } = require("./rental-listing");
+const { rentalListingFields, businessRentalListingFields } = require("./rental-listing");
 const MAX_BYTES = 1500000;
 
 function rental591Url(value) {
@@ -7,8 +7,9 @@ function rental591Url(value) {
     const url = new URL(value);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.port) return "";
     const id = url.hostname === "rent.591.com.tw" ? url.pathname.match(/^\/(\d{5,12})\/?$/)?.[1]
+      : url.hostname === "business.591.com.tw" ? url.pathname.match(/^\/rent\/(\d{5,12})\/?$/)?.[1]
       : ["www.591.com.tw", "591.com.tw"].includes(url.hostname) ? url.pathname.match(/^\/rent-detail-(\d{5,12})\.html$/)?.[1] : "";
-    return id ? `https://rent.591.com.tw/${id}` : "";
+    return id ? url.hostname === "business.591.com.tw" ? `https://business.591.com.tw/rent/${id}` : `https://rent.591.com.tw/${id}` : "";
   } catch { return ""; }
 }
 function validDay(value) {
@@ -51,15 +52,19 @@ function inspectRentalHtml(html, url, httpStatus = 200, { includeListing = false
   if (/captcha|access denied|安全驗證|人機驗證|just a moment/i.test(title) || [401, 403, 429].includes(httpStatus)) return result;
   if ([404, 410].includes(httpStatus)) return { ...result, status: "unlisted" };
   if (httpStatus < 200 || httpStatus >= 300) return result;
-  const id = new URL(url).pathname.slice(1);
+  const source = new URL(url), business = source.hostname === "business.591.com.tw";
+  const id = source.pathname.split("/").filter(Boolean).pop();
   for (const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
     if (!/^\s*window\.__NUXT__\s*=/.test(match[1])) continue;
     try {
       const data = readNuxt(match[1]);
-      const listing = data?.pinia?.["rent-detail-info"]?.ctx;
-      if (String(listing?.id) !== id) continue;
+      const detail = business ? data?.pinia?.["business-rent-detail"]?.detailInfo : null;
+      if (business && (String(detail?.basicData?.id) !== id || Number(detail?.basicData?.type) !== 1)) continue;
+      const listing = business ? detail?.baseInfo : data?.pinia?.["rent-detail-info"]?.ctx;
+      if (!business && String(listing?.id) !== id) continue;
       const status = listing.status === "open" && typeof listing.title === "string" && listing.title.trim() ? "live" : ["close", "closed", "deal", "expired", "off", "offline", "rented"].includes(listing.status) ? "unlisted" : "unknown";
-      return { ...result, status, expiresOn: validDay(listing.endTime) ? listing.endTime : "", ...(includeListing && status === "live" ? { listing: rentalListingFields(listing) } : {}) };
+      const fields = includeListing && status === "live" ? business ? businessRentalListingFields(detail) : rentalListingFields(listing) : null;
+      return { ...result, status, expiresOn: validDay(listing.endTime) ? listing.endTime : "", ...(fields ? { listing: fields } : {}) };
     } catch { /* A changed layout is unknown, never proof that a website has expired. */ }
   }
   return result;

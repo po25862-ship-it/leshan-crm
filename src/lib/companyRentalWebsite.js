@@ -18,12 +18,13 @@ export function rentalWebsiteKey(value) {
     const url = new URL(value);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.href.length > 2000) return "";
     const id = url.hostname === "rent.591.com.tw" ? url.pathname.match(/^\/(\d{5,12})\/?$/)?.[1]
+      : url.hostname === "business.591.com.tw" ? url.pathname.match(/^\/rent\/(\d{5,12})\/?$/)?.[1]
       : ["www.591.com.tw", "591.com.tw"].includes(url.hostname) ? url.pathname.match(/^\/rent-detail-(\d{5,12})\.html$/)?.[1] : "";
-    if (id && !url.port) return `https://rent.591.com.tw/${id}`;
+    if (id && !url.port) return url.hostname === "business.591.com.tw" ? `https://business.591.com.tw/rent/${id}` : `https://rent.591.com.tw/${id}`;
     url.searchParams.delete("agid"); url.hash = ""; return url.href;
   } catch { return ""; }
 }
-export const isRental591Url = value => /^https:\/\/rent\.591\.com\.tw\/\d+$/.test(rentalWebsiteKey(value));
+export const isRental591Url = value => /^https:\/\/(?:rent\.591\.com\.tw\/|business\.591\.com\.tw\/rent\/)\d+$/.test(rentalWebsiteKey(value));
 export function rentalWebsiteState(rental, now = Date.now()) {
   const key = rentalWebsiteKey(rental.websiteUrl);
   const checked = key && rentalWebsiteKey(rental.websiteCheckedUrl) === key;
