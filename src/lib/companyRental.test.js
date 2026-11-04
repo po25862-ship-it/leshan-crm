@@ -140,3 +140,11 @@ test("remembered equipment accepts only bounded lists and valid names", () => {
   expect(validateCompanyRental({ ...form, equipmentCatalog: ["設".repeat(31)] }, "draft")).toContain("30 字");
   expect(validateCompanyRental({ ...form, equipmentCatalog: Array.from({ length: 201 }, (_, i) => "設備" + i) }, "draft")).toContain("200 項");
 });
+
+
+test("publication validation names only the missing fields and keeps draft saving available", () => {
+  const imported = {...form,doorAddress:"",viewingInstructions:""};
+  expect(validateCompanyRental(imported,"available")).toBe("還需要補上：完整門牌（內部）、帶看方式。");
+  expect(validateCompanyRental({...imported,doorAddress:"已補門牌"},"available")).toBe("還需要補上：帶看方式。");
+  expect(validateCompanyRental(imported,"draft")).toBe("");
+});

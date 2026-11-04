@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, MOTORBIKE_PARKING_OPTIONS, RENTAL_PARKING_FEE_OPTIONS, rentalMonthlyCost, rentalMoney, validateCompanyRental, companyRentalForm, companyRentalColleagues, normalizeRentalFurniture, addRentalFurniture, MAX_RENTAL_FURNITURE_NAME } from "../lib/companyRental";
+import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, MOTORBIKE_PARKING_OPTIONS, RENTAL_PARKING_FEE_OPTIONS, rentalMonthlyCost, rentalMoney, validateCompanyRental, missingCompanyRentalFields, rentalMissingFieldsMessage, companyRentalForm, companyRentalColleagues, normalizeRentalFurniture, addRentalFurniture, MAX_RENTAL_FURNITURE_NAME } from "../lib/companyRental";
 import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhotos";
 import { useCollection } from "../hooks/useCollection";
 import { isHiddenColleague } from "../lib/colleagueVisibility";
@@ -27,6 +27,16 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   const websiteRequest = useRef(0);
   useEffect(() => () => { websiteRequest.current++; }, []);
   const responsibleTouched = useRef(false), dirty = useRef(false), localUrls = useRef(new Set()), fileInput = useRef(null), errorRef = useRef(null);
+  const workspaceRef = useRef(null), [pendingFocus, setPendingFocus] = useState(null);
+  const missingFields = missingCompanyRentalFields(form), missingError = error.startsWith("還需要補上：");
+  const visibleError = missingError ? rentalMissingFieldsMessage(form) : error;
+  function goToMissingField(field) { setStep(field.step); setPendingFocus(field); }
+  useEffect(() => {
+    if (!pendingFocus || step !== pendingFocus.step) return;
+    const field = workspaceRef.current?.querySelector(`[data-rental-field="${pendingFocus.key}"]`);
+    field?.focus(); field?.scrollIntoView?.({ block: "center", behavior: "smooth" }); setPendingFocus(null);
+  }, [pendingFocus, step]);
+  const requiredFieldProps = key => ({ "data-rental-field": key, "aria-invalid": missingError && missingFields.some(field => field.key === key) || undefined, "aria-describedby": missingError && missingFields.some(field => field.key === key) ? "company-rental-validation" : undefined });
   const cost = rentalMonthlyCost(form);
   useEffect(() => () => localUrls.current.forEach(url => URL.revokeObjectURL(url)), []);
   useEffect(() => { setEquipmentOptions(current => normalizeRentalFurniture([...current, ...sharedEquipment])); }, [sharedEquipment]);
@@ -71,8 +81,8 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
     finally { if (request === websiteRequest.current) setCheckingWebsite(false); }
   }
   const close = () => { if (!busy && !processing && (!dirty.current || window.confirm("尚未儲存，確定離開編輯？"))) onClose(); };
-  const field = (key, label, { options, type = "text", hint, wide, ...props } = {}) => <label className={wide ? "cr-field cr-wide" : "cr-field"} key={key}><span>{label}</span>{options ? <select value={form[key] ?? ""} onChange={event => change(key, event.target.value)}>{options.map(option => { const value = typeof option === "string" ? option : option.value; return <option key={value} value={value}>{typeof option === "string" ? option : option.label}</option>; })}</select> : <input type={type} value={form[key] ?? ""} onChange={event => change(key, event.target.value)} {...props} />}{hint && <small>{hint}</small>}</label>;
-  const textarea = (key, label, hint) => <label className="cr-field cr-wide"><span>{label}</span><textarea rows={3} value={form[key] || ""} onChange={event => change(key, event.target.value)} />{hint && <small>{hint}</small>}</label>;
+  const field = (key, label, { options, type = "text", hint, wide, ...props } = {}) => <label className={wide ? "cr-field cr-wide" : "cr-field"} key={key}><span>{label}</span>{options ? <select {...requiredFieldProps(key)} value={form[key] ?? ""} onChange={event => change(key, event.target.value)}>{options.map(option => { const value = typeof option === "string" ? option : option.value; return <option key={value} value={value}>{typeof option === "string" ? option : option.label}</option>; })}</select> : <input {...requiredFieldProps(key)} type={type} value={form[key] ?? ""} onChange={event => change(key, event.target.value)} {...props} />}{hint && <small>{hint}</small>}</label>;
+  const textarea = (key, label, hint) => <label className="cr-field cr-wide"><span>{label}</span><textarea {...requiredFieldProps(key)} rows={3} value={form[key] || ""} onChange={event => change(key, event.target.value)} />{hint && <small>{hint}</small>}</label>;
   function prepareEquipment() {
     const result = addRentalFurniture(equipmentOptions, form.furniture, newEquipment);
     const nextForm = { ...form, furniture: result.furniture, equipmentCatalog: normalizeRentalFurniture([...form.equipmentCatalog, result.name]) };
@@ -116,7 +126,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
       catch (err) { setEquipmentError(err.message); setStep(1); return; }
     }
     const validation = validateCompanyRental(saveForm, nextStatus, photos);
-    if (validation) { setError(validation); setTimeout(() => errorRef.current?.focus(), 0); return; }
+    if (validation) { setError(validation); if (validation.startsWith("還需要補上：")) goToMissingField(missingCompanyRentalFields(saveForm)[0]); else setTimeout(() => errorRef.current?.focus(), 0); return; }
     setBusy(true); setMessage("正在儲存…");
     try {
       const result = await saveCompanyRental({ original, form: saveForm, status: nextStatus, photos, user, profile, onProgress: setMessage });
@@ -125,25 +135,25 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
     } catch (err) { setError(err.message || "儲存失敗，請稍後重試。"); setMessage(""); }
     finally { setBusy(false); }
   }
-  return <section className="cr-editor" aria-label="租賃案件編輯">
+  return <section ref={workspaceRef} className="cr-editor" aria-label="租賃案件編輯">
     <div className="cr-editor-bar"><div><small>公司租賃</small><h2>{original ? "編輯租賃物件" : "新增租賃物件"}</h2></div><div className="cr-actions"><button type="button" disabled={busy || processing} onClick={close}>取消</button><button type="button" disabled={busy || processing} onClick={() => save("draft")}>存成草稿</button><button className="cr-primary" type="button" disabled={busy || processing} onClick={() => save(status)}>{busy ? "儲存中…" : status === "available" ? "儲存並招租" : "儲存案件"}</button></div></div>
     <Rental591Import form={form} user={user} initiallyOpen={!original} disabled={busy || processing} onBusyChange={setReadingListing} onApply={(info, selectedKeys) => {
       websiteRequest.current++; setCheckingWebsite(false); setWebsiteMessage(""); dirty.current = true;
       setForm(current => applyRentalListingImport(current, info, selectedKeys));
       if (selectedKeys.includes("furniture")) setEquipmentOptions(current => normalizeRentalFurniture([...current, ...normalizeRentalFurniture(info.listing.furniture)]));
-      setStep(0); setError(""); setMessage(`已從 591 帶入 ${selectedKeys.length} 項資料與刊登網址／期限，請確認完整門牌與帶看方式後儲存。`);
+      setStep(0); setError(""); setMessage(`已從 591 帶入 ${selectedKeys.length} 項資料與刊登網址／期限，已帶入的欄位不用重填。`);
     }} />
     <div className="cr-steps" role="tablist" aria-label="編輯步驟">{["基本資料", "租金與條件", "網址、照片與內部資料"].map((label, index) => <button key={label} type="button" role="tab" aria-selected={step === index} onClick={() => setStep(index)}>{index + 1}. {label}</button>)}</div>
-    {error && <p className="cr-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{message && <p className="cr-note" role="status">{message}</p>}
+    {visibleError && <div className="cr-error" id="company-rental-validation" role="alert" tabIndex={-1} ref={errorRef}><p>{visibleError}</p>{missingError && <><p>已填好的資料不用重寫。點下方按鈕可直接補填。</p><div className="cr-actions cr-missing-actions">{missingFields.map(field => <button type="button" key={field.key} onClick={() => goToMissingField(field)}>補{field.label}</button>)}</div></>}</div>}{message && <p className="cr-note" role="status">{message}</p>}
     <fieldset disabled={busy || processing} className="cr-form-body">
       {step === 0 && <><h3>先讓同事快速找到這間房</h3><div className="cr-form-grid">
-        <label className="cr-field cr-wide"><span>案件負責人＊</span><select value={form.agentUid || "__manual__"} onChange={event => chooseAgent(event.target.value)}><optgroup label="店內同事">{staffChoices.map(item => <option key={item.id} value={item.id} hidden={isHiddenColleague(item)} disabled={isHiddenColleague(item)}>{item.name}{item.id === user.uid ? "（我）" : ""}</option>)}</optgroup><option value="__manual__">自行輸入業務</option></select><small>{staffLoading ? "正在讀取店內同事名冊…" : "可選擇店內同事；名單以外的業務請選「自行輸入業務」。"}</small></label>
+        <label className="cr-field cr-wide"><span>案件負責人＊</span><select {...requiredFieldProps("agentName")} value={form.agentUid || "__manual__"} onChange={event => chooseAgent(event.target.value)}><optgroup label="店內同事">{staffChoices.map(item => <option key={item.id} value={item.id} hidden={isHiddenColleague(item)} disabled={isHiddenColleague(item)}>{item.name}{item.id === user.uid ? "（我）" : ""}</option>)}</optgroup><option value="__manual__">自行輸入業務</option></select><small>{staffLoading ? "正在讀取店內同事名冊…" : "可選擇店內同事；名單以外的業務請選「自行輸入業務」。"}</small></label>
         {!form.agentUid && field("agentName", "業務姓名＊", { maxLength: 80 })}
         {field("agentPhone", "業務聯絡電話", { type: "tel", maxLength: 40 })}{field("branch", "所屬分店", { maxLength: 80 })}
         {field("title", "案名＊", { wide: true, placeholder: "例如：金捷市採光兩房平車", maxLength: 120 })}
         <RentalCommunityPicker value={form.community} onChange={value => change("community", value)} />{field("type", "租賃類型", { options: COMPANY_RENTAL_TYPES })}
         {field("area", "生活圈", { options: ["A7", "A8", "A9", "其他"] })}{field("city", "縣市＊")}{field("district", "行政區＊")}{field("street", "公開路段＊", { placeholder: "例如：樂善二路", hint: "分享給客人只帶出這個路段，請勿填完整門牌。" })}
-        {field("doorAddress", "完整門牌／樓層＊（內部）", { wide: true, placeholder: "供同事帶看核對，不帶入分享文字" })}
+        {field("doorAddress", "完整門牌＊（內部）", { wide: true, placeholder: "供同事帶看核對，不帶入分享文字", hint: "591 沒公開完整門牌時請補填；這一欄不會放進客人分享文字。" })}
         {field("floor", "樓層", { placeholder: "例如：8／28" })}{field("rooms", "房", { type: "number", min: 0, step: 1 })}{field("living", "廳", { type: "number", min: 0, step: 1 })}{field("baths", "衛", { type: "number", min: 0, step: 1 })}
         {field("size", "坪數", { type: "number", min: 0, step: ".01" })}{field("sizeBasis", "坪數說明", { options: ["室內使用，不含車位", "591 刊登使用坪數", "權狀坪數，含車位", "權狀坪數，不含車位", "其他，請見介紹"] })}
       </div></>}

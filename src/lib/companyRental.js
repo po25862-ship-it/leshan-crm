@@ -130,6 +130,19 @@ export function rentalMonthlyCost(rental) {
   }
   return { total, complete: missing.length === 0, missing };
 }
+export function missingCompanyRentalFields(form) {
+  const fields = [
+    { key: "title", label: "案名", step: 0 }, { key: "city", label: "縣市", step: 0 },
+    { key: "district", label: "行政區", step: 0 }, { key: "street", label: "公開路段", step: 0 },
+    { key: "doorAddress", label: "完整門牌（內部）", step: 0 }, { key: "agentName", label: "案件負責人", step: 0 },
+    { key: "rent", label: "月租金", step: 1 }, { key: "viewingInstructions", label: "帶看方式", step: 2 },
+  ];
+  return fields.filter(({ key }) => key === "rent" ? !(rentalNumber(form[key]) > 0) : !String(form[key] || "").trim());
+}
+export function rentalMissingFieldsMessage(form) {
+  const missing = missingCompanyRentalFields(form);
+  return missing.length ? `還需要補上：${missing.map(field => field.label).join("、")}。` : "";
+}
 export function validateCompanyRental(form, status, photos = []) {
   if (!Object.hasOwn(COMPANY_RENTAL_STATUSES, status)) return "請選擇有效的招租狀態。";
   for (const field of numericFields) {
@@ -157,10 +170,8 @@ export function validateCompanyRental(form, status, photos = []) {
   if (photos.some(photo => photo.size > MAX_RENTAL_PHOTO_BYTES || photo.type !== "image/jpeg")) return "照片請先壓縮至每張 300KB 內的 JPG。";
   if (form.moveIn === "另約日期" && form.availableDate && !validRentalDate(form.availableDate)) return "請填寫有效的可入住日期。";
   if (status !== "draft") {
-    if (![form.title, form.city, form.district, form.street, form.doorAddress].every(value => String(value || "").trim())) return "請填寫案名、縣市、行政區、路段與門牌／樓層。";
-    if (!String(form.agentName || "").trim()) return "請選擇案件負責人或自行輸入業務姓名。";
-    if (!(rentalNumber(form.rent) > 0)) return "請填寫月租金後再加入招租清單。";
-    if (!String(form.viewingInstructions || "").trim()) return "請填寫帶看方式，方便同事聯繫。";
+    const missing = rentalMissingFieldsMessage(form);
+    if (missing) return missing;
   }
   return "";
 }

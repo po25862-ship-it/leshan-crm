@@ -27,7 +27,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
 const click = async label => act(async () => button(label).click());
-function input(element, value) { const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set; act(() => { setter.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
+function input(element, value) { const setter = Object.getOwnPropertyDescriptor(element.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype, "value").set; act(() => { setter.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
 test("status and search counts reflect filtered rows; changing a search closes stale details", async () => {
   render(); expect(container.querySelectorAll("article")).toHaveLength(2);
   await click("查看資料"); expect(container.textContent).toContain("完整門牌／樓層");
@@ -45,7 +45,7 @@ test("failed private read disables editing rather than replacing it with empty p
 });
 test("empty new listing can be saved as draft, while publishing requires complete details", async () => {
   render(); await click("＋ 新增租賃"); await click("儲存並招租");
-  expect(saveCompanyRental).not.toHaveBeenCalled(); expect(container.querySelector("[role=alert]").textContent).toContain("請填寫");
+  expect(saveCompanyRental).not.toHaveBeenCalled(); expect(container.querySelector("[role=alert]").textContent).toContain("還需要補上");
   await click("存成草稿"); expect(saveCompanyRental).toHaveBeenCalledWith(expect.objectContaining({ status: "draft", photos: [] }));
 });
 
@@ -270,4 +270,27 @@ test("a delayed 591 response cannot appear after the URL has been changed", asyn
   const urlInput=fieldLabel("591 租屋網址").querySelector("input");input(urlInput,imported591.url);await click("讀取 591 資料");
   input(urlInput,"https://rent.591.com.tw/12345678");await act(async()=>finish(imported591));
   expect(container.querySelector(".cr-import-preview")).toBeNull();expect(saveCompanyRental).not.toHaveBeenCalled();
+});
+
+
+test("after a 591 import only missing private details are requested, and shortcuts open the correct step", async () => {
+  loadRentalListingInfo.mockResolvedValue({...imported591,listing:{...imported591.listing,city:"桃園市",district:"龜山區",street:"牛角坡路",floor:"6/15"}});
+  render();await click("＋ 新增租賃");
+  input(fieldLabel("591 租屋網址").querySelector("input"),imported591.url);await click("讀取 591 資料");
+  await act(async()=>[...container.querySelectorAll("button")].find(node=>node.textContent.startsWith("帶入表單（")).click());
+  await click("儲存並招租");
+  const alert=container.querySelector("[role=alert]");
+  expect(alert.querySelector("p").textContent).toBe("還需要補上：完整門牌（內部）、帶看方式。");
+  expect(alert.textContent).not.toContain("縣市");expect(alert.textContent).not.toContain("案名");
+  expect(document.activeElement.getAttribute("data-rental-field")).toBe("doorAddress");
+  expect(fieldLabel("案名＊").querySelector("input").value).toBe("591案名");
+  input(fieldLabel("完整門牌＊（內部）").querySelector("input"),"測試完整門牌");
+  expect(container.querySelector("[role=alert]").querySelector("p").textContent).toBe("還需要補上：帶看方式。");
+  await click("補帶看方式");
+  expect([...container.querySelectorAll(".cr-steps button")].find(node=>node.getAttribute("aria-selected")==="true").textContent).toContain("3.");
+  expect(document.activeElement.getAttribute("data-rental-field")).toBe("viewingInstructions");
+  input(fieldLabel("帶看方式＊").querySelector("textarea"),"請先聯繫負責同事");
+  expect(container.querySelector("[role=alert]")).toBeNull();
+  await click("儲存並招租");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({title:"591案名",street:"牛角坡路",floor:"6/15",rent:29000,doorAddress:"測試完整門牌",viewingInstructions:"請先聯繫負責同事"}));
 });
