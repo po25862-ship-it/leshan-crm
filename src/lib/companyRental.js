@@ -1,3 +1,4 @@
+import { parseRentalKey, rentalViewingNotes } from "./companyRentalKeys";
 import { MAIN_OWNER_UID, withAgid, withoutAgid } from "./url";
 import { visibleColleagueOptions } from "./colleagueVisibility";
 import { validRentalDay, rentalWebsiteKey, rentalWebsiteState, rentalCheckTime } from "./companyRentalWebsite";
@@ -58,6 +59,8 @@ export const INTERNAL_RENTAL_FIELDS = ["doorAddress", "landlordName", "landlordP
 // Keep older unclassified fee notes internal until a colleague splits them explicitly.
 export function companyRentalForm(original, internal, user, profile = {}) {
   return { ...RENTAL_FORM_DEFAULTS, ...original, ...internal,
+    viewingInstructions: rentalViewingNotes(internal),
+    keyInfo: parseRentalKey(internal?.keyInfo) ? internal.keyInfo : "",
     furniture: normalizeRentalFurniture(original?.furniture),
     equipmentCatalog: normalizeRentalFurniture([...normalizeRentalFurniture(original?.equipmentCatalog), ...normalizeRentalFurniture(original?.furniture)]),
     buyerServiceFee: original?.buyerServiceFee ?? RENTAL_FORM_DEFAULTS.buyerServiceFee,
