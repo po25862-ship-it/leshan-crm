@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { getIdToken } from "firebase/auth";
-import { loadRentalWebsiteInfo, needsRentalWebsiteCheck } from "./rentalWebsiteClient";
+import { loadRentalWebsiteInfo, loadRentalListingInfo, needsRentalWebsiteCheck } from "./rentalWebsiteClient";
 jest.mock("firebase/auth", () => ({ getIdToken: jest.fn(async () => "test-token") }));
 const url = "https://rent.591.com.tw/22258856";
 beforeEach(() => { global.fetch = jest.fn(); getIdToken.mockResolvedValue("test-token"); });
@@ -26,4 +26,11 @@ test("manual refresh bypasses the cache, while a mismatched response is rejected
   await loadRentalWebsiteInfo(user, url); await loadRentalWebsiteInfo(user, url, true); expect(fetch).toHaveBeenCalledTimes(2);
   fetch.mockResolvedValue({ ok: true, json: async () => ({ ...info, url: "https://rent.591.com.tw/12345678" }) });
   await expect(loadRentalWebsiteInfo(user, url, true)).rejects.toThrow("無法確認");
+});
+
+test("manual listing import is authenticated and cannot be satisfied by the daily metadata cache", async () => {
+  const user={uid:"listing-import-test"}, base={url,status:"live",expiresOn:"2026-12-01",checkedAt:new Date().toISOString()};
+  fetch.mockResolvedValueOnce({ok:true,json:async()=>base}).mockResolvedValueOnce({ok:true,json:async()=>({...base,listing:{rent:29000}})});
+  await loadRentalWebsiteInfo(user,url);expect((await loadRentalListingInfo(user,url)).listing.rent).toBe(29000);
+  expect(fetch).toHaveBeenCalledTimes(2);expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({url,includeListing:true});
 });

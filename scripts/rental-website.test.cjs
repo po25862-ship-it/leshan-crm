@@ -45,3 +45,36 @@ test("API authenticates every call and rejects unsupported URLs before fetching"
   const bad = response(); await handler({ method: "POST", headers: {}, body: { url: "http://127.0.0.1/secret" } }, bad); assert.equal(bad.statusCode, 400); assert.equal(fetches, 1);
   const rejected = response(); await createHandler({ verifyUser: async () => { throw new Error("unauthorized"); }, checkWebsite: async () => { fetches++; } })({ method: "POST", headers: {}, body: { url } }, rejected); assert.equal(rejected.statusCode, 401); assert.equal(fetches, 1);
 });
+
+
+const listingHtml = fields => `<script>window.__NUXT__=(function(){return ${JSON.stringify({pinia:{"rent-detail-info":{ctx:{id:22258856,status:"open",title:"測試兩房",endTime:"2026-12-01",...fields}}}}).replaceAll("<", "\\u003c")};}());</script>`;
+test("manual imports read exact-listing facts, explicit fees and active equipment without exposing source accounts", () => {
+  const result = inspectRentalHtml(listingHtml({
+    breadcrumb:[{query:"region",name:"桃園市"},{query:"section",name:"龜山區"},{query:"kind",name:"整層住家"}],
+    title:"A7測試兩房",price:"29,000",deposit:"二個月",positionRound:{communityName:"示範社區",address:"龜山區牛角坡路123號6樓"},
+    info:[{key:"layout",value:"2房2廳2衛"},{key:"area",name:"使用坪數",value:"20坪"},{key:"floor",value:"6F/15F"}],
+    infoData:{data:[{key:"carInfo",value:"平面式"}]},rent_calculation_data:{manage_fee:0,manage_fee_text:"無數據",price_has_carport:true},
+    service:{facility:[{key:"cold",name:"冷氣",active:1},{key:"fridge",name:"冰箱",active:0}],descData:[{label:"養寵物",value:"可養寵物"},{label:"開伙",value:"可開伙"}]},
+    publish:{name:"網站刊登人",phone:"private"},remark:{content:"<h3>房屋介紹</h3><p>採光好</p><script>danger()</script>"}
+  }),url,200,{includeListing:true});
+  assert.equal(result.listing.rent,29000);assert.equal(result.listing.deposit,2);assert.equal(result.listing.rooms,2);
+  assert.equal(result.listing.floor,"6/15");assert.equal(result.listing.street,"牛角坡路");assert.equal(result.listing.doorAddress,"桃園市龜山區牛角坡路123號6樓");
+  assert.equal(result.listing.parking,"平面車位");assert.equal(result.listing.parkMode,"已含租金");assert.equal(result.listing.mgmtMode,undefined);
+  assert.deepEqual(result.listing.furniture,["冷氣"]);assert.equal(result.listing.agentName,undefined);assert.equal(result.listing.publish,undefined);
+  assert.ok(!result.listing.description.includes("danger"));assert.ok(result.listing.description.includes("房屋介紹\n採光好"));
+});
+test("street-only addresses, unknown fees, inactive parking and missing room counts stay unfilled", () => {
+  const result=inspectRentalHtml(listingHtml({positionRound:{address:"龜山區牛角坡路"},breadcrumb:[{query:"section",name:"龜山區"}],deposit:"面議",rent_calculation_data:{manage_fee:0,manage_fee_text:"無數據"},service:{facility:[{key:"park",name:"平面車位",active:0}]}}),url,200,{includeListing:true});
+  assert.equal(result.listing.street,"牛角坡路"); for(const key of ["doorAddress","deposit","parking","mgmtMode","rooms","rent"])assert.equal(result.listing[key],undefined);
+  assert.equal(inspectRentalHtml(listingHtml({status:"close"}),url,200,{includeListing:true}).listing,undefined);
+  assert.equal(inspectRentalHtml(listingHtml({id:12345678}),url,200,{includeListing:true}).listing,undefined);
+});
+test("listing data is opt-in so daily website checks remain small", async () => {
+  assert.equal(inspectRentalHtml(listingHtml({price:"29,000"}),url).listing,undefined);
+  const withListing=await checkRentalWebsite(url,{includeListing:true,fetcher:async()=>new Response(listingHtml({price:"29,000"}))});
+  assert.equal(withListing.listing.rent,29000);
+  const options=[];const handler=createHandler({verifyUser:async()=>({uid:"staff"}),checkWebsite:async(value,opts)=>{options.push(opts);return{url:value,status:"live"}}});
+  await handler({method:"POST",headers:{},body:{url,includeListing:true}},response());
+  await handler({method:"POST",headers:{},body:{url,includeListing:"true"}},response());
+  assert.deepEqual(options,[{includeListing:true},{includeListing:false}]);
+});

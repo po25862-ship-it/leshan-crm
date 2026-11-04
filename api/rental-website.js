@@ -10,7 +10,7 @@ function createHandler({ verifyUser = verifyCrmReferenceUser, checkWebsite = che
     let body; try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; } catch { body = null; }
     const url = typeof body?.url === "string" && body.url.length <= 2000 ? rental591Url(body.url) : "";
     if (!url) return res.status(400).json({ error: "unsupported_url" });
-    try { return res.status(200).json(await checkWebsite(url)); }
+    try { return res.status(200).json(await checkWebsite(url, { includeListing: body.includeListing === true })); }
     catch { console.warn("rental_website_check_failed", { code: "source_unavailable" }); return res.status(503).json({ error: "website_check_unavailable" }); }
   };
 }

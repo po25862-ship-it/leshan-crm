@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import CompanyRentals from "./CompanyRentals";
 import { readRentalInternal, saveCompanyRental, setCompanyRentalStatus } from "../lib/companyRentalRepository";
+import { loadRentalListingInfo } from "../lib/rentalWebsiteClient";
 import { rentalToday } from "../lib/companyRentalWebsite";
 const mockRows = [
   { id: "a", title: "金捷市兩房", community: "金捷市", street: "樂善二路", area: "A7", status: "available", ownerUid: "staff", rent: 28000, photos: [], revision: 1 },
@@ -17,11 +18,11 @@ jest.mock("../hooks/useDoc", () => ({ useDoc: () => ({ data: { name: "小林" } 
 jest.mock("../hooks/usePersonalAgid", () => ({ usePersonalAgid: () => ({ agid: "67890" }) }));
 jest.mock("../hooks/useCompanyRentals", () => ({ useCompanyRentals: () => ({ items: mockStoredRows, loading: false, error: null, refresh: jest.fn() }) }));
 jest.mock("../hooks/useRentalWebsiteChecks", () => ({ useRentalWebsiteChecks: () => ({}) }));
-jest.mock("../lib/rentalWebsiteClient", () => ({ loadRentalWebsiteInfo: jest.fn(), needsRentalWebsiteCheck: jest.fn(() => false) }));
+jest.mock("../lib/rentalWebsiteClient", () => ({ loadRentalWebsiteInfo: jest.fn(), loadRentalListingInfo: jest.fn(), needsRentalWebsiteCheck: jest.fn(() => false) }));
 jest.mock("../lib/companyRentalRepository", () => ({ readRentalInternal: jest.fn(), saveCompanyRental: jest.fn(), setCompanyRentalStatus: jest.fn() }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [], loading: false }) }));
 let container, root;
-beforeEach(() => { mockStoredRows = mockRows; setCompanyRentalStatus.mockReset(); mockRows.forEach(row => { row.furniture = []; for (const key of ["equipmentCatalog", "agentUid", "agentName", "websiteUrl", "websiteExpiresOn", "mandateExpiresOn", "websiteCheckStatus", "websiteCheckedUrl", "websiteUnavailable"]) delete row[key]; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
+beforeEach(() => { mockStoredRows = mockRows; setCompanyRentalStatus.mockReset(); loadRentalListingInfo.mockReset(); mockRows.forEach(row => { row.furniture = []; for (const key of ["equipmentCatalog", "agentUid", "agentName", "websiteUrl", "websiteExpiresOn", "mandateExpiresOn", "websiteCheckStatus", "websiteCheckedUrl", "websiteUnavailable"]) delete row[key]; }); global.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); readRentalInternal.mockReset().mockResolvedValue({ doorAddress: "內部門牌" }); saveCompanyRental.mockReset().mockResolvedValue({ rental: { id: "new", status: "draft" }, cleanupFailures: [] }); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = () => act(() => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><CompanyRentals /></MemoryRouter>));
 const button = label => [...container.querySelectorAll("button")].find(node => node.textContent === label);
@@ -241,4 +242,32 @@ test("a failed list status save keeps the rental in its original tab and restore
   expect(container.querySelector("[role=alert]").textContent).toContain("狀態尚未更新");
   expect(container.querySelector("[role=alert]").textContent).toContain("目前帳號無法修改");
   expect(container.querySelector(".cr-success")).toBeNull();
+});
+
+
+const imported591 = {url:"https://rent.591.com.tw/22268405",status:"live",expiresOn:"2026-12-01",checkedAt:"2026-11-04T13:00:00Z",listing:{title:"591案名",community:"頤昌筑岳",rent:29000,parking:"平面車位",sizeBasis:"591 刊登使用坪數",furniture:["冷氣"]}};
+test("591 import fills the form after review, preserves a custom title, and saves with the current colleague", async () => {
+  loadRentalListingInfo.mockResolvedValue(imported591);render();await click("＋ 新增租賃");
+  input(fieldLabel("案名＊").querySelector("input"),"自己的案名");
+  input(fieldLabel("591 租屋網址").querySelector("input"),imported591.url);await click("讀取 591 資料");
+  expect(saveCompanyRental).not.toHaveBeenCalled();
+  const titleOption=[...container.querySelectorAll(".cr-import-fields label")].find(node=>node.querySelector("b").textContent==="案名");
+  expect(titleOption.querySelector("input").checked).toBe(false);
+  await act(async()=>[...container.querySelectorAll("button")].find(node=>node.textContent.startsWith("帶入表單（")).click());
+  expect(fieldLabel("案名＊").querySelector("input").value).toBe("自己的案名");
+  expect(fieldLabel("坪數說明").querySelector("select").value).toBe("591 刊登使用坪數");
+  await click("存成草稿");
+  expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({title:"自己的案名",community:"頤昌筑岳",rent:29000,parking:"平面車位",agentUid:"staff",websiteUrl:imported591.url,websiteExpiresOn:"2026-12-01",furniture:["冷氣"]}));
+});
+test("a 591 read failure leaves the existing form untouched and does not save", async () => {
+  loadRentalListingInfo.mockResolvedValue({...imported591,status:"unknown",listing:undefined});render();await click("＋ 新增租賃");
+  input(fieldLabel("案名＊").querySelector("input"),"保留案名");input(fieldLabel("591 租屋網址").querySelector("input"),imported591.url);await click("讀取 591 資料");
+  expect(container.querySelector("[role=alert]").textContent).toContain("表單內容未更動");
+  expect(fieldLabel("案名＊").querySelector("input").value).toBe("保留案名");expect(saveCompanyRental).not.toHaveBeenCalled();
+});
+test("a delayed 591 response cannot appear after the URL has been changed", async () => {
+  let finish;loadRentalListingInfo.mockImplementation(()=>new Promise(resolve=>{finish=resolve}));render();await click("＋ 新增租賃");
+  const urlInput=fieldLabel("591 租屋網址").querySelector("input");input(urlInput,imported591.url);await click("讀取 591 資料");
+  input(urlInput,"https://rent.591.com.tw/12345678");await act(async()=>finish(imported591));
+  expect(container.querySelector(".cr-import-preview")).toBeNull();expect(saveCompanyRental).not.toHaveBeenCalled();
 });

@@ -4,6 +4,8 @@ import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhot
 import { useCollection } from "../hooks/useCollection";
 import { isHiddenColleague } from "../lib/colleagueVisibility";
 import RentalCommunityPicker from "./RentalCommunityPicker";
+import Rental591Import from "./Rental591Import";
+import { applyRentalListingImport } from "../lib/rentalListingImport";
 import { saveCompanyRental } from "../lib/companyRentalRepository";
 import { isRental591Url, rentalWebsiteKey, rentalWebsitePatch } from "../lib/companyRentalWebsite";
 import { loadRentalWebsiteInfo, needsRentalWebsiteCheck } from "../lib/rentalWebsiteClient";
@@ -21,6 +23,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false), [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState(""), [error, setError] = useState("");
   const [checkingWebsite, setCheckingWebsite] = useState(false), [websiteMessage, setWebsiteMessage] = useState("");
+  const [readingListing, setReadingListing] = useState(false);
   const websiteRequest = useRef(0);
   useEffect(() => () => { websiteRequest.current++; }, []);
   const responsibleTouched = useRef(false), dirty = useRef(false), localUrls = useRef(new Set()), fileInput = useRef(null), errorRef = useRef(null);
@@ -106,7 +109,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   }
   async function save(nextStatus) {
     setError("");
-    if (checkingWebsite) { setError("正在讀取 591，到期資料回來後即可儲存。"); return; }
+    if (checkingWebsite || readingListing) { setError("正在讀取 591，資料讀取完成後即可儲存。"); return; }
     let saveForm = form;
     if (newEquipment.trim()) {
       try { saveForm = prepareEquipment(); }
@@ -124,6 +127,12 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   }
   return <section className="cr-editor" aria-label="租賃案件編輯">
     <div className="cr-editor-bar"><div><small>公司租賃</small><h2>{original ? "編輯租賃物件" : "新增租賃物件"}</h2></div><div className="cr-actions"><button type="button" disabled={busy || processing} onClick={close}>取消</button><button type="button" disabled={busy || processing} onClick={() => save("draft")}>存成草稿</button><button className="cr-primary" type="button" disabled={busy || processing} onClick={() => save(status)}>{busy ? "儲存中…" : status === "available" ? "儲存並招租" : "儲存案件"}</button></div></div>
+    <Rental591Import form={form} user={user} initiallyOpen={!original} disabled={busy || processing} onBusyChange={setReadingListing} onApply={(info, selectedKeys) => {
+      websiteRequest.current++; setCheckingWebsite(false); setWebsiteMessage(""); dirty.current = true;
+      setForm(current => applyRentalListingImport(current, info, selectedKeys));
+      if (selectedKeys.includes("furniture")) setEquipmentOptions(current => normalizeRentalFurniture([...current, ...normalizeRentalFurniture(info.listing.furniture)]));
+      setStep(0); setError(""); setMessage(`已從 591 帶入 ${selectedKeys.length} 項資料與刊登網址／期限，請確認完整門牌與帶看方式後儲存。`);
+    }} />
     <div className="cr-steps" role="tablist" aria-label="編輯步驟">{["基本資料", "租金與條件", "網址、照片與內部資料"].map((label, index) => <button key={label} type="button" role="tab" aria-selected={step === index} onClick={() => setStep(index)}>{index + 1}. {label}</button>)}</div>
     {error && <p className="cr-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{message && <p className="cr-note" role="status">{message}</p>}
     <fieldset disabled={busy || processing} className="cr-form-body">
@@ -136,13 +145,13 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
         {field("area", "生活圈", { options: ["A7", "A8", "A9", "其他"] })}{field("city", "縣市＊")}{field("district", "行政區＊")}{field("street", "公開路段＊", { placeholder: "例如：樂善二路", hint: "分享給客人只帶出這個路段，請勿填完整門牌。" })}
         {field("doorAddress", "完整門牌／樓層＊（內部）", { wide: true, placeholder: "供同事帶看核對，不帶入分享文字" })}
         {field("floor", "樓層", { placeholder: "例如：8／28" })}{field("rooms", "房", { type: "number", min: 0, step: 1 })}{field("living", "廳", { type: "number", min: 0, step: 1 })}{field("baths", "衛", { type: "number", min: 0, step: 1 })}
-        {field("size", "坪數", { type: "number", min: 0, step: ".01" })}{field("sizeBasis", "坪數說明", { options: ["室內使用，不含車位", "權狀坪數，含車位", "權狀坪數，不含車位", "其他，請見介紹"] })}
+        {field("size", "坪數", { type: "number", min: 0, step: ".01" })}{field("sizeBasis", "坪數說明", { options: ["室內使用，不含車位", "591 刊登使用坪數", "權狀坪數，含車位", "權狀坪數，不含車位", "其他，請見介紹"] })}
       </div></>}
       {step === 1 && <><h3>費用先說清楚，介紹更省時間</h3><div className="cr-cost"><span>{cost.complete ? "每月固定費用" : "目前已知每月費用"}</span><strong>{rentalMoney(cost.total)} <small>元</small></strong>{!cost.complete && <small>尚待確認：{cost.missing.join("、")}</small>}<small>不含水電等依用量計收費用</small></div><div className="cr-form-grid">
         {field("rent", "月租金（元）＊", { type: "number", min: 1, step: 1 })}{field("deposit", "押金（月）", { type: "number", min: 0, step: ".5" })}
         {field("mgmtMode", "管理費", { options: ["待確認", "已含租金", "另計", "無管理費"] })}{form.mgmtMode === "另計" && field("mgmt", "管理費（元／月）", { type: "number", min: 0 })}
         <div className="cr-wide cr-parking-grid"><section className="cr-parking-section" aria-label="汽車位設定"><h4>汽車位</h4>
-          {field("parking", "汽車位類型", { options: ["待確認", { value: "無車位", label: "無汽車位" }, "坡道平面", "坡道機械", "升降機械", "其他"] })}
+          {field("parking", "汽車位類型", { options: ["待確認", { value: "無車位", label: "無汽車位" }, "坡道平面", "坡道機械", "升降機械", "平面車位", "機械車位", "其他"] })}
           {form.parking !== "無車位" && field("parkMode", "汽車位費用", { options: RENTAL_PARKING_FEE_OPTIONS })}
           {form.parking !== "無車位" && form.parkMode === "另計" && field("parkFee", "汽車位租金（元／月）", { type: "number", min: 0 })}
         </section><section className="cr-parking-section" aria-label="機車位設定"><h4>機車位</h4>

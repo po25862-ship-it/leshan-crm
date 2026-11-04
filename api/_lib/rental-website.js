@@ -1,4 +1,5 @@
 const { parse } = require("acorn");
+const { rentalListingFields } = require("./rental-listing");
 const MAX_BYTES = 1500000;
 
 function rental591Url(value) {
@@ -44,7 +45,7 @@ function readNuxt(code) {
   call.callee.params.forEach((param, i) => { if (param.type === "Identifier") env.set(param.name, literal(call.arguments[i])); });
   return literal(call.callee.body.body.find(node => node.type === "ReturnStatement")?.argument);
 }
-function inspectRentalHtml(html, url, httpStatus = 200) {
+function inspectRentalHtml(html, url, httpStatus = 200, { includeListing = false } = {}) {
   const result = { url, status: "unknown", expiresOn: "" };
   const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || "";
   if (/captcha|access denied|安全驗證|人機驗證|just a moment/i.test(title) || [401, 403, 429].includes(httpStatus)) return result;
@@ -58,7 +59,7 @@ function inspectRentalHtml(html, url, httpStatus = 200) {
       const listing = data?.pinia?.["rent-detail-info"]?.ctx;
       if (String(listing?.id) !== id) continue;
       const status = listing.status === "open" && typeof listing.title === "string" && listing.title.trim() ? "live" : ["close", "closed", "deal", "expired", "off", "offline", "rented"].includes(listing.status) ? "unlisted" : "unknown";
-      return { ...result, status, expiresOn: validDay(listing.endTime) ? listing.endTime : "" };
+      return { ...result, status, expiresOn: validDay(listing.endTime) ? listing.endTime : "", ...(includeListing && status === "live" ? { listing: rentalListingFields(listing) } : {}) };
     } catch { /* A changed layout is unknown, never proof that a website has expired. */ }
   }
   return result;
@@ -71,7 +72,7 @@ async function readBounded(response) {
     return Buffer.concat(chunks).toString("utf8");
   } finally { await reader.cancel().catch(() => {}); }
 }
-async function checkRentalWebsite(value, { fetcher = fetch, now = () => new Date() } = {}) {
+async function checkRentalWebsite(value, { fetcher = fetch, now = () => new Date(), includeListing = false } = {}) {
   const url = rental591Url(value);
   if (!url) throw new Error("unsupported_url");
   const checkedAt = now().toISOString();
@@ -79,7 +80,7 @@ async function checkRentalWebsite(value, { fetcher = fetch, now = () => new Date
     const response = await fetcher(url, { redirect: "manual", signal: AbortSignal.timeout(12000), headers: { Accept: "text/html", "Accept-Language": "zh-TW" } });
     // Never follow a redirect to another host, private IP, login page or unrelated listing.
     if (response.status >= 300 && response.status < 400) return { url, status: "unknown", expiresOn: "", checkedAt };
-    return { ...inspectRentalHtml(await readBounded(response), url, response.status), checkedAt };
+    return { ...inspectRentalHtml(await readBounded(response), url, response.status, { includeListing }), checkedAt };
   } catch { return { url, status: "unknown", expiresOn: "", checkedAt }; }
 }
 module.exports = { rental591Url, readNuxt, inspectRentalHtml, checkRentalWebsite };
