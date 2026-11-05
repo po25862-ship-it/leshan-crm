@@ -28,10 +28,12 @@ import ReverseMatchesPanel from "./ReverseMatchesPanel";
 import MarketIntelligence from "./MarketIntelligence";
 import a7Communities from "../lib/a7-communities.json";
 import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
+import { choiceText, propertyTags, uniqueChoices, sharedPropertyChoices, propertyChoiceFields, matchesPropertyTags, VIEWING_METHOD_LENGTH } from "../lib/propertyChoices";
+import PropertyTagPicker, { PropertyTagBadges } from "./PropertyTagPicker";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
 import { getPropertyParkingNumber } from "../lib/propertyParkingNumber";
-import { matchesWebsiteFilter } from "../lib/propertyWebsite";
+import { matchesWebsiteFilter, propertyWebsiteStatus, verifyPropertyWebsite, withoutWebsiteScanFields } from "../lib/propertyWebsite";
 import { validateFloorplanFiles } from "../lib/floorplanUpload";
 import { getPropertyManagementFee, formatPropertyManagementFee, managementFeeImportFields } from "../lib/propertyManagementFee";
 import floorplanAddress from "../lib/floorplanAddress";
@@ -105,6 +107,10 @@ const emptyForm = {
   parkingPrice: "",
   viewingStatus: "unknown",
   viewingConfirmedAt: "",
+  viewingMethod: "",
+  viewingMethodCatalog: [],
+  tags: [],
+  tagCatalog: [],
   floor: "",
   orientation: "",
   age: "",
@@ -212,6 +218,7 @@ export default function Properties() {
   const isMobile = useIsMobile();
   const { agid } = usePersonalAgid();
   const { items, add, update, remove } = useCollection("properties", "createdAt");
+  const sharedChoices = useMemo(() => sharedPropertyChoices(items), [items]);
   const floorplansByAddress = useMemo(() => indexRememberedFloorplans(items), [items]);
   const withKnownFloorplans = useCallback((item) => ({
     ...item,
@@ -231,6 +238,46 @@ export default function Properties() {
   const [form, setForm] = useState(emptyForm);
   const [originalTotalPrice, setOriginalTotalPrice] = useState(null);
   const [keyword, setKeyword] = useState("");
+  const [tagFilters, setTagFilters] = useState([]);
+  const [websiteBusy, setWebsiteBusy] = useState("");
+  const [websiteNotice, setWebsiteNotice] = useState("");
+  const [websiteAudit, setWebsiteAudit] = useState({ running: false, completed: 0, total: 0, live: 0, unlisted: 0, unknown: 0, changed: [] });
+  const websiteRun = useRef(0);
+  useEffect(() => () => { websiteRun.current++; }, [user.uid]);
+  const checkOneWebsite = async (property) => {
+    if (websiteBusy || websiteAudit.running) return;
+    setWebsiteBusy(property.id); setWebsiteNotice("");
+    try {
+      const patch = await verifyPropertyWebsite(user, property);
+      if (!patch) { setWebsiteNotice("官網暫時無法確認，原有狀態未更動。"); return; }
+      await update(property.id, patch);
+      if (editingId === property.id) setForm((current) => ({ ...current, ...patch }));
+      setWebsiteNotice(`${property.title}：${patch.websitePublished ? "官網已上架" : "官網目前未上架"}，已更新紀錄。`);
+    } catch (error) { setWebsiteNotice(error.message || "核對失敗，請稍後重試。"); }
+    finally { setWebsiteBusy(""); }
+  };
+  const runWebsiteAudit = async () => {
+    if (websiteBusy || websiteAudit.running) return;
+    const targets = items.filter((property) => (property.status || "active") === "active" && /^[A-Z][A-Z0-9]{6,13}$/.test(property.listingNo || ""));
+    const run = ++websiteRun.current;
+    const progress = { running: true, completed: 0, total: targets.length, live: 0, unlisted: 0, unknown: 0, changed: [] };
+    setWebsiteAudit({ ...progress }); setWebsiteNotice("");
+    for (const property of targets) {
+      if (run !== websiteRun.current) return;
+      try {
+        const patch = await verifyPropertyWebsite(user, property);
+        if (run !== websiteRun.current) return;
+        if (patch) {
+          await update(property.id, patch);
+          progress[patch.websitePublished ? "live" : "unlisted"]++;
+          if (property.websitePublished !== patch.websitePublished) progress.changed.push(`${property.listingNo} ${property.title} → ${patch.websitePublished ? "已上架" : "未上架"}`);
+        } else progress.unknown++;
+      } catch { progress.unknown++; }
+      progress.completed++;
+      if (run === websiteRun.current) setWebsiteAudit({ ...progress, changed: [...progress.changed] });
+    }
+    if (run === websiteRun.current) setWebsiteAudit({ ...progress, running: false });
+  };
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [unitPriceBasis, setUnitPriceBasis] = useState("gross");
@@ -429,7 +476,8 @@ export default function Properties() {
       ? floorplansByAddress.get(addressKey)
       : mergeFloorplanFiles(form.floorplanAddressFiles, floorplansByAddress.get(addressKey));
     const formToSave = {
-      ...withKnownFloorplans(form),
+      ...withoutWebsiteScanFields(withKnownFloorplans(form)),
+      ...propertyChoiceFields(form, items.find((item) => item.id === editingId)),
       viewingConfirmedAt: form.viewingStatus === "available"
         ? (items.find((p) => p.id === editingId)?.viewingStatus === "available" && form.viewingConfirmedAt
           ? form.viewingConfirmedAt : new Date().toISOString()) : "",
@@ -699,6 +747,7 @@ export default function Properties() {
     if (districtFilter && !normalizeRegionText(p.address).includes(normalizeRegionText(districtFilter))) return false;
     if (!matchesPropertyBusinessArea(p, businessAreaFilter)) return false;
     if (!matchesWebsiteFilter(p, websiteFilter)) return false;
+    if (!matchesPropertyTags(p, tagFilters)) return false;
     if (parkingFilter === "yes" && !propertyHasParking(p)) return false;
     if (parkingFilter === "no" && propertyHasParking(p)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
@@ -773,6 +822,7 @@ export default function Properties() {
   const clearAllFilters = () => {
     closeBrowsingDetail();
     setKeyword("");
+    setTagFilters([]);
     setPriorityFilter("all");
     setMinPrice("");
     setMaxPrice("");
@@ -1474,7 +1524,7 @@ export default function Properties() {
           </label>
           <label className="property-search-field">官網
             <select aria-label="官網篩選" value={websiteFilter} onChange={(e) => setWebsiteFilter(e.target.value)}>
-              <option value="all">全部</option><option value="published">有官網</option><option value="unpublished">沒官網</option>
+              <option value="all">全部</option><option value="published">有官網</option><option value="unpublished">沒官網</option><option value="unknown">待確認</option>
             </select>
           </label>
           <div className="property-search-field property-search-wide"><span>總價（萬）</span>
@@ -1496,6 +1546,18 @@ export default function Properties() {
             </select>
           </label>
         </div>
+        <div className="property-tag-filter">
+          <PropertyTagPicker value={tagFilters} choices={sharedChoices.tags} onChange={(tags) => { closeBrowsingDetail(); setTagFilters(tags); }} label="小標籤篩選" creatable={false} help="可複選；只顯示同時具備這些標籤的案件。也可在關鍵字輸入標籤搜尋。" />
+        </div>
+        <details className="property-website-tools">
+          <summary>官網狀態核對{websiteAudit.running ? `（${websiteAudit.completed}/${websiteAudit.total}）` : ""}</summary>
+          <p>平常使用公司後台「官網點閱」的超連結判斷；沒有檢查紀錄顯示待確認。這裡可直接核對台灣房屋公開頁面，連線或驗證失敗會保留原狀。</p>
+          <button type="button" className="btn ghost" disabled={!!websiteBusy || websiteAudit.running} onClick={runWebsiteAudit}>檢查所有在售官網</button>
+          {websiteAudit.running && <button type="button" className="btn ghost" onClick={() => { websiteRun.current++; setWebsiteAudit((current) => ({ ...current, running: false })); }}>停止檢查</button>}
+          {websiteAudit.total > 0 && <p role="status">已核對 {websiteAudit.completed}/{websiteAudit.total} 筆：已上架 {websiteAudit.live}、未上架 {websiteAudit.unlisted}、無法確認 {websiteAudit.unknown}。修正 {websiteAudit.changed.length} 筆。</p>}
+          {websiteAudit.changed.length > 0 && <details><summary>查看修正清單</summary><ul>{websiteAudit.changed.map((text) => <li key={text}>{text}</li>)}</ul></details>}
+        </details>
+        {websiteNotice && <p role="status">{websiteNotice}</p>}
         {showAdvancedFilters && <div id="property-advanced-filters" className="property-search-advanced">
           <div className="property-search-subheading">單價篩選</div>
           <div className="property-search-advanced-grid" aria-label="物件單價篩選">
@@ -1560,7 +1622,9 @@ export default function Properties() {
                 <div className="property-detail-actions">
                   {form.websiteUrl && form.websitePublished === true && <a href={withAgid(form.websiteUrl, agid)} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none" }}>開啟網頁</a>}
                   {form.websiteUrl && form.websitePublished === true && <button type="button" className="btn ghost" onClick={() => copyUrl(form.websiteUrl)}>複製網址</button>}
-                  {form.websiteUrl && form.websitePublished !== true && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>}
+                  {form.websiteUrl && propertyWebsiteStatus(form) === "unpublished" && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>}
+                  {propertyWebsiteStatus(form) === "unknown" && <span className="tag">官網待確認</span>}
+                  <button type="button" className="btn ghost" disabled={!!websiteBusy || websiteAudit.running} onClick={() => checkOneWebsite({ ...form, id: editingId })}>{websiteBusy === editingId ? "核對中…" : "重新檢查官網"}</button>
                   <label htmlFor="property-floorplan-upload" onClick={() => setDetailTab("files")} className="btn ghost" style={{ cursor: uploadingFloorplan ? "wait" : "pointer" }}>
                     {uploadingFloorplan ? "格局圖上傳中…" : "＋ 上傳格局圖"}
                   </label>
@@ -1601,7 +1665,10 @@ export default function Properties() {
                 <DetailValue label="管理費" value={formatPropertyManagementFee(form) || "未提供"} />
                 <DetailValue label="車位價格" value={formatPropertyParkingPrice(form)} />
                 <DetailValue label="帶看確認" value={({ available: "已確認可帶看", appointment: "需先預約確認", unavailable: "目前無法帶看" })[form.viewingStatus] || "尚未確認"} />
+                <DetailValue label="帶看方式" value={form.viewingMethod} />
+                <DetailValue label="官網最後檢查" value={form.officialStatusCheckedAt ? `${formatScanTime(form.officialStatusCheckedAt)} · ${form.officialStatusSource === "officialPage" ? "官網頁面" : "公司後台"}` : "尚無紀錄，請重新檢查"} />
               </div>
+              <PropertyTagBadges value={form.tags} />
               {(form.notes || form.agentInfo) && (
                 <div style={{ background: "var(--accent-soft)", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, lineHeight: 1.65 }}>
                   {form.agentInfo && <div><strong>負責業務：</strong>{displayPropertyAgent(form.agentInfo)}</div>}
@@ -1798,13 +1865,25 @@ export default function Properties() {
                 <input id="property-parking-price" type="number" min="0" step="0.1" value={formParkingPrice.source === "preset" ? formParkingPrice.price : form.parkingPrice ?? ""} onChange={(e) => setForm({ ...form, parkingPrice: e.target.value })} placeholder="填寫全部車位的合計價格" aria-describedby="property-parking-price-help" />
                 <small id="property-parking-price-help" style={{ color: "var(--muted)" }}>{formParkingPrice.source === "preset" ? `目前使用${formParkingPrice.kind}預設：每個 ${formParkingPrice.perSpace} 萬，${formParkingPrice.count} 個共 ${formParkingPrice.price} 萬。可直接修改。` : "已有價格優先；留空時，平面每個預設 180 萬、機械每個預設 150 萬，依車位數量合計。"}</small>
               </div>
+              <div className="form-field property-viewing-method">
+                <label htmlFor="property-viewing-method">帶看方式</label>
+                <input id="property-viewing-method" value={form.viewingMethod || ""} maxLength={VIEWING_METHOD_LENGTH} placeholder="例如：鑰匙在樂善店、提前一天預約" onChange={(event) => setForm({ ...form, viewingMethod: event.target.value })} />
+                <select aria-label="選用共用帶看方式" value="" onChange={(event) => { if (event.target.value) setForm({ ...form, viewingMethod: event.target.value }); }}>
+                  <option value="">選用同事填過的方式</option>
+                  {sharedChoices.viewingMethods.map((method) => <option key={method} value={method}>{method}</option>)}
+                </select>
+                <small>儲存後大家都可選用。請填帶看安排，門禁密碼請另存內部紀錄。</small>
+              </div>
               <div className="form-field">
-                <label htmlFor="property-viewing-status">帶看確認</label>
+                <label htmlFor="property-viewing-status">可否帶看（確認）</label>
                 <select id="property-viewing-status" value={form.viewingStatus || "unknown"} onChange={(e) => setForm({ ...form, viewingStatus: e.target.value, viewingConfirmedAt: "" })}>
                   <option value="unknown">尚未確認</option><option value="available">已確認可帶看</option><option value="appointment">需先預約確認</option><option value="unavailable">目前無法帶看</option>
                 </select>
                 <small style={{ color: "var(--muted)" }}>選擇可帶看並儲存後記錄確認時間，30 天後需重新確認。</small>
                 {form.viewingStatus === "available" && <button type="button" className="btn ghost" onClick={() => setForm({ ...form, viewingConfirmedAt: "" })}>重新確認可帶看（儲存後生效）</button>}
+              </div>
+              <div className="property-tag-editor">
+                <PropertyTagPicker key={editingId || "new"} value={form.tags} choices={uniqueChoices([...sharedChoices.tags, ...propertyTags(form.tagCatalog)])} onChange={(tags) => setForm((current) => ({ ...current, tags, tagCatalog: uniqueChoices([...tags, ...propertyTags(current.tagCatalog)]) }))} help="自己新增或選用同事建過的標籤；儲存後共用。只勾選這間實際具有的特色，會用於搜尋及客需配對。" />
               </div>
               <div className="form-field">
                 <label>樓別</label>
@@ -1880,8 +1959,11 @@ export default function Properties() {
                     複製網址
                   </button>
                 )}
-                {form.websiteUrl && form.websitePublished !== true && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB", whiteSpace: "nowrap" }}>× 官網未上架</span>}
+                {form.websiteUrl && propertyWebsiteStatus(form) === "unpublished" && <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB", whiteSpace: "nowrap" }}>× 官網未上架</span>}
+                {propertyWebsiteStatus(form) === "unknown" && <span className="tag">官網待確認</span>}
+                {editingId && <button type="button" className="btn ghost" disabled={!!websiteBusy || websiteAudit.running} onClick={() => checkOneWebsite({ ...form, id: editingId })}>{websiteBusy === editingId ? "核對中…" : "重新檢查官網"}</button>}
               </div>
+              <small>最後檢查：{form.officialStatusCheckedAt ? formatScanTime(form.officialStatusCheckedAt) : "尚無紀錄"}；網址保留，不會因未上架而清除。</small>
             </div>
             <div className="form-field">
               <label>備註</label>
@@ -1998,6 +2080,8 @@ export default function Properties() {
                 <span>負責業務</span>
                 <strong>{displayPropertyAgent(p.agentInfo)}</strong>
               </div>
+              <PropertyTagBadges value={p.tags} />
+              {choiceText(p.viewingMethod) && <div className="meta">帶看方式：{p.viewingMethod}</div>}
               {retainOpenProperty && p.id === editingId && <div className="property-priority-progress">這筆案件的分類已更新；關閉資料後會從目前分類隱藏。</div>}
               {priorityFilter !== "all" && priorities.get(p.id) && <div className="property-priority-task">
                 <strong>{priorities.get(p.id).reason}</strong>
@@ -2051,22 +2135,24 @@ export default function Properties() {
                   開啟網頁
                 </a>
               )}
-              {p.websitePublished !== true && !isMobile && (
+              {propertyWebsiteStatus(p) === "unpublished" && !isMobile && (
                 <span
                   role="img"
                   aria-label={`${p.title || "物件"} 官網目前未上架`}
-                  title="公司後台「官網點閱」沒有超連結，目前未上官網"
+                  title="上次檢查未上架；可按「檢查官網」重新核對"
                   style={{ color: "#B42318", background: "#FEECEB", border: "1px solid #F1B8B2", borderRadius: 8, padding: 8, display: "inline-flex" }}
                 >
                   <X size={15} strokeWidth={2.5} aria-hidden="true" />
                 </span>
               )}
-              {p.websitePublished !== true && !isMobile && (
+              {propertyWebsiteStatus(p) === "unpublished" && !isMobile && (
                 <span className="tag" style={{ color: "#B42318", background: "#FEECEB" }}>官網未上架</span>
               )}
-              {p.websitePublished !== true && isMobile && (
+              {propertyWebsiteStatus(p) === "unpublished" && isMobile && (
                 <span className="btn ghost" style={{ color: "#B42318", background: "#FEECEB" }}>× 官網未上架</span>
               )}
+              {propertyWebsiteStatus(p) === "unknown" && <span className="tag">官網待確認</span>}
+              {propertyWebsiteStatus(p) !== "published" && <button type="button" className="btn ghost" disabled={!!websiteBusy || websiteAudit.running} onClick={() => checkOneWebsite(p)}>{websiteBusy === p.id ? "核對中…" : "檢查官網"}</button>}
               {p.websiteUrl && p.websitePublished === true && (
                 <button className="btn ghost" onClick={() => copyUrl(p.websiteUrl)}>
                   複製網址

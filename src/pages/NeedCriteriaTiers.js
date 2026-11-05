@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { normalizeNeedRanges } from "../lib/needsFields";
+import { useCollection } from "../hooks/useCollection";
+import { sharedPropertyChoices, featureTerms } from "../lib/propertyChoices";
+import PropertyTagPicker from "./PropertyTagPicker";
 
 const CRITERIA = [
   ["type", "物件類型"], ["mainArea", "主建物坪數"], ["rooms", "房數"],
@@ -40,6 +43,8 @@ export function NeedTierSummary({ need }) {
 }
 
 export default function NeedCriteriaTiers({ form, setForm, compact = false }) {
+  const { items: properties } = useCollection("properties");
+  const tagChoices = useMemo(() => sharedPropertyChoices(properties).tags, [properties]);
   const levels = form.criteriaLevels || {};
   const setLevel = (key, value) => setForm({
     ...form,
@@ -76,7 +81,8 @@ export default function NeedCriteriaTiers({ form, setForm, compact = false }) {
           <span>特色關鍵字</span>
           <input value={form.preferredFeatures || ""} onChange={(event) => setForm({ ...form, preferredFeatures: event.target.value })} placeholder="例如：衛浴開窗、雙陽台、近捷運" />
         </label>
-        <p>用逗號或頓號分隔；會比對案名、地址、車位說明、備註與自訂欄位。</p>
+        <p>用逗號或頓號分隔；會比對物件小標籤、案名、地址、車位說明、備註與自訂欄位。標籤已移除的案件不會因舊文字再命中。</p>
+        <PropertyTagPicker value={featureTerms(form.preferredFeatures)} choices={tagChoices} onChange={(tags) => setForm({ ...form, preferredFeatures: tags.join("、") })} label="偏好小標籤" creatable={false} help="選到的特色會加入上方關鍵字；符合加分，沒填標籤的案件仍保留供確認。" />
       </div>
 
       <div className="need-tier excluded">
@@ -90,6 +96,7 @@ export default function NeedCriteriaTiers({ form, setForm, compact = false }) {
           <span>其他排除關鍵字</span>
           <input value={form.excludedFeatures || ""} onChange={(event) => setForm({ ...form, excludedFeatures: event.target.value })} placeholder="例如：面高架、嫌惡設施" />
         </label>
+        <PropertyTagPicker value={featureTerms(form.excludedFeatures)} choices={tagChoices} onChange={(tags) => setForm({ ...form, excludedFeatures: tags.join("、") })} label="排除小標籤" creatable={false} help="命中任一排除特色就不推薦。" />
       </div>
     </section>
   );

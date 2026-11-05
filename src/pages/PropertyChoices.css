@@ -1,0 +1,30 @@
+.property-tag-picker { min-width: 0; display: grid; gap: 9px; }
+.property-tag-picker > label { font-size: 14px; font-weight: 700; color: var(--text, #20352e); }
+.property-choice-inputs, .property-choice-add { display: flex; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.property-choice-inputs > select { flex: 1 1 190px; }
+.property-choice-add { flex: 2 1 280px; }
+.property-choice-add input { flex: 1 1 160px; }
+.property-choice-inputs input, .property-choice-inputs select, .property-viewing-method input, .property-viewing-method select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border, #dce3df); border-radius: 9px; background: #fff; color: var(--text, #20352e); font: inherit; }
+.property-choice-add .btn { flex: 0 0 auto; white-space: nowrap; margin: 0; }
+.property-tag-picker small, .property-viewing-method small { color: var(--muted, #6b7870); font-size: 12px; line-height: 1.6; }
+.property-tag-picker .property-choice-error { color: #b42318; }
+.property-tag-chips, .property-tag-badges { display: flex; flex-wrap: wrap; gap: 7px; }
+.property-tag-chips button, .property-tag-badges span { color: #245e4c; background: #edf5f0; border: 1px solid #cbded3; border-radius: 20px; padding: 5px 11px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.property-tag-chips button { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; }
+.property-tag-chips button span { font-size: 18px; }
+.property-tag-badges { margin: 7px 0; }
+.property-tag-badges span { max-width: 100%; }
+.property-tag-filter { border-top: 1px solid var(--border, #dce3df); padding-top: 14px; margin-top: 14px; }
+.property-tag-filter .property-choice-inputs { max-width: 380px; }
+.property-website-tools { margin-top: 12px; color: var(--muted, #6b7870); font-size: 13px; line-height: 1.7; }
+.property-website-tools summary { cursor: pointer; font-weight: 600; }
+.property-website-tools .btn { margin: 0 8px 8px 0; }
+.property-tag-editor { grid-column: 1 / -1; padding: 14px; background: #f7faf8; border: 1px solid var(--border, #dce3df); border-radius: 12px; }
+.property-viewing-method { display: grid; align-content: start; gap: 8px; }
+.property-viewing-method label { margin: 0; }
+.property-choice-inputs :focus-visible, .property-tag-chips button:focus-visible { outline: 2px solid var(--accent, #dc581c); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .property-choice-inputs, .property-choice-add { flex-direction: column; }
+  .property-choice-inputs > select, .property-choice-add, .property-choice-add input { flex: auto; }
+  .property-choice-inputs input, .property-choice-inputs select, .property-viewing-method input, .property-viewing-method select { font-size: 16px; }
+}

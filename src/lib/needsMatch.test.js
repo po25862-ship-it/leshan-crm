@@ -56,3 +56,22 @@ test('required main-building area never falls back to title area when the main a
  expect(preferred.missedReasons).toContain('主建物坪數待確認');
  expect(preferred.reasons).not.toContain('主建物坪數符合');
 });
+
+test("小標籤提高配對分數，缺少標籤不會冒認符合；正反配對一致", () => {
+  const need = { ...baseNeed, preferredFeatures: "邊間、有裝潢" };
+  const tagged = property({ id: "tagged", tags: ["邊間", "有裝潢"] });
+  const plain = property({ id: "plain", tagCatalog: ["邊間", "有裝潢"] });
+  const results = matchPropertiesForNeed(need, [plain, tagged]);
+  expect(results[0].property.id).toBe("tagged");
+  expect(results[0].percent).toBeGreaterThan(results[1].percent);
+  expect(results[0].reasons).toEqual(expect.arrayContaining(["偏好：邊間", "偏好：有裝潢"]));
+  expect(results[1].missedReasons).toContain("未命中：邊間");
+  expect(reverseMatchProperty(tagged, [need])[0].percent).toBe(results[0].percent);
+});
+
+test("排除小標籤直接過濾，移除的歷史與名稱相似標籤不誤判", () => {
+  const need = { ...baseNeed, excludedFeatures: "邊間" };
+  expect(matchPropertiesForNeed(need, [property({ tags: ["邊間"] })])).toHaveLength(0);
+  expect(matchPropertiesForNeed(need, [property({ tags: ["非邊間"] })])).toHaveLength(1);
+  expect(matchPropertiesForNeed(need, [property({ tagCatalog: ["邊間"], notes: "舊資料邊間" })])).toHaveLength(1);
+});

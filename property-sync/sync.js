@@ -17,6 +17,7 @@ const roadKeyword = require("./road-keyword");
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = require("./floorplan-address");
 const { managementFeeFromLines } = require("./management-fee");
 const { companyCommonAreaFields } = require("./common-area");
+const { parseOfficialStatusRows } = require("./official-status");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -531,10 +532,12 @@ function parseReports(dir) {
         websiteUrl: /\/buy\//i.test(officialLink) ? officialLink : `https://www.twhg.com.tw/buy/${listingNo}`,
         notes: String(row[16] || "").trim(),
       };
-      if (officialColumn >= 0) {
-        record.websitePublished = Boolean(officialLink);
+      if (officialColumn >= 0 && /\/buy\//i.test(officialLink)) {
+        // Spreadsheet export may drop hyperlink formatting. Absence here is not proof of unlisting.
+        record.websitePublished = true;
         record.officialViewCount = numberOrNull(row[officialColumn]);
         record.officialStatusCheckedAt = new Date().toISOString();
+        record.officialStatusSource = "backendSpreadsheet";
       }
       records.push(record);
     }
@@ -558,24 +561,7 @@ function parseOfficialStatusDirectory(dir, records) {
       : buffer.toString("utf8");
     if (/url\s*=\s*\.\.\/index\.php|name=["']user_pass1["']/i.test(html)) continue;
 
-    for (const rowHtml of html.match(/<tr\b[\s\S]*?<\/tr>/gi) || []) {
-      const plain = decode(rowHtml.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
-      const listingMatch = plain.match(/\b([A-Z]{1,3}\d{7,10})\b/);
-      if (!listingMatch) continue;
-      let viewCount = null;
-      for (const anchor of rowHtml.match(/<a\b[\s\S]*?<\/a>/gi) || []) {
-        const anchorText = decode(anchor.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
-        if (/^\d+$/.test(anchorText)) {
-          viewCount = Number(anchorText);
-          break;
-        }
-      }
-      statuses.set(listingMatch[1], {
-        websitePublished: viewCount !== null,
-        officialViewCount: viewCount,
-        officialStatusCheckedAt: new Date().toISOString(),
-      });
-    }
+    for (const [listingNo, status] of parseOfficialStatusRows(html)) statuses.set(listingNo, status);
   }
 
   const coverage = records.length ? statuses.size / records.length : 1;

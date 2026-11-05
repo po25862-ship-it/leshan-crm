@@ -3,6 +3,7 @@ import { normalizeRegionText } from "./taiwanRegions";
 import { normalizeNeedRanges, toNum } from "./needsFields";
 import { parseFloor, isTopFloor } from "./floor";
 import { parseAge } from "./age";
+import { featureTerms, matchesPropertyFeature } from "./propertyChoices";
 
 const TYPE_TO_CATEGORIES = {
   公寓: ["公寓"], 大樓: ["電梯大樓"], 廠房: ["工廠", "廠辦", "工業地"],
@@ -58,8 +59,7 @@ function isGroundFloor(property) {
 }
 
 function toFeatureList(value) {
-  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
-  return String(value || "").split(/[、,，\n]/).map((item) => item.trim()).filter(Boolean);
+  return featureTerms(value);
 }
 
 function propertySearchText(property) {
@@ -100,7 +100,7 @@ export function matchPropertiesForNeed(need, properties) {
     if (need.excludeGroundFloor && isGroundFloor(property)) return;
     if (need.excludeTopFloor && isTopFloor(property.floor)) return;
     if (need.excludeMechanicalParking && isMechanicalParking(property)) return;
-    if (excludedFeatures.some((feature) => searchable.includes(feature.toLowerCase()))) return;
+    if (excludedFeatures.some((feature) => matchesPropertyFeature(property, feature, searchable))) return;
 
     let matchedWeight = 0, totalWeight = 0, rejected = false;
     const reasons = [], missedReasons = [];
@@ -146,7 +146,7 @@ export function matchPropertiesForNeed(need, properties) {
     if (rejected) return;
 
     if (preferredFeatures.length > 0) {
-      const hits = preferredFeatures.filter((feature) => searchable.includes(feature.toLowerCase()));
+      const hits = preferredFeatures.filter((feature) => matchesPropertyFeature(property, feature, searchable));
       totalWeight += MATCH_WEIGHTS.features;
       matchedWeight += MATCH_WEIGHTS.features * (hits.length / preferredFeatures.length);
       hits.forEach((feature) => reasons.push(`偏好：${feature}`));
