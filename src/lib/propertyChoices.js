@@ -43,6 +43,15 @@ export function sharedPropertyChoices(properties = []) {
   return { tags: sort(tags), viewingMethods: sort(viewingMethods) };
 }
 
+// Quick list edits must only write tags, leaving other property fields untouched.
+export function propertyTagFields(value, previous = {}) {
+  const tags = propertyTags(value);
+  return {
+    tags,
+    tagCatalog: uniqueChoices([...tags, ...propertyTags(previous.tags), ...propertyTags(previous.tagCatalog)], PROPERTY_CHOICE_HISTORY_LIMIT),
+  };
+}
+
 // Keep previously used values even after removing a tag or changing a method on this property.
 export function propertyChoiceFields(form, previous = {}) {
   const tags = propertyTags(form.tags);

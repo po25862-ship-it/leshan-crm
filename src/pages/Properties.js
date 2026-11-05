@@ -28,8 +28,9 @@ import ReverseMatchesPanel from "./ReverseMatchesPanel";
 import MarketIntelligence from "./MarketIntelligence";
 import a7Communities from "../lib/a7-communities.json";
 import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
-import { choiceText, propertyTags, uniqueChoices, sharedPropertyChoices, propertyChoiceFields, matchesPropertyTags } from "../lib/propertyChoices";
+import { choiceText, propertyTags, uniqueChoices, sharedPropertyChoices, propertyChoiceFields, propertyTagFields, matchesPropertyTags } from "../lib/propertyChoices";
 import PropertyTagPicker, { PropertyTagBadges, PropertyViewingMethodField } from "./PropertyTagPicker";
+import PropertyListTags from "./PropertyListTags";
 import PropertyWebsiteReportImport from "./PropertyWebsiteReportImport";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
@@ -323,6 +324,14 @@ export default function Properties() {
     } catch {
       alert("複製失敗，請手動選取網址複製");
     }
+  };
+
+  const saveListTags = async (id, tags) => {
+    const previous = items.find(property => property.id === id);
+    if (!previous) throw new Error("找不到物件");
+    const fields = propertyTagFields(tags, previous);
+    await update(id, fields);
+    if (editingId === id) setForm(current => ({ ...current, ...fields }));
   };
 
   const toggleSelect = (id) => {
@@ -2024,7 +2033,7 @@ export default function Properties() {
                 <span>負責業務</span>
                 <strong>{displayPropertyAgent(p.agentInfo)}</strong>
               </div>
-              <PropertyTagBadges value={p.tags} />
+              <PropertyListTags property={p} choices={sharedChoices.tags} onSave={tags => saveListTags(p.id, tags)} />
               {choiceText(p.viewingMethod) && <div className="meta">帶看方式：{p.viewingMethod}</div>}
               {retainOpenProperty && p.id === editingId && <div className="property-priority-progress">這筆案件的分類已更新；關閉資料後會從目前分類隱藏。</div>}
               {priorityFilter !== "all" && priorities.get(p.id) && <div className="property-priority-task">

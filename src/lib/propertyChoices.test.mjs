@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { propertyChoiceFields, sharedPropertyChoices, matchesPropertyTags, matchesPropertyFeature, uniqueChoices, filterPropertyChoices } from "./propertyChoices.js";
+import { propertyChoiceFields, propertyTagFields, sharedPropertyChoices, matchesPropertyTags, matchesPropertyFeature, uniqueChoices, filterPropertyChoices } from "./propertyChoices.js";
 import { matchesPropertyKeyword } from "./propertyKeywordSearch.js";
 
 test("共同選單去重、全半形一致，跨物件保留舊選項", () => {
@@ -39,4 +39,16 @@ test("輸入一字優先篩選既有標籤；精確、開頭、包含依序顯�
   assert.deepEqual(filterPropertyChoices(["邊間", "衛浴開窗", "窗", "窗景", "廁所開窗"], "窗"), ["窗", "窗景", "廁所開窗", "衛浴開窗"]);
   assert.deepEqual(filterPropertyChoices(["Ａ７", "a7", "邊間"], "a"), ["A7"]);
   assert.deepEqual(filterPropertyChoices(["邊間", "有裝潢"], "窗"), []);
+});
+
+test("清單快速儲存只修改標籤，保留歷史選項和其他案件資料", () => {
+  const previous = { tags: ["邊間"], tagCatalog: ["有裝潢"], viewingMethod: "鑰匙在店裡", viewingStatus: "unknown", websitePublished: true, status: "active", totalPrice: 1500 };
+  const before = structuredClone(previous);
+  const patch = propertyTagFields([" 廁所開窗 ", "廁所開窗"], previous);
+  assert.deepEqual(Object.keys(patch).sort(), ["tagCatalog", "tags"]);
+  assert.deepEqual(patch.tags, ["廁所開窗"]);
+  assert.deepEqual(patch.tagCatalog, ["廁所開窗", "邊間", "有裝潢"]);
+  assert.deepEqual(previous, before);
+  assert.equal(matchesPropertyFeature(patch, "邊間", "邊間兩房"), false);
+  assert.deepEqual(propertyTagFields([], { ...previous, ...patch }).tags, []);
 });
