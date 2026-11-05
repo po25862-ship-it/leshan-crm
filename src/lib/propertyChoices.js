@@ -12,6 +12,13 @@ export function choiceKey(value) {
   return choiceText(value).toLocaleLowerCase("zh-TW");
 }
 
+export function filterPropertyChoices(values, query) {
+  const key = choiceKey(query);
+  const rank = value => choiceKey(value) === key ? 0 : choiceKey(value).startsWith(key) ? 1 : 2;
+  return uniqueChoices(values).filter(value => !key || choiceKey(value).includes(key))
+    .sort((a, b) => key ? rank(a) - rank(b) || a.localeCompare(b, "zh-Hant") : 0);
+}
+
 export function uniqueChoices(values, limit = Infinity) {
   const seen = new Set();
   return (Array.isArray(values) ? values : []).map(choiceText).filter((value) => {

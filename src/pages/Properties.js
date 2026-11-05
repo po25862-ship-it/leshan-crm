@@ -28,8 +28,8 @@ import ReverseMatchesPanel from "./ReverseMatchesPanel";
 import MarketIntelligence from "./MarketIntelligence";
 import a7Communities from "../lib/a7-communities.json";
 import { matchesPropertyKeyword } from "../lib/propertyKeywordSearch";
-import { choiceText, propertyTags, uniqueChoices, sharedPropertyChoices, propertyChoiceFields, matchesPropertyTags, VIEWING_METHOD_LENGTH } from "../lib/propertyChoices";
-import PropertyTagPicker, { PropertyTagBadges } from "./PropertyTagPicker";
+import { choiceText, propertyTags, uniqueChoices, sharedPropertyChoices, propertyChoiceFields, matchesPropertyTags } from "../lib/propertyChoices";
+import PropertyTagPicker, { PropertyTagBadges, PropertyViewingMethodField } from "./PropertyTagPicker";
 import PropertyWebsiteReportImport from "./PropertyWebsiteReportImport";
 import { PROPERTY_SORT_OPTIONS, sortProperties } from "../lib/propertySort";
 import { displayPropertyAgent } from "../lib/propertyAgent";
@@ -1818,15 +1818,7 @@ export default function Properties() {
                 <input id="property-parking-price" type="number" min="0" step="0.1" value={formParkingPrice.source === "preset" ? formParkingPrice.price : form.parkingPrice ?? ""} onChange={(e) => setForm({ ...form, parkingPrice: e.target.value })} placeholder="填寫全部車位的合計價格" aria-describedby="property-parking-price-help" />
                 <small id="property-parking-price-help" style={{ color: "var(--muted)" }}>{formParkingPrice.source === "preset" ? `目前使用${formParkingPrice.kind}預設：每個 ${formParkingPrice.perSpace} 萬，${formParkingPrice.count} 個共 ${formParkingPrice.price} 萬。可直接修改。` : "已有價格優先；留空時，平面每個預設 180 萬、機械每個預設 150 萬，依車位數量合計。"}</small>
               </div>
-              <div className="form-field property-viewing-method">
-                <label htmlFor="property-viewing-method">帶看方式</label>
-                <input id="property-viewing-method" value={form.viewingMethod || ""} maxLength={VIEWING_METHOD_LENGTH} placeholder="例如：鑰匙在樂善店、提前一天預約" onChange={(event) => setForm({ ...form, viewingMethod: event.target.value })} />
-                <select aria-label="選用共用帶看方式" value="" onChange={(event) => { if (event.target.value) setForm({ ...form, viewingMethod: event.target.value }); }}>
-                  <option value="">選用同事填過的方式</option>
-                  {sharedChoices.viewingMethods.map((method) => <option key={method} value={method}>{method}</option>)}
-                </select>
-                <small>儲存後大家都可選用。請填帶看安排，門禁密碼請另存內部紀錄。</small>
-              </div>
+              <PropertyViewingMethodField key={editingId || "new-viewing"} value={form.viewingMethod} choices={sharedChoices.viewingMethods} onChange={viewingMethod => setForm({ ...form, viewingMethod })} />
               <div className="form-field">
                 <label htmlFor="property-viewing-status">可否帶看（確認）</label>
                 <select id="property-viewing-status" value={form.viewingStatus || "unknown"} onChange={(e) => setForm({ ...form, viewingStatus: e.target.value, viewingConfirmedAt: "" })}>

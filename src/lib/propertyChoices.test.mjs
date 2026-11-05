@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { propertyChoiceFields, sharedPropertyChoices, matchesPropertyTags, matchesPropertyFeature, uniqueChoices } from "./propertyChoices.js";
+import { propertyChoiceFields, sharedPropertyChoices, matchesPropertyTags, matchesPropertyFeature, uniqueChoices, filterPropertyChoices } from "./propertyChoices.js";
 import { matchesPropertyKeyword } from "./propertyKeywordSearch.js";
 
 test("共同選單去重、全半形一致，跨物件保留舊選項", () => {
@@ -34,4 +34,9 @@ test("編輯不變更帶看確認；記憶清單有上限且優先保留目前�
   assert.equal(p.tagCatalog[0], "邊間");
   assert.equal("viewingStatus" in p, false);
   assert.equal("viewingConfirmedAt" in p, false);
+});
+test("輸入一字優先篩選既有標籤；精確、開頭、包含依序顯示", () => {
+  assert.deepEqual(filterPropertyChoices(["邊間", "衛浴開窗", "窗", "窗景", "廁所開窗"], "窗"), ["窗", "窗景", "廁所開窗", "衛浴開窗"]);
+  assert.deepEqual(filterPropertyChoices(["Ａ７", "a7", "邊間"], "a"), ["A7"]);
+  assert.deepEqual(filterPropertyChoices(["邊間", "有裝潢"], "窗"), []);
 });
