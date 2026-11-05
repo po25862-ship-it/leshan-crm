@@ -1441,8 +1441,8 @@ export default function Properties() {
           </div>
         </div>
         <div className="property-search-basic">
-          <label className="property-search-field property-search-wide">關鍵字
-            <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="輸入關鍵字，例如 a7；搜尋案名、商圈、社區、地址…" />
+          <label className="property-search-field property-search-wide">關鍵字／業務姓名
+            <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="輸入關鍵字或業務姓名，例如 a7、董韋伶" />
           </label>
           <label className="property-search-field">商圈／區域
             <select value={businessAreaFilter} onChange={(e) => setBusinessAreaFilter(e.target.value)}>
