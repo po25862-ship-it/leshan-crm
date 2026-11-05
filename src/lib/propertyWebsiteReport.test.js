@@ -9,10 +9,12 @@ test("只修正缺少或不一致的狀態，既有相同資料不重寫", () =>
   expect(Object.keys(result.updates[0].patch).sort()).toEqual(["officialStatusCheckedAt", "officialStatusSource", "websitePublished", "websiteUrl"]);
   expect(analyzeWebsiteReport(report([row]), [{...property,websitePublished:true}], now)).toMatchObject({unchanged:1,updates:[]});
 });
-test("較新紀錄、找不到及重複委託的案件不覆寫", () => {
-  expect(analyzeWebsiteReport(report([row]), [{...property,officialStatusCheckedAt:"2026-11-05T02:00:00Z"}], now)).toMatchObject({skipped:1,updates:[]});
+test("較新的明確紀錄及找不到的案件不覆寫，同案多筆則一併修正", () => {
+  expect(analyzeWebsiteReport(report([row]), [{...property,websitePublished:false,officialStatusCheckedAt:"2026-11-05T02:00:00Z"}], now)).toMatchObject({skipped:1,updates:[]});
   expect(analyzeWebsiteReport(report([row]), [], now)).toMatchObject({skipped:1,updates:[]});
-  expect(analyzeWebsiteReport(report([row]), [property,{...property,id:'p2'}], now)).toMatchObject({skipped:1,updates:[]});
+  const result = analyzeWebsiteReport(report([row]), [property,{...property,id:'p2',status:'onHold'}], now);
+  expect(result.updates.map(r=>r.id)).toEqual(['p1','p2']);
+  expect(result.updates.every(r=>!('status' in r.patch))).toBe(true);
 });
 test("不接受不完整、重複、未確認、異常網址或未來時間的核對資料", () => {
   expect(()=>analyzeWebsiteReport({records:[row]},[property],now)).toThrow();

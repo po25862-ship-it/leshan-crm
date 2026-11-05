@@ -21,4 +21,11 @@ function parseOfficialStatusRows(html, checkedAt = new Date().toISOString()) {
   }
   return statuses;
 }
-module.exports = { parseOfficialStatusRows };
+function officialStatusFields(record) {
+  if (typeof record?.websitePublished !== "boolean" || !Number.isFinite(Date.parse(record.officialStatusCheckedAt))) return null;
+  const fields = { websitePublished: record.websitePublished, websiteUrl: `https://www.twhg.com.tw/buy/${record.listingNo}`, officialStatusCheckedAt: record.officialStatusCheckedAt };
+  if (record.officialStatusSource) fields.officialStatusSource = record.officialStatusSource;
+  if (record.officialViewCount !== undefined) fields.officialViewCount = record.officialViewCount;
+  return fields;
+}
+module.exports = { parseOfficialStatusRows, officialStatusFields };

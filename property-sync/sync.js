@@ -17,7 +17,7 @@ const roadKeyword = require("./road-keyword");
 const { floorplanAddressKey, mergeFloorplanFiles, indexRememberedFloorplans } = require("./floorplan-address");
 const { managementFeeFromLines } = require("./management-fee");
 const { companyCommonAreaFields } = require("./common-area");
-const { parseOfficialStatusRows } = require("./official-status");
+const { parseOfficialStatusRows, officialStatusFields } = require("./official-status");
 
 const STORES = [
   { code: "D5", name: "長庚直營店" },
@@ -137,7 +137,7 @@ async function applyToCrm(incomingRecords, roadSummary = null) {
     const incomingByNo = new Map(incomingRecords.map((item) => [item.listingNo, item]));
     const operations = [];
     const mergedRecords = [];
-    const counts = { added: 0, updated: 0, priceChanged: 0, firstMissing: 0, paused: 0, reactivated: 0 };
+    const counts = { added: 0, updated: 0, priceChanged: 0, firstMissing: 0, paused: 0, reactivated: 0, websiteDuplicates: 0 };
     const nowIso = new Date().toISOString();
 
     for (const incoming of incomingRecords) {
@@ -197,6 +197,12 @@ async function applyToCrm(incomingRecords, roadSummary = null) {
     }
 
     for (const old of existing) {
+      const number = String(old.listingNo || "").trim();
+      const websiteFields = byListingNo.get(number)?.id !== old.id ? officialStatusFields(incomingByNo.get(number)) : null;
+      if (websiteFields) {
+        operations.push({ ref: doc(db, "properties", old.id), data: websiteFields, merge: true });
+        counts.websiteDuplicates++;
+      }
       if (!shouldMarkFourStoreMissing(old, incomingByNo)) continue;
       const missingSyncCount = Number(old.missingSyncCount || 0) + 1;
       const updates = { missingSyncCount, lastMissingAt: nowIso, ...firstMissingFields(old, nowIso), updatedAt: today };

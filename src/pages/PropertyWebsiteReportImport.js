@@ -33,7 +33,7 @@ export default function PropertyWebsiteReportImport({ properties, update }) {
     <p>依公司後台「官網點閱」欄位是否有超連結判斷；沒有紀錄顯示待確認。每日同步會更新。官網會限制雲端程式連線，因此不把連線失敗當成下架。</p>
     <label className="btn ghost" style={{ display: "inline-flex", cursor: "pointer" }}>匯入公司官網核對檔<input aria-label="公司官網核對檔" type="file" accept=".json,application/json" disabled={busy} style={{ display: "none" }} onChange={read} /></label>
     {preview && <div>
-      <p role="status">已比對 {preview.matched} 筆：需要修正 {preview.updates.length} 筆、原本一致 {preview.unchanged} 筆、略過 {preview.skipped} 筆（未找到、編號重複或已有較新紀錄）。</p>
+      <p role="status">已比對 {preview.matched} 個委託編號：需要修正 {preview.updates.length} 筆紀錄、原本一致 {preview.unchanged} 筆、略過 {preview.skipped} 筆（未找到或已有較新紀錄）。同一編號的各筆資料會一併核對。</p>
       {preview.updates.length > 0 && <><ul>{preview.updates.map(item => <li key={item.id}>{item.listingNo} {item.title} → {item.patch.websitePublished ? "官網已上架" : "官網未上架"}</li>)}</ul><button type="button" className="btn" disabled={busy} onClick={apply}>{busy ? "更新中…" : `更新 ${preview.updates.length} 筆官網紀錄`}</button></>}
     </div>}
     {message && <p role="status">{message}</p>}

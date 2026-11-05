@@ -14,13 +14,16 @@ export function analyzeWebsiteReport(payload, properties, now = Date.now()) {
     if (typeof r.websitePublished !== "boolean" || !Number.isFinite(checked) || checked > now + 300000 ||
         !["backendReport", "officialPage"].includes(r.officialStatusSource) || r.websiteUrl !== expectedUrl) throw new Error("核對檔缺少可靠的上架狀態、檢查時間或正確官網網址。");
     const matches = byNo.get(r.listingNo) || [];
-    if (matches.length !== 1 || checked < Date.parse(matches[0].officialStatusCheckedAt || "")) { skipped++; continue; }
-    const property = matches[0]; matched++;
-    if (property.websitePublished === r.websitePublished && String(property.websiteUrl || "").split("?")[0] === expectedUrl) { unchanged++; continue; }
-    updates.push({ id: property.id, listingNo: r.listingNo, title: property.title, patch: {
-      websitePublished: r.websitePublished, websiteUrl: expectedUrl,
-      officialStatusCheckedAt: r.officialStatusCheckedAt, officialStatusSource: r.officialStatusSource,
-    } });
+    if (!matches.length) { skipped++; continue; }
+    matched++;
+    for (const property of matches) {
+      if (property.websitePublished === r.websitePublished && String(property.websiteUrl || "").split("?")[0] === expectedUrl) { unchanged++; continue; }
+      if (typeof property.websitePublished === "boolean" && checked < Date.parse(property.officialStatusCheckedAt || "")) { skipped++; continue; }
+      updates.push({ id: property.id, listingNo: r.listingNo, title: property.title, patch: {
+        websitePublished: r.websitePublished, websiteUrl: expectedUrl,
+        officialStatusCheckedAt: r.officialStatusCheckedAt, officialStatusSource: r.officialStatusSource,
+      } });
+    }
   }
   return { matched, unchanged, skipped, updates };
 }
