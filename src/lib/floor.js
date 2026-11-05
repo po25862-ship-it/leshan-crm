@@ -4,8 +4,11 @@
 
 // 取所在樓層數字，給樓層搜尋用
 export function parseFloor(floor) {
-  if (!floor) return null;
-  const m = String(floor).match(/-?\d+/);
+  if (floor === null || floor === undefined) return null;
+  const text = String(floor).normalize("NFKC").trim();
+  const basement = text.match(/^(?:B\s*|地下\s*)(\d+)/i);
+  if (basement) return -parseInt(basement[1], 10);
+  const m = text.match(/-?\d+/);
   return m ? parseInt(m[0], 10) : null;
 }
 

@@ -277,8 +277,8 @@ export default function Properties() {
   const [parkingFilter, setParkingFilter] = useState("all");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [layoutKeyword, setLayoutKeyword] = useState("");
-  const [floorFilter, setFloorFilter] = useState("");
-  const [floorMode, setFloorMode] = useState("eq");
+  const [minFloor, setMinFloor] = useState("");
+  const [maxFloor, setMaxFloor] = useState("");
   const [topFloorOnly, setTopFloorOnly] = useState(false);
   const [roomFilter, setRoomFilter] = useState("");
   const [roomMode, setRoomMode] = useState("eq");
@@ -722,7 +722,7 @@ export default function Properties() {
     if (parkingFilter === "yes" && !propertyHasParking(p)) return false;
     if (parkingFilter === "no" && propertyHasParking(p)) return false;
     if (layoutKeyword.trim() && !String(p.layout || "").includes(layoutKeyword.trim())) return false;
-    if (!matchNum(parseFloor(p.floor), floorFilter, floorMode)) return false;
+    if (!matchRange(parseFloor(p.floor), minFloor, maxFloor)) return false;
     if (topFloorOnly && !isTopFloor(p.floor)) return false;
     const { rooms, living, bath } = parseLayout(p.layout);
     if (!matchNum(rooms, roomFilter, roomMode)) return false;
@@ -782,7 +782,7 @@ export default function Properties() {
     minLandPing, maxLandPing, minAge, maxAge, parkingFilter === "all" ? "" : parkingFilter,
     minUnitPrice, maxUnitPrice,
     unitPriceBasis === "net" ? "net" : "",
-    floorFilter, livingFilter, bathFilter, layoutKeyword.trim(), topFloorOnly ? "top" : "",
+    minFloor, maxFloor, livingFilter, bathFilter, layoutKeyword.trim(), topFloorOnly ? "top" : "",
   ].filter((value) => value !== "").length;
 
   // Starting another search closes browsing details, while leaving an unsaved edit intact.
@@ -801,7 +801,8 @@ export default function Properties() {
     setMaxUnitPrice("");
     setUnitPriceBasis("gross");
     setLayoutKeyword("");
-    setFloorFilter("");
+    setMinFloor("");
+    setMaxFloor("");
     setTopFloorOnly(false);
     setRoomFilter("");
     setLivingFilter("");
@@ -817,7 +818,6 @@ export default function Properties() {
     setBusinessAreaFilter("");
     setCityFilter("");
     setDistrictFilter("");
-    setFloorMode("eq");
     setRoomMode("eq");
     setLivingMode("eq");
     setBathMode("eq");
@@ -1538,15 +1538,15 @@ export default function Properties() {
               { label: "權狀坪數", min: minTitlePing, setMin: setMinTitlePing, max: maxTitlePing, setMax: setMaxTitlePing },
               { label: "地坪", min: minLandPing, setMin: setMinLandPing, max: maxLandPing, setMax: setMaxLandPing },
               { label: "屋齡（年）", min: minAge, setMin: setMinAge, max: maxAge, setMax: setMaxAge },
-            ].map((range) => <div key={range.label} className="property-search-field"><span>{range.label}</span>
+              { label: "樓層", min: minFloor, setMin: setMinFloor, max: maxFloor, setMax: setMaxFloor, isFloor: true },
+            ].map((range) => <div key={range.label} className={`property-search-field${range.isFloor ? " property-search-floor-range" : ""}`}><span>{range.label}</span>
               <div className="property-search-pair">
-                <input aria-label={`最低${range.label}`} type="number" min="0" step="0.1" inputMode="decimal" value={range.min} onChange={(e) => range.setMin(e.target.value)} placeholder="最低" />
+                <input aria-label={`最低${range.label}`} type="number" min={range.isFloor ? undefined : "0"} step={range.isFloor ? "1" : "0.1"} inputMode={range.isFloor ? "text" : "decimal"} value={range.min} onChange={(e) => range.setMin(e.target.value)} placeholder="最低" />
                 <span>～</span>
-                <input aria-label={`最高${range.label}`} type="number" min="0" step="0.1" inputMode="decimal" value={range.max} onChange={(e) => range.setMax(e.target.value)} placeholder="最高" />
+                <input aria-label={`最高${range.label}`} type="number" min={range.isFloor ? undefined : "0"} step={range.isFloor ? "1" : "0.1"} inputMode={range.isFloor ? "text" : "decimal"} value={range.max} onChange={(e) => range.setMax(e.target.value)} placeholder="最高" />
               </div>
             </div>)}
             {[
-              { label: "樓層", value: floorFilter, setValue: setFloorFilter, mode: floorMode, setMode: setFloorMode },
               { label: "廳數", value: livingFilter, setValue: setLivingFilter, mode: livingMode, setMode: setLivingMode },
               { label: "衛浴數", value: bathFilter, setValue: setBathFilter, mode: bathMode, setMode: setBathMode },
             ].map((field) => <div key={field.label} className="property-search-field"><span>{field.label}</span>
@@ -1563,8 +1563,9 @@ export default function Properties() {
             </label>
             <label className="property-search-top-floor"><input type="checkbox" checked={topFloorOnly} onChange={(e) => setTopFloorOnly(e.target.checked)} />只看頂樓</label>
           </div>
-          <p className="property-search-help">坪數、屋齡等條件只會列出已填寫相關資料的物件。</p>
+          <p className="property-search-help">樓層可只填最低或最高；地下 1 樓請填 -1。坪數、屋齡、樓層等條件只會列出已填寫相關資料的物件。</p>
         </div>}
+        {minFloor !== "" && maxFloor !== "" && Number(minFloor) > Number(maxFloor) && <p className="property-search-error" role="alert">最低樓層不能大於最高樓層，請調整範圍。</p>}
         {minUnitPrice !== "" && maxUnitPrice !== "" && Number(minUnitPrice) > Number(maxUnitPrice) && <p className="property-search-error" role="alert">最低單價不能大於最高單價，請調整範圍。</p>}
       </section>
 
