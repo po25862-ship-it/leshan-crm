@@ -275,6 +275,7 @@ export default function Properties() {
   const [districtFilter, setDistrictFilter] = useState("");
   const [websiteFilter, setWebsiteFilter] = useState("all");
   const [parkingFilter, setParkingFilter] = useState("all");
+  const [showSearchFilters, setShowSearchFilters] = useState(true);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [layoutKeyword, setLayoutKeyword] = useState("");
   const [minFloor, setMinFloor] = useState("");
@@ -1451,16 +1452,20 @@ export default function Properties() {
         </details>
       </section>
 
-      <section className="property-search-panel" aria-label="物件搜尋條件" onChangeCapture={closeBrowsingDetail}>
+      <section className="property-search-panel" data-collapsed={!showSearchFilters} aria-label="物件搜尋條件" onChangeCapture={closeBrowsingDetail}>
         <div className="property-search-heading">
           <div><strong>物件搜尋</strong><span role="status">找到 {filtered.length} 筆</span></div>
-          <div className="property-search-actions">
+          <button type="button" className="property-search-toggle" aria-label={showSearchFilters ? "收起物件搜尋" : "展開物件搜尋"} aria-expanded={showSearchFilters} aria-controls="property-search-fields" onClick={() => setShowSearchFilters((value) => !value)}>
+            {showSearchFilters ? "收起" : "展開"} <span aria-hidden="true">{showSearchFilters ? "▴" : "▾"}</span>
+          </button>
+          {showSearchFilters && <div className="property-search-actions">
             <button type="button" className={showAdvancedFilters || advancedFilterCount > 0 ? "btn" : "btn ghost"} aria-expanded={showAdvancedFilters} aria-controls="property-advanced-filters" onClick={() => setShowAdvancedFilters((value) => !value)}>
               {showAdvancedFilters ? "收起進階" : "進階篩選"}{advancedFilterCount > 0 ? `（${advancedFilterCount}）` : ""}
             </button>
             <button type="button" className="btn ghost" onClick={clearAllFilters}>清除條件</button>
-          </div>
+          </div>}
         </div>
+        <div id="property-search-fields" hidden={!showSearchFilters}>
         <div className="property-search-basic">
           <label className="property-search-field property-search-wide">關鍵字／業務姓名
             <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="輸入關鍵字或業務姓名，例如 a7、董韋伶" />
@@ -1567,6 +1572,7 @@ export default function Properties() {
         </div>}
         {minFloor !== "" && maxFloor !== "" && Number(minFloor) > Number(maxFloor) && <p className="property-search-error" role="alert">最低樓層不能大於最高樓層，請調整範圍。</p>}
         {minUnitPrice !== "" && maxUnitPrice !== "" && Number(minUnitPrice) > Number(maxUnitPrice) && <p className="property-search-error" role="alert">最低單價不能大於最高單價，請調整範圍。</p>}
+        </div>
       </section>
 
       {showForm && (() => {

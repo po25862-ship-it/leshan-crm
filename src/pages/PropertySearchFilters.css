@@ -15,6 +15,22 @@
 .property-search-heading { justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; }
 .property-search-heading strong { font-size: 16px; }
 .property-search-heading [role="status"] { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.property-search-panel[data-collapsed="true"] { padding-block: 0; }
+.property-search-panel[data-collapsed="true"] .property-search-heading { margin-bottom: 0; }
+.property-search-toggle {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.property-search-toggle:hover { background: var(--paper-deep, #f5f7f6); }
+.property-search-actions { margin-inline-start: auto; }
 .property-search-actions .btn { min-height: 40px; padding: 8px 14px; }
 .property-search-basic { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
 .property-search-wide { grid-column: span 2; }
