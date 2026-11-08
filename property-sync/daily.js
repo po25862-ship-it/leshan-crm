@@ -4,16 +4,16 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { createStore, readJson, taipeiDay, scheduleDecision } = require("./sync-control");
 
 const appDir = __dirname;
 const configDir = path.join(os.homedir(), ".leshan-property-sync");
-const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
 
 function loadConfig() {
   return JSON.parse(fs.readFileSync(path.join(configDir, "config.json"), "utf8"));
 }
 
-function archiveRun(localOutputDir) {
+function archiveRun(localOutputDir, today) {
   const { outputRoot } = loadConfig();
   const driveOutputDir = path.join(outputRoot, today);
   try {
@@ -28,18 +28,35 @@ function archiveRun(localOutputDir) {
 function run(script, args = []) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(appDir, script), ...args], {
-      cwd: appDir, env: process.env, stdio: "inherit",
+      cwd: appDir, env: { ...process.env, LESHAN_SYNC_TRIGGER: "scheduled" }, stdio: "inherit",
     });
-    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`${script} 結束代碼 ${code}`)));
+    child.on("close", (code) => {
+      if (code === 0) return resolve();
+      const error = new Error(`${script} 結束代碼 ${code}`);
+      error.exitCode = code;
+      reject(error);
+    });
     child.on("error", reject);
   });
 }
 
 async function main() {
+  const store = createStore(configDir);
+  const state = store.read();
+  const decision = scheduleDecision({ state, busy: store.busy(),
+    snapshotAt: state.lastSuccessAt ? undefined : readJson(path.join(configDir, "latest-snapshot.json")).generatedAt });
+  if (process.argv.includes("--check-only")) {
+    console.log(JSON.stringify(decision));
+    return;
+  }
+  if (!decision.run) return;
+  console.log(`${new Date().toISOString()} ${decision.reason}`);
+  const today = taipeiDay();
   const localOutputDir = path.join(configDir, "runs", today);
   fs.mkdirSync(localOutputDir, { recursive: true });
-  await run("sync.js", ["--apply-crm", "--output-dir", localOutputDir]);
-  archiveRun(localOutputDir);
+  try { await run("sync.js", ["--apply-crm", "--output-dir", localOutputDir]); }
+  catch (error) { if (store.busy()) return; throw error; }
+  archiveRun(localOutputDir, today);
   try {
     await run("sheet-import.js", ["--apply"]);
   } catch (error) {
@@ -47,4 +64,4 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
+if (require.main === module) main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

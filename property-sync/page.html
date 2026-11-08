@@ -38,6 +38,7 @@
     <div class="card">
       <h1>樂善 CRM 物件同步</h1>
       <p>每天 07:30 自動下載 64 份報表、更新 CRM，並整理物件資料圖片。</p>
+      <p>下載逾時會自動重試 3 次；若仍未成功，每 15 分鐘檢查補跑。當天更新成功後停止補跑，錯過 07:30 也會在電腦恢復運作後補跑。</p>
       <div id="status" class="status" role="status">讀取狀態中…</div>
 
       <section class="login" aria-labelledby="backend-title">
@@ -70,6 +71,13 @@
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
+    function displayTime(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("zh-TW", {
+        timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).format(date);
+    }
     function show(message, ok) {
       $("notice").textContent = message;
       $("notice").className = `notice ${ok ? "success" : "error"}`;
@@ -95,11 +103,14 @@
         $("status").textContent = [
           `CRM 安全設定：${status.credentialsReady ? "完成" : "尚未完成"}`,
           `公司後台：${status.backendSessionReady ? "已登入" : "待重新登入"}；${codeState}`,
-          status.running ? `物件同步中，開始時間：${status.running.startedAt}` : status.lastResult
-            ? `${status.lastResult.ok ? "上次同步成功" : "上次同步失敗"}：${status.lastResult.finishedAt}` : "尚無本次啟動後的同步紀錄",
+          status.running ? `物件同步中，開始時間：${displayTime(status.running.startedAt)}` : status.syncState?.finishedAt
+            ? `${status.syncState.ok ? "上次同步成功" : "上次同步未完成"}：${displayTime(status.syncState.finishedAt)}` : status.lastResult
+            ? `${status.lastResult.ok ? "上次同步成功" : "上次同步失敗"}：${displayTime(status.lastResult.finishedAt)}` : "尚無本次啟動後的同步紀錄",
+          status.syncState?.message || "",
+          status.syncState?.ok === false && status.syncState.lastSuccessAt ? `最近更新成功：${displayTime(status.syncState.lastSuccessAt)}` : "",
           `物件資料：${status.sheetRunning ? "掃描中" : status.sheetLastResult ? status.sheetLastResult.ok ? "上次掃描成功" : "上次掃描失敗" : "可按「掃描物件資料」"}`,
           `輸出位置：${status.outputRoot}`,
-        ].join("\n");
+        ].filter(Boolean).join("\n");
       } catch { show("無法連上這台電腦的同步工具，請確認背景服務已啟動。", false); }
     }
     async function submit(url, data, clearBackend = false) {

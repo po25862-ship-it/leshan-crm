@@ -3,7 +3,9 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { download } = require("./download");
 const { spawn } = require("child_process");
+const { createStore, managedSync } = require("./sync-control");
 const XLSX = require("xlsx");
 const iconv = require("iconv-lite");
 const ExcelJS = require("exceljs");
@@ -56,6 +58,7 @@ const stateDir = path.join(os.homedir(), ".leshan-property-sync");
 const previousFile = argValue("--previous", path.join(stateDir, "latest-snapshot.json"));
 const legacyPreviousFile = path.join(path.dirname(outputDir), "latest-snapshot.json");
 const applyCrm = process.argv.includes("--apply-crm");
+let syncProgress = () => {};
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDiGtIemWS0C4Pb-fNFBjDnoa2Z6ETwics",
@@ -253,20 +256,11 @@ function decodeBig5(value) {
   return iconv.decode(Buffer.from(value, "latin1"), "big5").trim();
 }
 
-function runCurl(args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("curl", args, { stdio: ["ignore", "ignore", "pipe"] });
-    let error = "";
-    const timeout = setTimeout(() => {
-      error += "下載逾時，已停止卡住的連線";
-      child.kill("SIGKILL");
-    }, 150000);
-    child.stderr.on("data", (chunk) => { error += chunk.toString(); });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      code === 0 ? resolve() : reject(new Error(error.trim() || `curl ${code}`));
-    });
-  });
+function runCurl(args, options = {}) {
+  return download(args, { ...options, onRetry: (message) => {
+    console.warn(message);
+    syncProgress({ message });
+  } });
 }
 
 function numberOrNull(value) {
@@ -459,10 +453,12 @@ async function downloadReports(userId) {
         "--data-urlencode", "txtAREA=", "--data-urlencode", "tno=", "--data-urlencode", "tnof=",
         "--data-urlencode", "tsort=1", "--data-urlencode", "tQRC=Y", "--data-urlencode", "sendpok=",
         "http://nh3.twhg.com.tw/report/objexcel.php",
-      ]);
-      if (fs.statSync(file).size < 4096) throw new Error(`${store.name}／${category.name} 下載檔案異常`);
+      ], { validate: (temporary) => {
+        if (fs.statSync(temporary).size < 4096) throw new Error(`${store.name}／${category.name} 下載檔案異常，請確認後台登入`);
+      } });
       completed += 1;
       console.log(`下載 ${completed}/64 ${store.name}／${category.name}`);
+      syncProgress({ message: `已下載 ${completed}/64 份報表` });
     }
   }
   return reportDir;
@@ -489,6 +485,7 @@ async function downloadOfficialStatusReports(userId) {
       try {
         await runCurl([...common, "--output", reportFile, "http://nh3.twhg.com.tw/report/objreport.php"]);
       } catch (error) {
+        fs.rmSync(reportFile, { force: true });
         console.error(`官網狀態失敗 ${store.name}／${category.name}: ${error.message}`);
       }
       completed += 1;
@@ -703,8 +700,11 @@ async function main() {
   let outputRecords = snapshot.records;
   let crm = null;
   if (applyCrm) {
+    syncProgress({ phase: "applying", retryable: false, message: "下載完成，正在更新 CRM" });
     crm = await applyToCrm(snapshot.records, snapshot.roadKeywords);
     outputRecords = crm.records;
+    syncProgress({ phase: "exporting", retryable: false, lastSuccessAt: new Date().toISOString(),
+      lastSuccessStartedAt: syncStartedAt, message: "CRM 已更新，正在產生報表" });
   }
   const workbookPath = await createWorkbook(outputRecords, diff, previous.length ? "上次同步" : "首次");
   const payload = { generatedAt: new Date().toISOString(), ...snapshot, diff: { added: diff.added.length, removed: diff.removed.length, changed: diff.changed.length } };
@@ -732,4 +732,20 @@ async function withAuthenticatedCrm(callback) {
 }
 
 module.exports = { parseDetail, crmRecord, createWorkbook, withAuthenticatedCrm };
-if (require.main === module) main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
+let syncStartedAt;
+if (require.main === module) {
+  if (applyCrm && !process.argv.includes("--sync-lock-held")) {
+    const locked = createStore(stateDir).lockedCommand(process.execPath, [__filename, ...process.argv.slice(2), "--sync-lock-held"]);
+    const child = spawn(locked.command, locked.args, { stdio: "inherit", env: process.env });
+    child.on("error", (error) => { console.error(error.message); process.exit(1); });
+    child.on("close", (code) => process.exit(code ?? 1));
+  } else if (applyCrm) {
+    managedSync(async (update) => {
+      syncStartedAt = new Date().toISOString();
+      syncProgress = update;
+      await main();
+    }, { store: createStore(stateDir), trigger: process.env.LESHAN_SYNC_TRIGGER || "manual" })
+      .then((code) => process.exit(code))
+      .catch((error) => { console.error(error.message); process.exit(1); });
+  } else main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
+}

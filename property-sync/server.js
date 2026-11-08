@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const { spawn, execFileSync } = require("child_process");
 const { credentialStatus, ensureBackendSession, sessionReady } = require("./backend-auth");
+const { createStore } = require("./sync-control");
 
 const HOST = "127.0.0.1";
 const PORT = 8877;
@@ -13,6 +14,7 @@ const appDir = __dirname;
 const configDir = path.join(os.homedir(), ".leshan-property-sync");
 const configFile = path.join(configDir, "config.json");
 const sheetStatusFile = path.join(configDir, "sheet-import-status.json");
+const syncStore = createStore(configDir);
 let running = null;
 let lastResult = null;
 let sheetRunning = null;
@@ -72,7 +74,7 @@ function escapeXml(value) {
 function plist(label, args, outputRoot, schedule = false) {
   const argumentsXml = args.map((arg) => `    <string>${escapeXml(arg)}</string>`).join("\n");
   const timing = schedule
-    ? "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>"
+    ? "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict><key>StartInterval</key><integer>900</integer><key>RunAtLoad</key><true/>"
     : "<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>";
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>${label}</string>\n<key>ProgramArguments</key><array>\n${argumentsXml}\n</array>\n${timing}\n<key>WorkingDirectory</key><string>${escapeXml(appDir)}</string>\n<key>EnvironmentVariables</key><dict><key>LESHAN_SYNC_OUTPUT_ROOT</key><string>${escapeXml(outputRoot)}</string></dict>\n<key>StandardOutPath</key><string>${escapeXml(path.join(configDir, `${label}.log`))}</string>\n<key>StandardErrorPath</key><string>${escapeXml(path.join(configDir, `${label}.error.log`))}</string>\n</dict></plist>\n`;
 }
@@ -98,7 +100,7 @@ function installLaunchAgents(outputRoot) {
 }
 
 function runSync() {
-  if (running) return false;
+  if (running || syncStore.busy()) return false;
   const config = loadConfig();
   const runDate = today();
   const outputDir = path.join(configDir, "runs", runDate);
@@ -189,12 +191,19 @@ http.createServer(async (request, response) => {
     }
     if (request.method === "GET" && request.url === "/api/status") {
       const config = loadConfig();
-      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: sessionReady(), backend: credentialStatus(), outputRoot: config.outputRoot, running, lastResult, sheetRunning, sheetLastResult });
+      const syncState = syncStore.read();
+      const busy = syncStore.busy();
+      const syncRunning = busy ? { startedAt: syncState.startedAt, pid: syncState.pid } : running;
+      if (syncState.running && !syncRunning) {
+        syncState.message = syncState.retryable ? "上次下載中斷，07:30 後會每 15 分鐘檢查補跑。"
+          : "上次同步中斷，請查看紀錄後確認是否重新同步。";
+      }
+      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: sessionReady(), backend: credentialStatus(), outputRoot: config.outputRoot, running: syncRunning, syncState, lastResult, sheetRunning, sheetLastResult });
       return;
     }
     if (request.method === "POST" && request.url === "/api/sync") {
       if (!credentialsReady()) return sendJson(response, 400, { message: "請先完成安全設定。" });
-      if (running) return sendJson(response, 409, { message: "同步已在執行中。" });
+      if (running || syncStore.busy()) return sendJson(response, 409, { message: "同步已在執行中。" });
       const data = await readJson(request);
       try { ensureBackendSession(data, { required: true }); }
       catch (error) { return sendJson(response, 400, { message: error.message }); }
