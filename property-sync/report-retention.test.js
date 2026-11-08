@@ -99,3 +99,28 @@ test("預覽後被修改的檔案保留，錯誤寫入還原清單", (t) => {
   assert.equal(result.errors.length, 1);
   assert.equal(fs.readFileSync(file, "utf8"), "old");
 });
+
+test("Drive 使用原生垃圾桶並記錄實際還原位置，不跨 File Provider 下載舊檔", (t) => {
+  const f = fixture(t);
+  f.put("2026-09-01/raw-64/report.xls", "cloud original");
+  const nativeTarget = path.join(f.directory, "provider-trash", "raw-64");
+  fs.mkdirSync(path.dirname(nativeTarget));
+  const progress = [];
+  const plan = planRetention([{ label: "GoogleDrive", directory: f.root }], now);
+  let calls = 0;
+  const result = applyRetention(plan, { state: success, now, trashRoot: f.trashRoot, useNativeTrash: true,
+    onProgress: (status) => progress.push(status), moveNative: (source) => {
+      calls += 1;
+      fs.renameSync(source, nativeTarget);
+      return { target: nativeTarget, nativeOutput: "native success" };
+    } });
+  assert.equal(calls, 1);
+  assert.equal(result.movedCount, 1);
+  const entry = JSON.parse(fs.readFileSync(path.join(result.trashDirectory, "還原清單.json"))).entries[0];
+  assert.equal(entry.target, nativeTarget);
+  assert.equal(entry.trashMethod, "native");
+  assert.equal(entry.status, "moved");
+  assert.equal(progress.at(-1).movedCount, 1);
+  fs.renameSync(entry.target, entry.source);
+  assert.equal(fs.readFileSync(path.join(entry.source, "report.xls"), "utf8"), "cloud original");
+});

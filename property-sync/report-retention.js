@@ -2,7 +2,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
 const { createStore, readJson, taipeiDay } = require("./sync-control");
 
 const RULES = { rawDays: 30, backupDays: 90, summaryYears: 1 };
@@ -82,7 +82,15 @@ function atomicJson(file, value) {
   fs.renameSync(temporary, file);
 }
 
-function applyRetention(plan, { state, now = new Date(), trashRoot = path.join(os.homedir(), ".Trash") } = {}) {
+function nativeTrash(source) {
+  const output = execFileSync("/usr/bin/trash", ["--verbose", "--stopOnError", source], { encoding: "utf8" });
+  const match = output.match(/ to "([^\n]+)"\s*$/);
+  return { target: match ? match[1] : null, nativeOutput: output.trim() };
+}
+
+function applyRetention(plan, { state, now = new Date(), trashRoot = path.join(os.homedir(), ".Trash"),
+  useNativeTrash = false, moveNative = nativeTrash, onProgress = () => {},
+} = {}) {
   if (!canClean(state || {}, now)) return { skipped: true, reason: "今日同步尚未成功，保留全部舊檔。", movedCount: 0, movedBytes: 0 };
   const result = { completedAt: now.toISOString(), rules: RULES, movedCount: 0, movedBytes: 0, errors: [...plan.errors] };
   if (!plan.entries.length) return result;
@@ -90,20 +98,27 @@ function applyRetention(plan, { state, now = new Date(), trashRoot = path.join(o
   const batch = fs.mkdtempSync(path.join(trashRoot, `樂善同步報表_${taipeiDay(now)}_`));
   const manifestFile = path.join(batch, "還原清單.json");
   const manifest = { createdAt: now.toISOString(), entries: plan.entries.map((entry) => ({
-    ...entry, target: path.join(batch, entry.label, entry.day, entry.name), status: "planned",
+    ...entry, trashMethod: useNativeTrash && entry.label === "GoogleDrive" ? "native" : "rename",
+    target: useNativeTrash && entry.label === "GoogleDrive" ? null : path.join(batch, entry.label, entry.day, entry.name), status: "planned",
   })) };
   // Save original locations before moving anything, including in case of an interrupted cleanup.
   atomicJson(manifestFile, manifest);
-  fs.writeFileSync(path.join(batch, "還原說明.txt"), "這些是 CRM 自動整理的舊報表，沒有永久刪除。\n原始位置請看「還原清單.json」的 source；檔案依本機／GoogleDrive及日期整理。\n需要還原時，將檔案移回原位置；遇到同名檔案請先核對，不要覆蓋新檔。\n此工具不會清空垃圾桶；垃圾桶內的檔案仍會佔用空間。\n", { mode: 0o600 });
+  fs.writeFileSync(path.join(batch, "還原說明.txt"), "這些是 CRM 自動整理的舊報表，沒有永久刪除。\n原始位置請看「還原清單.json」的 source，垃圾桶位置為 target。\n本機檔案依日期整理；Google Drive 檔案使用原生垃圾桶，通常位於該 Drive 的垃圾桶，可用雲端硬碟還原。\n需要還原時，將檔案移回原位置；遇到同名檔案請先核對，不要覆蓋新檔。\n此工具不會清空垃圾桶；垃圾桶內的檔案仍會佔用空間。\n", { mode: 0o600 });
+  onProgress({ running: true, total: manifest.entries.length, movedCount: 0, trashDirectory: batch });
   for (const entry of manifest.entries) {
     try {
       const stat = fs.lstatSync(entry.source);
       if (stat.isSymbolicLink() || stat.dev !== entry.device || stat.ino !== entry.inode || stat.mtimeMs !== entry.modified) {
         throw new Error("檔案已變動，保留原檔。");
       }
-      fs.mkdirSync(path.dirname(entry.target), { recursive: true, mode: 0o700 });
-      // Rename only: never fall back to copy-then-delete across volumes.
-      fs.renameSync(entry.source, entry.target);
+      if (entry.trashMethod === "native") {
+        // File Provider trash avoids materialising every cloud-only HTML file on the Mac.
+        Object.assign(entry, moveNative(entry.source));
+      } else {
+        fs.mkdirSync(path.dirname(entry.target), { recursive: true, mode: 0o700 });
+        // Rename only: never fall back to copy-then-delete across volumes.
+        fs.renameSync(entry.source, entry.target);
+      }
       entry.status = "moved";
       result.movedCount += 1;
       result.movedBytes += entry.bytes;
@@ -113,6 +128,8 @@ function applyRetention(plan, { state, now = new Date(), trashRoot = path.join(o
       result.errors.push({ source: entry.source, message: error.message });
     }
     atomicJson(manifestFile, manifest);
+    onProgress({ running: true, total: manifest.entries.length, movedCount: result.movedCount,
+      movedBytes: result.movedBytes, errors: result.errors, trashDirectory: batch });
   }
   return { ...result, trashDirectory: batch };
 }
@@ -134,8 +151,10 @@ function main() {
     console.log(JSON.stringify({ preview: true, ...plan }, null, 2));
     return;
   }
-  const result = applyRetention(plan, { state: createStore(configDir).read() });
-  atomicJson(path.join(configDir, "report-retention-status.json"), result);
+  const statusFile = path.join(configDir, "report-retention-status.json");
+  const result = applyRetention(plan, { state: createStore(configDir).read(), useNativeTrash: true,
+    onProgress: (progress) => atomicJson(statusFile, progress) });
+  atomicJson(statusFile, { ...result, running: false });
   console.log(JSON.stringify(result, null, 2));
 }
 
