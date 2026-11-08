@@ -113,8 +113,9 @@ function runSync() {
   running = { startedAt: new Date().toISOString(), pid: child.pid };
   child.stdout.on("data", (chunk) => appendLocalLog(logFile, chunk));
   child.stderr.on("data", (chunk) => appendLocalLog(logFile, chunk));
-  child.on("close", (code) => {
+  child.on("close", async (code) => {
     let archiveError = "";
+    let retentionError = "";
     if (code === 0) {
       try {
         fs.mkdirSync(archiveDir, { recursive: true });
@@ -122,8 +123,19 @@ function runSync() {
       } catch (error) {
         archiveError = error.message;
       }
+      try {
+        await new Promise((resolve, reject) => {
+          const cleanup = spawn(process.execPath, [path.join(appDir, "report-retention.js"), "--apply"], {
+            cwd: appDir, env: process.env, stdio: ["ignore", "pipe", "pipe"],
+          });
+          cleanup.stdout.on("data", (chunk) => appendLocalLog(logFile, chunk));
+          cleanup.stderr.on("data", (chunk) => appendLocalLog(logFile, chunk));
+          cleanup.on("error", reject);
+          cleanup.on("close", (exitCode) => exitCode === 0 ? resolve() : reject(new Error(`整理結束代碼 ${exitCode}`)));
+        });
+      } catch (error) { retentionError = error.message; }
     }
-    lastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, outputDir, archiveDir, archiveError, logFile };
+    lastResult = { finishedAt: new Date().toISOString(), ok: code === 0, code, outputDir, archiveDir, archiveError, retentionError, logFile };
     running = null;
   });
   return true;
@@ -198,7 +210,8 @@ http.createServer(async (request, response) => {
         syncState.message = syncState.retryable ? "上次下載中斷，07:30 後會每 15 分鐘檢查補跑。"
           : "上次同步中斷，請查看紀錄後確認是否重新同步。";
       }
-      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: sessionReady(), backend: credentialStatus(), outputRoot: config.outputRoot, running: syncRunning, syncState, lastResult, sheetRunning, sheetLastResult });
+      const retention = readJsonFile(path.join(configDir, "report-retention-status.json"), null);
+      sendJson(response, 200, { credentialsReady: credentialsReady(), backendSessionReady: sessionReady(), backend: credentialStatus(), outputRoot: config.outputRoot, running: syncRunning, syncState, lastResult, sheetRunning, sheetLastResult, retention });
       return;
     }
     if (request.method === "POST" && request.url === "/api/sync") {

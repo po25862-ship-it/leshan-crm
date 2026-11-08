@@ -39,6 +39,7 @@
       <h1>樂善 CRM 物件同步</h1>
       <p>每天 07:30 自動下載 64 份報表、更新 CRM，並整理物件資料圖片。</p>
       <p>下載逾時會自動重試 3 次；若仍未成功，每 15 分鐘檢查補跑。當天更新成功後停止補跑，錯過 07:30 也會在電腦恢復運作後補跑。</p>
+      <p>同步成功後自動整理舊報表：原始下載保留 30 天、同步前備份保留 90 天、Excel 與同步紀錄保留 1 年。舊檔移到 Mac 垃圾桶並附還原清單，不會清空垃圾桶或刪除 CRM 物件。</p>
       <div id="status" class="status" role="status">讀取狀態中…</div>
 
       <section class="login" aria-labelledby="backend-title">
@@ -109,6 +110,7 @@
           status.syncState?.message || "",
           status.syncState?.ok === false && status.syncState.lastSuccessAt ? `最近更新成功：${displayTime(status.syncState.lastSuccessAt)}` : "",
           `物件資料：${status.sheetRunning ? "掃描中" : status.sheetLastResult ? status.sheetLastResult.ok ? "上次掃描成功" : "上次掃描失敗" : "可按「掃描物件資料」"}`,
+          status.retention?.completedAt ? `報表整理：${displayTime(status.retention.completedAt)}，已移到垃圾桶 ${status.retention.movedCount} 項${status.retention.errors?.length ? `，${status.retention.errors.length} 項保留待確認` : ""}` : "舊報表自動整理：已啟用，待同步成功後執行",
           `輸出位置：${status.outputRoot}`,
         ].filter(Boolean).join("\n");
       } catch { show("無法連上這台電腦的同步工具，請確認背景服務已啟動。", false); }

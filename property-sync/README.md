@@ -33,6 +33,20 @@ LaunchAgent 保留每天 07:30，另於載入及每 900 秒執行本機檢查。
 
 `node daily.js --check-only` 只顯示本機排程是否需要補跑，不登入、不下載、不寫入 CRM。`node --test download.test.js sync-control.test.js` 使用本機 HTTP 與暫存測試檔，驗證重試、完整檔案替換、補跑、跨程序鎖及寫入後不重播。
 
+### 舊報表自動整理
+
+每天排程及手動同步成功、備份流程結束後，都會執行 `report-retention.js --apply`。它使用相同的程序鎖，且只接受台灣當日的完整成功狀態；同步失敗或執行中不整理。
+
+- 日期資料夾超過 30 天：將 `raw-64`、`raw-details`、`official-status-64`、`road-keywords` 移到 Mac 垃圾桶。
+- 超過 90 天：整理該日期的 `CRM同步前備份_YYYY-MM-DD.json`。
+- 超過 1 個曆年：整理該日期的 Excel、`snapshot.json`、`road-keyword-summary.json`、`同步紀錄.log`。
+
+同時處理本機 `runs` 與設定的 Google Drive 桌面同步備份資料夾。只辨識固定檔名，保留未知檔案、照片／格局圖、根目錄 `latest-snapshot.json`、程式及登入設定；不跟隨日期資料夾或目標的符號連結。今天及未來日期永遠保留。
+
+垃圾桶以「樂善同步報表_日期_批次」分組，搬移前先寫 `還原清單.json`，另附 `還原說明.txt`。只使用同磁碟搬移；失敗保留原檔，絕不複製後刪除或清空垃圾桶。垃圾桶仍佔用磁碟空間，Drive 容量也須等待桌面同步及雲端垃圾桶處理；不宣稱搬移後立即釋出雲端配額。
+
+`node report-retention.js` 只預覽清單及大小；`--apply` 才執行。最近結果保留於 `report-retention-status.json`，本機同步頁可查看整理時間及保留待確認的數量。
+
 ## 安全測試
 
 `npm run test:archive` 只讀取測試封存，不會連線或寫入 Firebase。正式寫入必須明確加上 `--apply-crm`，且 64 份來源全部驗證成功。

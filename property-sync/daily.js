@@ -57,6 +57,8 @@ async function main() {
   try { await run("sync.js", ["--apply-crm", "--output-dir", localOutputDir]); }
   catch (error) { if (store.busy()) return; throw error; }
   archiveRun(localOutputDir, today);
+  try { await run("report-retention.js", ["--apply"]); }
+  catch (error) { console.error(`舊報表整理未完成（不影響本次同步）：${error.message}`); }
   try {
     await run("sheet-import.js", ["--apply"]);
   } catch (error) {
