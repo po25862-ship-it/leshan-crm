@@ -30,6 +30,13 @@ function newestTime(property) {
   return timestamp(property.firstSeenAt) ?? timestamp(property.createdAt);
 }
 
+function onHoldTime(property) {
+  const changedAt = property.statusChangedAt;
+  const localDate = typeof changedAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(changedAt)
+    ? `${changedAt}T00:00:00+08:00` : changedAt;
+  return timestamp(localDate) ?? timestamp(property.firstOnHoldAt);
+}
+
 function recentPriceDrop(property) {
   const change = property.lastPriceChange;
   const before = positiveNumber(change?.oldPrice);
@@ -44,7 +51,8 @@ function compareKnown(a, b, direction = "desc") {
   return direction === "asc" ? a - b : b - a;
 }
 
-export function sortProperties(properties, sortBy = "newest", { unitPriceBasis = "gross" } = {}) {
+export function sortProperties(properties, sortBy = "newest", { unitPriceBasis = "gross", viewMode = "active" } = {}) {
+  const defaultTime = viewMode === "onHold" ? onHoldTime : newestTime;
   return [...properties].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
@@ -70,9 +78,9 @@ export function sortProperties(properties, sortBy = "newest", { unitPriceBasis =
         comparison = compareKnown(recentPriceDrop(a), recentPriceDrop(b));
         break;
       default:
-        comparison = compareKnown(newestTime(a), newestTime(b));
+        comparison = compareKnown(defaultTime(a), defaultTime(b));
     }
-    return comparison || compareKnown(newestTime(a), newestTime(b)) ||
+    return comparison || compareKnown(defaultTime(a), defaultTime(b)) || compareKnown(newestTime(a), newestTime(b)) ||
       String(a.listingNo || a.id || "").localeCompare(String(b.listingNo || b.id || ""), "zh-Hant");
   });
 }

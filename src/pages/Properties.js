@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { updateReadCache } from "../hooks/firestoreReadCache";
-import { todayStr, formatDate } from "../lib/dates";
+import { todayStr, todayTaipeiStr, formatDate } from "../lib/dates";
 import { withAgid, withoutAgid } from "../lib/url";
 import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
@@ -450,6 +450,8 @@ export default function Properties() {
     const formToSave = {
       ...withoutWebsiteScanFields(withKnownFloorplans(form)),
       ...propertyChoiceFields(form, items.find((item) => item.id === editingId)),
+      ...(!editingId || form.status !== (items.find((item) => item.id === editingId)?.status || "active")
+        ? { statusChangedAt: new Date().toISOString() } : {}),
       viewingConfirmedAt: form.viewingStatus === "available"
         ? (items.find((p) => p.id === editingId)?.viewingStatus === "available" && form.viewingConfirmedAt
           ? form.viewingConfirmedAt : new Date().toISOString()) : "",
@@ -501,8 +503,8 @@ export default function Properties() {
   };
 
   const changeStatus = async (item, newStatus) => {
-    const dateStr = todayStr();
-    const updates = { status: newStatus, statusChangedAt: dateStr };
+    const dateStr = todayTaipeiStr();
+    const updates = { status: newStatus, statusChangedAt: new Date().toISOString() };
     let logNote = "";
 
     if (newStatus === "sold") {
@@ -759,7 +761,7 @@ export default function Properties() {
     setPriorityRefresh((current) => ({ ...current, running: false, message: `已停止；完成 ${current.completed} 筆，其餘可稍後繼續更新。` }));
   };
 
-  const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy, { unitPriceBasis });
+  const filtered = sortProperties(pool.filter((p) => matchesPropertyFilters(p)), sortBy, { unitPriceBasis, viewMode });
   const displayedProperties = [...filtered];
   const openProperty = showForm && editingId && priorityFilter !== "all" && items.find((item) => item.id === editingId);
   const retainOpenProperty = openProperty && (openProperty.status || "active") === viewMode
@@ -1025,7 +1027,7 @@ export default function Properties() {
 
     const missing = missingCandidates.filter((p) => !finalMatchedIds.has(p.id));
     missing.forEach((p) => {
-      ops.push({ ref: doc(db, "properties", p.id), data: { status: "onHold", statusChangedAt: todayStr() }, merge: true });
+      ops.push({ ref: doc(db, "properties", p.id), data: { status: "onHold", statusChangedAt: new Date().toISOString() }, merge: true });
       ops.push({
         ref: doc(collection(db, `properties/${p.id}/statusLogs`)),
         data: { status: "onHold", date: todayStr(), note: "Excel 更新後未再出現，系統自動標記", createdAt: serverTimestamp() },
@@ -1388,7 +1390,7 @@ export default function Properties() {
         <button className={viewMode === "active" ? "btn" : "btn ghost"} onClick={() => { setViewMode("active"); setShowForm(false); }}>
           在售（{statusCounts.active}）
         </button>
-        <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("onHold"); setShowForm(false); }}>
+        <button className={viewMode === "onHold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("onHold"); setSortBy("newest"); setShowForm(false); }}>
           暫時不賣（{statusCounts.onHold}）
         </button>
         <button className={viewMode === "sold" ? "btn" : "btn ghost"} onClick={() => { setViewMode("sold"); setShowForm(false); }}>
@@ -1518,7 +1520,7 @@ export default function Properties() {
           </div>
           <label className="property-search-field property-search-wide" htmlFor="property-sort">排序方式
             <select id="property-sort" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              {PROPERTY_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}{option.value.startsWith("unit-price") ? `（${unitPriceBasis === "net" ? "扣車位" : "含車簡算"}）` : ""}</option>)}
+              {PROPERTY_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.value === "newest" && viewMode === "onHold" ? "最近轉暫時不賣優先" : option.label}{option.value.startsWith("unit-price") ? `（${unitPriceBasis === "net" ? "扣車位" : "含車簡算"}）` : ""}</option>)}
             </select>
           </label>
         </div>
