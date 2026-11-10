@@ -138,11 +138,7 @@ export default function Buyers() {
 
   const logFollowUp = (item) => update(item.id, { lastContactDate: todayStr(), lastModifiedByUid: user.uid });
 
-  const sorted = [...buyers].sort((a, b) => {
-    const da = daysSince(a.lastContactDate) ?? -999;
-    const db_ = daysSince(b.lastContactDate) ?? -999;
-    return db_ - da;
-  });
+  const sorted = [...buyers].sort((a, b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
 
   const filtered = sorted.filter((item) => {
     if (!keyword.trim()) return true;
