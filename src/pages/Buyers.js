@@ -232,6 +232,7 @@ export default function Buyers() {
         )}
         {filtered.map((item) => {
           const days = daysSince(item.lastContactDate);
+          const source = String(item.source ?? "").trim();
           const stats = buyerStats[item.id] || { needsCount: 0, matchesCount: 0, newMatchesCount: 0, maxPercent: 0 };
           const isOpen = editingId === item.id;
           return (
@@ -243,16 +244,18 @@ export default function Buyers() {
                     {item.phone && <span>{item.phone}　</span>}
                     最後聯絡：{formatDate(item.lastContactDate)}
                     {days !== null && <span className="mono"> （{days} 天前）</span>}
-                    {item.source && <>　來源：{item.source}</>}
                   </div>
                   {item.lastContactNote && (
                     <div className="meta" style={{ marginTop: 2 }}>
                       內容：{item.lastContactNote}
                     </div>
                   )}
-                  <div style={{ marginTop: 6 }}>
+                  <div className="buyer-tags">
                     {(item.tags || []).map((t) => (
-                      <span key={t} className={`tag ${t === "買方" ? "buyer" : ""}`}>{t}</span>
+                      <React.Fragment key={t}>
+                        <span className={`tag ${t === "買方" ? "buyer" : ""}`}>{t}</span>
+                        {t === "買方" && source && <span className="tag buyer-source">來源：{source}</span>}
+                      </React.Fragment>
                     ))}
                   </div>
                 </div>
