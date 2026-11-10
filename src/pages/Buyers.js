@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useId } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useCollection } from "../hooks/useCollection";
@@ -11,6 +11,7 @@ import { useAuth } from "../AuthContext";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { timestampToMillis } from "../lib/propertyPresentation";
+import { choiceKey, choiceText, uniqueChoices } from "../lib/propertyChoices";
 import ContactConversationAnalyses from "./ContactConversationAnalyses";
 
 const emptyForm = {
@@ -22,6 +23,39 @@ const emptyForm = {
   lastContactDate: todayStr(),
   sharedWith: [],
 };
+
+function BuyerSourceField({ value, choices, onChange }) {
+  const id = useId();
+  const [custom, setCustom] = useState(false);
+  const current = choiceText(value);
+  const currentKey = choiceKey(current);
+  const selected = choices.find((source) => choiceKey(source) === currentKey) || current;
+  const options = selected && !choices.includes(selected) ? [selected, ...choices] : choices;
+
+  const selectSource = (event) => {
+    const option = event.target.value;
+    setCustom(option === "custom");
+    onChange(option.startsWith("source:") ? option.slice("source:".length) : "");
+  };
+
+  return (
+    <div className="form-field">
+      <label htmlFor={id}>客戶來源</label>
+      <select id={id} value={custom ? "custom" : selected ? `source:${selected}` : ""} onChange={selectSource}>
+        <option value="">選擇來源（選填）</option>
+        {options.map((source) => <option key={source} value={`source:${source}`}>{source}</option>)}
+        <option value="custom">＋ 自行新增來源</option>
+      </select>
+      {custom && (
+        <div style={{ marginTop: 10 }}>
+          <label htmlFor={`${id}-custom`}>新來源</label>
+          <input id={`${id}-custom`} value={value || ""} onChange={(event) => onChange(event.target.value)} placeholder="例如：591 智富館、朋友介紹" />
+          <small>儲存買方後，下次就能選用這個來源。</small>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function BuyerDetailValue({ label, value }) {
   return (
@@ -50,7 +84,9 @@ export default function Buyers() {
   const [keyword, setKeyword] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const buyers = items.filter((c) => (c.tags || []).includes("買方"));
+  const buyers = useMemo(() => items.filter((c) => (c.tags || []).includes("買方")), [items]);
+  const sourceChoices = useMemo(() => uniqueChoices(buyers.map((buyer) => buyer.source))
+    .sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true })), [buyers]);
   const buyerStats = useMemo(() => {
     const stats = {};
     buyers.forEach((buyer) => {
@@ -126,7 +162,11 @@ export default function Buyers() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    const dataToSave = form.tags.includes("買方") ? form : { ...form, tags: [...form.tags, "買方"] };
+    const dataToSave = {
+      ...form,
+      source: String(form.source ?? "").trim(),
+      tags: form.tags.includes("買方") ? form.tags : [...form.tags, "買方"],
+    };
     if (editingId) {
       await update(editingId, { ...dataToSave, lastModifiedByUid: user.uid });
     } else {
@@ -193,10 +233,7 @@ export default function Buyers() {
                   這裡建立的客戶預設會標記「買方」；如果這位客戶同時也要賣房子，去「賣方」頁面登錄委託即可。
                 </div>
               </div>
-              <div className="form-field">
-                <label>客戶來源（自由輸入，例如：FB 粉專、朋友介紹、591…）</label>
-                <input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} placeholder="例如：FB 粉專廣告" />
-              </div>
+              <BuyerSourceField value={form.source} choices={sourceChoices} onChange={(source) => setForm((current) => ({ ...current, source }))} />
               <div className="form-field">
                 <label>最後聯絡日期</label>
                 <input type="date" value={form.lastContactDate} onChange={(e) => setForm({ ...form, lastContactDate: e.target.value })} />
@@ -327,10 +364,7 @@ export default function Buyers() {
                             這裡建立的客戶預設會標記「買方」；如果這位客戶同時也要賣房子，去「賣方」頁面登錄委託即可。
                           </div>
                         </div>
-                        <div className="form-field">
-                          <label>客戶來源（自由輸入，例如：FB 粉專、朋友介紹、591…）</label>
-                          <input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} placeholder="例如：FB 粉專廣告" />
-                        </div>
+                        <BuyerSourceField value={form.source} choices={sourceChoices} onChange={(source) => setForm((current) => ({ ...current, source }))} />
                         <div className="form-field">
                           <label>最後聯絡日期</label>
                           <input type="date" value={form.lastContactDate} onChange={(e) => setForm({ ...form, lastContactDate: e.target.value })} />
