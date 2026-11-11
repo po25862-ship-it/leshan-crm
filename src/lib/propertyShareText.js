@@ -4,8 +4,17 @@ import { withAgid } from "./url";
 import { nonNegativeNumber, resolvePropertyParkingPrice } from "./propertyUnitPrice";
 
 export const DEFAULT_PROPERTY_SHARE_INTRO = "幫您挑了幾間物件，整理重點給您比較看看：";
+export const DEFAULT_PRICE_DROP_INTRO = "這幾間物件有降價，整理最新售價給您參考，看看有沒有感興趣的 👇";
 
 const numberText = (value) => value.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
+
+export function propertySharePriceDrop(property) {
+  const oldPrice = nonNegativeNumber(property.lastPriceChange?.oldPrice);
+  const newPrice = nonNegativeNumber(property.lastPriceChange?.newPrice);
+  const currentPrice = nonNegativeNumber(property.totalPrice);
+  if (!(oldPrice > newPrice && newPrice > 0 && newPrice === currentPrice)) return null;
+  return { oldPrice, newPrice, amount: oldPrice - newPrice };
+}
 
 function shareParking(property) {
   const description = String(property.parkingDescription || property.parkingType || "").normalize("NFKC").trim();
@@ -25,7 +34,7 @@ function shareParking(property) {
   return { state: "included", area, ...preset, ...resolvePropertyParkingPrice(property) };
 }
 
-function propertyShareDetails(property) {
+function propertyShareDetails(property, priceDrop) {
   const lines = [];
   const price = nonNegativeNumber(property.totalPrice);
   const totalArea = nonNegativeNumber(property.titlePing);
@@ -41,7 +50,9 @@ function propertyShareDetails(property) {
   const parkingLabel = parking.state === "none" ? "（無車位）"
     : parking.state === "included" ? `（含${parking.count > 1 ? `${parking.count}個` : ""}${parking.kind}車位）` : "";
 
-  if (price > 0) lines.push(`售價｜${numberText(price)} 萬${parkingLabel}`);
+  if (priceDrop) lines.push(`前次售價｜${numberText(priceDrop.oldPrice)} 萬`);
+  if (price > 0) lines.push(`${priceDrop ? "最新售價" : "售價"}｜${numberText(price)} 萬${parkingLabel}`);
+  if (priceDrop) lines.push(`⬇️ 本次調降 ${numberText(priceDrop.amount)} 萬`);
   const areas = [];
   if (mainArea > 0 && (!(totalArea > 0) || mainArea <= totalArea)) areas.push(`主建${numberText(mainArea)}坪`);
   if (netArea > 0) areas.push(`扣車後${numberText(netArea)}坪`);
@@ -69,8 +80,11 @@ function publicPropertyAddress(address) {
   return String(address || "").match(/^.*?[縣市].*?[區鄉鎮市]/)?.[0] || "";
 }
 
-export function buildPropertyShareText(properties, intro, agid, includeMaps = true) {
-  const details = properties.map(propertyShareDetails);
+export function buildPropertyShareText(properties, intro, agid, includeMaps = true, mode = "recommend") {
+  const priceDropMode = mode === "price-drop";
+  const included = priceDropMode ? properties.filter(propertySharePriceDrop) : properties;
+  if (priceDropMode && !included.length) return "";
+  const details = included.map((property) => propertyShareDetails(property, priceDropMode ? propertySharePriceDrop(property) : null));
   const presets = [...new Set(details.filter((detail) => detail.hasNetUnit && detail.parking.source === "preset")
     .map(({ parking }) => `${parking.kind}車位每個${parking.perSpace}萬`))];
   const notes = [];
@@ -79,7 +93,7 @@ export function buildPropertyShareText(properties, intro, agid, includeMaps = tr
   return [
     intro,
     "",
-    ...properties.flatMap((property, index) => {
+    ...included.flatMap((property, index) => {
       const publicAddress = publicPropertyAddress(property.address);
       const location = [...new Set([property.communityName, property.area, publicAddress].filter(Boolean))]
         .join("・");
@@ -93,6 +107,6 @@ export function buildPropertyShareText(properties, intro, agid, includeMaps = tr
       return [...lines, ""];
     }),
     ...(notes.length ? [`※${notes.join("；")}。`, ""] : []),
-    ...(properties.length ? ["有想了解的物件，回覆編號就可以。"] : []),
+    ...(included.length ? [priceDropMode ? "有哪一間想了解，回覆編號就可以，我再提供詳細資料。" : "有想了解的物件，回覆編號就可以。"] : []),
   ].join("\n").trim();
 }

@@ -1,4 +1,4 @@
-import { buildPropertyShareText, DEFAULT_PROPERTY_SHARE_INTRO } from "./propertyShareText";
+import { buildPropertyShareText, DEFAULT_PROPERTY_SHARE_INTRO, DEFAULT_PRICE_DROP_INTRO } from "./propertyShareText";
 
 const properties = [
   { title: "第一間", address: "桃園市龜山區文青路12號8樓", websiteUrl: "https://www.twhg.com.tw/buy/AAA", totalPrice: 1598 },
@@ -89,4 +89,27 @@ test("可以關閉地圖，地址不夠完整時不產生誤導連結", () => {
   expect(buildPropertyShareText(properties, "推薦給您", "06459", false)).not.toContain("📍");
   expect(buildPropertyShareText([{ title: "待確認", address: "桃園市龜山區" }], "", "06459"))
     .toContain("📍位置：地址待確認");
+});
+
+test("降價通知使用確認的前次與最新售價，依選取順序編號並保留面積與個人連結", () => {
+  const result = buildPropertyShareText([
+    properties[1],
+    { ...flat, lastPriceChange: { oldPrice: "１,６９８", newPrice: 1598 } },
+    { ...properties[1], lastPriceChange: { oldPrice: 1550, newPrice: "1498" } },
+  ], DEFAULT_PRICE_DROP_INTRO, "12345", false, "price-drop");
+  expect(result).toMatch(/^這幾間物件有降價，整理最新售價給您參考，看看有沒有感興趣的 👇/);
+  expect(result).toContain("1. 皇翔花園捷運兩房車\n前次售價｜1,698 萬\n最新售價｜1,598 萬（含平面車位）\n⬇️ 本次調降 100 萬");
+  expect(result).toContain("2. 第二間\n前次售價｜1,550 萬\n最新售價｜1,498 萬\n⬇️ 本次調降 52 萬");
+  expect(result).toContain("主建19.65坪｜扣車後31.14坪");
+  expect(result).toContain("agid=12345");
+  expect(result).toMatch(/有哪一間想了解，回覆編號就可以，我再提供詳細資料。$/);
+  expect(result).not.toMatch(/3\. |您有在找的/);
+});
+
+test.each([
+  null, { oldPrice: "", newPrice: 1598 }, { oldPrice: 1498, newPrice: 1598 },
+  { oldPrice: 1598, newPrice: 1598 }, { oldPrice: 1698, newPrice: 1588 },
+  { oldPrice: "bad", newPrice: 1598 }, { oldPrice: 1698, newPrice: 0 },
+])("缺少有效降價或異動紀錄與目前價格不一致時不產生通知 %j", (lastPriceChange) => {
+  expect(buildPropertyShareText([{ ...flat, lastPriceChange }], DEFAULT_PRICE_DROP_INTRO, "06459", false, "price-drop")).toBe("");
 });
