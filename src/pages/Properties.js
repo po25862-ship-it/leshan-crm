@@ -1656,7 +1656,7 @@ export default function Properties() {
               {detailTab === "files" && <>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
-                <FileDropZone label="拖曳物調資料到這裡" hint="PDF 或圖片，可多選；放開即上傳至本物件。手機請點選擇檔案。" accept=".pdf,application/pdf,image/*" disabled={uploadingSheet} onFiles={uploadSheets} />
+                <FileDropZone label="拖曳物調資料到這裡" hint="PDF、JPG、PNG、WebP、HEIC，每份限 10MB；可多選，放開即上傳本物件。" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" maxBytes={10 * 1024 * 1024} disabled={uploadingSheet} onFiles={uploadSheets} />
                 <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => setSingleViewingPdfId(editingId)}>製作最新售價 PDF</button>
                 {singleViewingPdfId === editingId && <PropertyViewingPdf properties={[{ ...form, id: editingId }]} onClose={() => setSingleViewingPdfId(null)} onGenerated={pdfLibrary.saveGenerated} />}
                 {(form.sheetFiles || []).length === 0 ? (
@@ -1960,7 +1960,7 @@ export default function Properties() {
                       </div>
                     </div>
                   ))}
-                  <FileDropZone label="拖曳物調資料到這裡" hint="PDF 或圖片，可多選；放開即上傳至本物件。手機請點選擇檔案。" accept=".pdf,application/pdf,image/*" disabled={uploadingSheet} onFiles={uploadSheets} />
+                  <FileDropZone label="拖曳物調資料到這裡" hint="PDF、JPG、PNG、WebP、HEIC，每份限 10MB；可多選，放開即上傳本物件。" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" maxBytes={10 * 1024 * 1024} disabled={uploadingSheet} onFiles={uploadSheets} />
                 </>
               )}
             </div>
