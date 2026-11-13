@@ -14,7 +14,7 @@ import OutreachReminder from './OutreachReminder';
 const isRecent = (value, days = 7) => timestampToMillis(value) >= Date.now() - days * 86400000;
 
 function KpiCard({ icon: Icon, label, value, hint, tone, to }) {
-  return <Link to={to} className={`deal-kpi ${tone || ""}`}><div className="deal-kpi-icon"><Icon size={19} /></div><div><span>{label}</span><strong>{value}</strong><small>{hint}</small></div><ArrowUpRight size={16} className="deal-kpi-arrow" /></Link>;
+  return <Link to={to} className={`deal-kpi ${tone || ""}`}><div className="deal-kpi-icon"><Icon size={19} /></div><div className="deal-kpi-content"><span>{label}</span><strong>{value}</strong><small>{hint}</small></div><ArrowUpRight size={16} className="deal-kpi-arrow" /></Link>;
 }
 
 export default function Dashboard() {

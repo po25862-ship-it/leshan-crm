@@ -56,6 +56,7 @@ import {
   ScanText,
   Mail,
 } from "lucide-react";
+import TextSizeSettings, { TextSizeProvider } from "./components/TextSizeSettings";
 import "./mobile.css";
 
 const desktopNavItems = [
@@ -131,6 +132,7 @@ function DesktopTopBar() {
   return <header className="desktop-topbar">
     <label><Search size={15} /><input placeholder="搜尋工作台" /></label>
     <div className="desktop-topbar-actions">
+      <TextSizeSettings />
       <div className="notification-wrap">
         <button className="notification-button" aria-label={`工作提醒${notificationCount ? `，${notificationCount} 筆` : ""}`} aria-expanded={showNotifications} onClick={() => setShowNotifications((current) => !current)}><Bell size={16} />{notificationCount > 0 && <span className="notification-badge">{notificationCount > 99 ? "99+" : notificationCount}</span>}</button>
         {showNotifications && <div className="notification-popover">
@@ -248,6 +250,7 @@ function AppShell() {
 
   return (
     <HashRouter>
+      <TextSizeProvider key={user.uid} userId={user.uid} isMobile={isMobile}>
       <ScrollToTop />
       {isMobile ? (
         <div className="mobile-shell mobile-floating-shell">
@@ -264,6 +267,7 @@ function AppShell() {
           </div>
         </div>
       )}
+      </TextSizeProvider>
     </HashRouter>
   );
 }

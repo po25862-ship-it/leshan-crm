@@ -23,9 +23,9 @@
   padding:14px 18px 10px;display:flex;align-items:center;justify-content:space-between;
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
 }
-.mobile-shell .m-topbar h1{font-family:'Noto Serif TC',serif;font-size:19px;font-weight:700;margin:0;letter-spacing:.03em;}
+.mobile-shell .m-topbar h1{font-family:'Noto Serif TC',serif;font-size:calc(19px * var(--crm-font-scale,1));font-weight:700;margin:0;letter-spacing:.03em;}
 .mobile-shell .m-topbar .m-logout{
-  border:1px solid var(--m-border);border-radius:999px;background:#fff;color:var(--m-muted);font-size:14px;font-weight:700;padding:7px 12px;
+  border:1px solid var(--m-border);border-radius:999px;background:#fff;color:var(--m-muted);font-size:calc(14px * var(--crm-font-scale,1));font-weight:700;padding:7px 12px;
 }
 
 .mobile-shell main{padding:6px 16px 20px;max-width:100%;}
@@ -38,12 +38,12 @@
   flex-shrink:0;min-width:110px;background:var(--m-card);border:1px solid var(--m-border);
   border-radius:16px;padding:14px 16px;box-shadow:0 4px 16px rgba(23,35,31,.04);
 }
-.mobile-shell .kpi .label{font-size:14px;color:var(--m-muted);}
-.mobile-shell .kpi .value{font-size:22px;font-weight:700;color:var(--m-primary);font-family:'IBM Plex Mono',monospace;}
+.mobile-shell .kpi .label{font-size:calc(14px * var(--crm-font-scale,1));color:var(--m-muted);}
+.mobile-shell .kpi .value{font-size:calc(22px * var(--crm-font-scale,1));font-weight:700;color:var(--m-primary);font-family:'IBM Plex Mono',monospace;}
 .mobile-shell .kpi .value.warn{color:var(--m-primary);}
 
 .mobile-shell .section-title{
-  font-family:inherit;font-size:20px;font-weight:900;margin:18px 0 10px;
+  font-family:inherit;font-size:calc(20px * var(--crm-font-scale,1));font-weight:900;margin:18px 0 10px;
 }
 .mobile-shell .section-title::before{display:none;}
 
@@ -52,7 +52,7 @@
 }
 
 .mobile-shell .btn{
-  background:var(--m-primary);border-radius:12px;padding:12px 18px;font-size:15px;font-weight:700;
+  background:var(--m-primary);border-radius:12px;padding:12px 18px;font-size:calc(15px * var(--crm-font-scale,1));font-weight:700;
 }
 .mobile-shell .btn.ghost{background:#F3F1EC;border:none;color:var(--m-ink);}
 .mobile-shell .btn.danger{background:#C1503F;}
@@ -70,7 +70,7 @@
   display:flex;flex-direction:column;gap:22px;
 }
 .mobile-shell .col-head{
-  font-size:14px;font-weight:900;
+  font-size:calc(14px * var(--crm-font-scale,1));font-weight:900;
 }
 
 .mobile-shell .card{
@@ -88,7 +88,7 @@
 .mobile-shell input:not([type="checkbox"]):not([type="radio"]),
 .mobile-shell select,
 .mobile-shell textarea{
-  font-size:16px; /* 避免 iOS 自動放大畫面 */
+  font-size:calc(16px * var(--crm-font-scale,1)); /* 避免 iOS 自動放大畫面 */
   border-radius:12px;
   padding:12px 14px;
 }
@@ -119,12 +119,12 @@
 .mobile-shell .properties-toolbar{
   width:100%;display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;
 }
-.mobile-shell .properties-toolbar .btn{width:auto;min-width:0;padding:10px 8px;font-size:15px;}
+.mobile-shell .properties-toolbar .btn{width:auto;min-width:0;padding:10px 8px;font-size:calc(15px * var(--crm-font-scale,1));}
 .mobile-shell .properties-toolbar .properties-add-btn{grid-column:1/-1;}
 .mobile-shell .properties-mobile-tools{
   display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;margin-bottom:12px;
 }
-.mobile-shell .properties-mobile-tools .btn{width:auto;padding:10px 8px;font-size:15px;text-align:center;}
+.mobile-shell .properties-mobile-tools .btn{width:auto;padding:10px 8px;font-size:calc(15px * var(--crm-font-scale,1));text-align:center;}
 .mobile-shell .properties-mobile-tools label:last-child{grid-column:1/-1;}
 .mobile-shell .property-category-filter{
   flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;margin:0 -16px 14px!important;padding:0 16px 3px;
@@ -136,7 +136,7 @@
 }
 .mobile-shell .property-search-bar>input{width:100%!important;min-width:0!important;}
 .mobile-shell .property-search-bar>input:first-child{grid-column:1/-1;}
-.mobile-shell .property-search-bar>.btn{width:100%;padding:10px 6px;font-size:15px;}
+.mobile-shell .property-search-bar>.btn{width:100%;padding:10px 6px;font-size:calc(15px * var(--crm-font-scale,1));}
 .mobile-shell .property-structured-filters{
   display:grid!important;grid-template-columns:1fr!important;gap:8px!important;padding:10px;border:1px solid var(--m-border);border-radius:14px;background:#fff;
 }
@@ -166,7 +166,7 @@
   display:flex;padding:9px 6px calc(9px + env(safe-area-inset-bottom));
 }
 .mobile-bottom-nav a{
-  flex:1;text-align:center;font-size:14px;color:#8A8781;text-decoration:none;
+  flex:1;text-align:center;font-size:calc(14px * var(--crm-font-scale,1));color:#8A8781;text-decoration:none;
   display:flex;flex-direction:column;align-items:center;gap:4px;
 }
 .mobile-bottom-nav a.active{color:var(--m-primary);font-weight:700;}
@@ -183,9 +183,22 @@
 .mobile-more-row{
   display:flex;align-items:center;justify-content:space-between;
   background:#FFFFFF;border:1px solid #EAE7E1;border-radius:16px;
-  padding:16px 18px;margin-bottom:12px;text-decoration:none;color:#1A1A1A;font-weight:700;font-size:14px;
+  padding:16px 18px;margin-bottom:12px;text-decoration:none;color:#1A1A1A;font-weight:700;font-size:calc(14px * var(--crm-font-scale,1));
 }
 .mobile-more-row .arrow{color:#8A8781;}
 
 .mobile-shell .property-key-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
 .mobile-shell .property-key-stats>div:last-child{grid-column:1/-1;}
+
+/* Give mobile KPI labels the card's full width instead of squeezing them beside icons. */
+.mobile-shell .deal-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+.mobile-shell .deal-kpi{grid-template-columns:34px minmax(0,1fr);grid-template-rows:auto 34px 1fr;gap:9px 8px;padding:12px;min-width:0;align-items:center}
+.mobile-shell .deal-kpi-content{display:contents}
+.mobile-shell .deal-kpi-content>span{grid-column:1/-1;grid-row:1;white-space:nowrap;line-height:1.5;font-size:calc(14px * var(--crm-font-scale,1))}
+.mobile-shell .deal-kpi-icon{grid-column:1;grid-row:2}
+.mobile-shell .deal-kpi-content>strong{grid-column:2;grid-row:2;justify-self:end;margin:0;font-size:calc(28px * var(--crm-font-scale,1))}
+.mobile-shell .deal-kpi-content>small{grid-column:1/-1;grid-row:3;align-self:start;line-height:1.5;overflow-wrap:anywhere}
+.mobile-shell .workbench-card-head>div{min-width:0}
+.mobile-shell .workbench-card-head h3{white-space:nowrap;line-height:1.5}
+.mobile-shell .workbench-card-head>a{flex-shrink:0}
+.mobile-shell .workbench-hero h2{text-wrap:balance;line-height:1.45}
