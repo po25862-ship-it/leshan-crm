@@ -1,3 +1,6 @@
+import SearchSelect from "../components/SearchSelect";
+import WorkflowSteps from "../components/WorkflowSteps";
+import FileDropZone from "../components/FileDropZone";
 import React, { useEffect, useRef, useState } from "react";
 import { COMPANY_RENTAL_STATUSES, COMPANY_RENTAL_TYPES, RENTAL_FURNITURE, MOTORBIKE_PARKING_OPTIONS, RENTAL_PARKING_FEE_OPTIONS, rentalMonthlyCost, rentalMoney, validateCompanyRental, missingCompanyRentalFields, rentalMissingFieldsMessage, companyRentalForm, companyRentalColleagues, normalizeRentalFurniture, addRentalFurniture, MAX_RENTAL_FURNITURE_NAME } from "../lib/companyRental";
 import { compressRentalPhoto, mergeRentalPhotos } from "../lib/companyRentalPhotos";
@@ -27,7 +30,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
   const [readingListing, setReadingListing] = useState(false);
   const websiteRequest = useRef(0);
   useEffect(() => () => { websiteRequest.current++; }, []);
-  const responsibleTouched = useRef(false), dirty = useRef(false), localUrls = useRef(new Set()), fileInput = useRef(null), errorRef = useRef(null);
+  const responsibleTouched = useRef(false), dirty = useRef(false), localUrls = useRef(new Set()), errorRef = useRef(null);
   const workspaceRef = useRef(null), [pendingFocus, setPendingFocus] = useState(null);
   const missingFields = missingCompanyRentalFields(form), missingError = error.startsWith("還需要補上：");
   const visibleError = missingError ? rentalMissingFieldsMessage(form) : error;
@@ -102,8 +105,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
     try { prepareEquipment(); } catch (err) { setEquipmentError(err.message); setEquipmentNotice(""); }
     equipmentInput.current?.focus();
   }
-  async function addPhotos(event) {
-    const files = Array.from(event.target.files || []); event.target.value = "";
+  async function addPhotos(files) {
     if (!files.length) return;
     if (files.length > 10) { setError("一次最多選擇 10 張照片。"); return; }
     setProcessing(true); setError(""); setMessage("照片壓縮中…");
@@ -115,7 +117,7 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
       setPhotos(result.photos); dirty.current = true;
       setMessage(`已準備 ${incoming.length - result.duplicates} 張照片${result.duplicates ? `，跳過 ${result.duplicates} 張重複照片` : ""}；儲存案件時才會上傳。`);
     } catch (err) {
-      incoming.forEach(photo => { URL.revokeObjectURL(photo.url); localUrls.current.delete(photo.url); }); setError(err.message); setMessage("");
+      incoming.forEach(photo => { URL.revokeObjectURL(photo.url); localUrls.current.delete(photo.url); }); setError(err.message); setMessage(""); return false;
     } finally { setProcessing(false); }
   }
   async function save(nextStatus) {
@@ -144,11 +146,11 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
       if (selectedKeys.includes("furniture")) setEquipmentOptions(current => normalizeRentalFurniture([...current, ...normalizeRentalFurniture(info.listing.furniture)]));
       setStep(0); setError(""); setMessage(`已從 591 帶入 ${selectedKeys.length} 項資料與刊登網址／期限，已帶入的欄位不用重填。`);
     }} />
-    <div className="cr-steps" role="tablist" aria-label="編輯步驟">{["基本資料", "租金與條件", "網址、照片與內部資料"].map((label, index) => <button key={label} type="button" role="tab" aria-selected={step === index} onClick={() => setStep(index)}>{index + 1}. {label}</button>)}</div>
+    <WorkflowSteps steps={["基本資料", "租金與條件", "網址、照片與內部資料"]} shortLabels={["基本資料", "租金條件", "照片內部"]} current={step} onChange={setStep} completed={[0, 1, 2].filter(index => !missingFields.some(field => field.step === index))} disabled={busy || processing} label="租賃填寫步驟" />
     {visibleError && <div className="cr-error" id="company-rental-validation" role="alert" tabIndex={-1} ref={errorRef}><p>{visibleError}</p>{missingError && <><p>已填好的資料不用重寫。點下方按鈕可直接補填。</p><div className="cr-actions cr-missing-actions">{missingFields.map(field => <button type="button" key={field.key} onClick={() => goToMissingField(field)}>補{field.label}</button>)}</div></>}</div>}{message && <p className="cr-note" role="status">{message}</p>}
     <fieldset disabled={busy || processing} className="cr-form-body">
       {step === 0 && <><h3>先讓同事快速找到這間房</h3><div className="cr-form-grid">
-        <label className="cr-field cr-wide"><span>案件負責人＊</span><select {...requiredFieldProps("agentName")} value={form.agentUid || "__manual__"} onChange={event => chooseAgent(event.target.value)}><optgroup label="店內同事">{staffChoices.map(item => <option key={item.id} value={item.id} hidden={isHiddenColleague(item)} disabled={isHiddenColleague(item)}>{item.name}{item.id === user.uid ? "（我）" : ""}</option>)}</optgroup><option value="__manual__">自行輸入業務</option></select><small>{staffLoading ? "正在讀取店內同事名冊…" : "可選擇店內同事；名單以外的業務請選「自行輸入業務」。"}</small></label>
+        <div className="cr-field cr-wide"><SearchSelect label="案件負責人＊" value={form.agentUid || "__manual__"} allowCustom={false} options={[...staffChoices.filter(item => !isHiddenColleague(item)).map(item => ({ value: item.id, label: `${item.name}${item.id === user.uid ? "（我）" : ""}`, searchText: `${item.name} ${item.phone || ""} ${item.branch || ""}`, description: [item.branch, item.phone].filter(Boolean).join(" · ") })), { value: "__manual__", label: "自行輸入業務" }]} fallbackLabel={form.agentName} inputProps={requiredFieldProps("agentName")} onChange={chooseAgent} placeholder="輸入姓名、分店或電話找同事" help={staffLoading ? "正在讀取店內同事名冊…" : "選擇後帶入電話與分店；也可選「自行輸入業務」。"} disabled={busy || processing} /></div>
         {!form.agentUid && field("agentName", "業務姓名＊", { maxLength: 80 })}
         {field("agentPhone", "業務聯絡電話", { type: "tel", maxLength: 40 })}{field("branch", "所屬分店", { maxLength: 80 })}
         {field("title", "案名＊", { wide: true, placeholder: "例如：金捷市採光兩房平車", maxLength: 120 })}
@@ -185,7 +187,8 @@ export default function CompanyRentalEditor({ original, internal, sharedEquipmen
           {field("websiteExpiresOn", "網站刊登到期日", { type: "date", hint: form.websiteExpirySource === "591" ? "已從 591 刊登資料讀取，可自行修正；當天仍可刊登，超過日期後顯示目前無網站。" : "可手動填寫；沒有可靠的日期時保留空白，不用猜。" })}
           {field("mandateExpiresOn", "委託到期日", { type: "date", hint: "依實際委託填寫，提前 7 天在清單提醒；不會帶給客人。" })}
           <label className="cr-check cr-wide"><input type="checkbox" checked={form.websiteUnavailable} onChange={event => change("websiteUnavailable", event.target.checked)} />目前無網站（手動標記，原網址仍會保留）</label><label className="cr-check cr-wide"><input type="checkbox" checked={form.shareWebsite} onChange={event => change("shareWebsite", event.target.checked)} />分享文字附上物件網址</label>{field("albumUrl", "雲端相簿連結", { wide: true, type: "url", placeholder: "貼上 Google Drive 或其他相簿網址", hint: "相簿需先設定客人可開啟的權限。" })}<label className="cr-check cr-wide"><input type="checkbox" checked={form.shareAlbum} onChange={event => change("shareAlbum", event.target.checked)} />分享文字附上相簿連結</label></div>
-        <div className="cr-photo-head"><div><h3>物件照片（{photos.length}／10）</h3><small>自動縮小至每張 300KB 內，重複照片會跳過。</small></div><button type="button" onClick={() => fileInput.current?.click()}>＋ 選擇照片</button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden onChange={addPhotos} /></div>
+        <div className="cr-photo-head"><div><h3>物件照片（{photos.length}／10）</h3><small>自動縮小至每張 300KB 內，重複照片會跳過。</small></div></div>
+        <FileDropZone label="拖曳租賃照片到這裡" hint="最多 10 張；先壓縮與預覽，儲存案件時才上傳。手機可直接選照片。" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" maxFiles={10} maxBytes={25 * 1000 * 1000} disabled={busy || processing} onFiles={addPhotos} />
         <div className="cr-photo-grid">{photos.map(photo => <figure key={photo.id}><img src={photo.url} alt={photo.name} loading="lazy" /><figcaption>{Math.ceil(photo.size / 1000)} KB <button type="button" aria-label={`移除${photo.name}`} onClick={() => { dirty.current = true; setPhotos(current => current.filter(item => item.id !== photo.id)); if (photo.blob) { URL.revokeObjectURL(photo.url); localUrls.current.delete(photo.url); } }}>移除</button></figcaption></figure>)}</div>
         <div className="cr-internal"><h3>🔒 同事內部資料</h3><p>以下欄位只在平台內顯示，不會放進「分享給客人」文字。</p><div className="cr-form-grid">{field("landlordName", "屋主稱呼")}{field("landlordPhone", "屋主電話", { type: "tel" })}{field("parkingNumber", "汽車位編號")}{field("motorbikeParkingNumber", "機車位編號")}{field("viewingStatus", "帶看狀態", { options: ["待確認", "可預約帶看", "需先聯繫"] })}<RentalKeyPicker keyInfo={form.keyInfo} notes={form.viewingInstructions} onKeyChange={value => change("keyInfo", value)} onNotesChange={value => change("viewingInstructions", value)} notesProps={requiredFieldProps("viewingInstructions")} />{textarea("internalNotes", "內部備註")}</div></div>
         <label className="cr-field"><span>儲存後狀態</span><select value={status} onChange={event => { dirty.current = true; setStatus(event.target.value); }}>{Object.entries(COMPANY_RENTAL_STATUSES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>

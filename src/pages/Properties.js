@@ -1,3 +1,5 @@
+import SearchSelect from "../components/SearchSelect";
+import FileDropZone from "../components/FileDropZone";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -271,6 +273,8 @@ export default function Properties() {
   const [maxAge, setMaxAge] = useState("");
   const [businessAreaFilter, setBusinessAreaFilter] = useState("");
   const businessAreaOptions = useMemo(() => propertyBusinessAreaOptions(items), [items]);
+  const communityChoices = useMemo(() => uniqueChoices([...A7_COMMUNITY_NAMES, ...items.map(item => item.communityName)]), [items]);
+  const agentChoices = useMemo(() => uniqueChoices(items.map(item => item.agentInfo)).map(value => ({ value, label: displayPropertyAgent(value) })), [items]);
   const [cityFilter, setCityFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [websiteFilter, setWebsiteFilter] = useState("all");
@@ -533,33 +537,33 @@ export default function Properties() {
     }
   };
 
-  const handleSheetUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (files.length === 0 || !editingId) return;
+  const uploadSheets = async (files) => {
+    const propertyId = editingId;
+    if (files.length === 0 || !propertyId || uploadingSheet) return;
     setUploadingSheet(true);
     try {
       const newFiles = [];
       for (const file of files) {
         const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fff]/g, "_");
-        const storageRef = ref(storage, `properties/${editingId}/sheets/${Date.now()}_${safeName}`);
+        const storageRef = ref(storage, `properties/${propertyId}/sheets/${crypto.randomUUID()}_${safeName}`);
         await uploadBytes(storageRef, file);
         const url = await getDownloadURL(storageRef);
         newFiles.push({ url, name: file.name, type: file.type, uploadedAt: new Date().toISOString() });
       }
-      const nextFiles = [...(form.sheetFiles || []), ...newFiles];
-      await update(editingId, { sheetFiles: nextFiles });
-      setForm((f) => ({ ...f, sheetFiles: nextFiles }));
+      const batch = writeBatch(db);
+      batch.update(doc(db, "properties", propertyId), { sheetFiles: arrayUnion(...newFiles) });
+      await batch.commit();
+      updateReadCache("collection::properties", current => current.map(item => item.id === propertyId ? { ...item, sheetFiles: mergeFloorplanFiles(item.sheetFiles, newFiles) } : item));
+      setForm(current => current.id === propertyId ? { ...current, sheetFiles: mergeFloorplanFiles(current.sheetFiles, newFiles) } : current);
     } catch (err) {
       console.error(err);
       alert("上傳失敗，請確認 Firebase Storage 是否已啟用。");
+      setUploadingSheet(false); return false;
     }
     setUploadingSheet(false);
   };
 
-  const handleFloorplanUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
+  const uploadFloorplans = async (files) => {
     const propertyId = editingId;
     if (files.length === 0 || !propertyId || uploadingFloorplan) return;
     const validationError = validateFloorplanFiles(files);
@@ -608,6 +612,7 @@ export default function Properties() {
     } catch (error) {
       console.error("格局圖上傳失敗", error);
       alert("格局圖上傳失敗，請確認登入狀態或稍後重試。若仍失敗，請檢查 Firebase Storage 設定。");
+      return false;
     } finally {
       setUploadingFloorplan(false);
     }
@@ -1218,7 +1223,7 @@ export default function Properties() {
         type="file"
         accept=".jpg,.jpeg,.png,.webp,.heic,image/jpeg,image/png,image/webp,image/heic"
         multiple
-        onChange={handleFloorplanUpload}
+        onChange={event => { const files = [...event.target.files]; event.target.value = ""; uploadFloorplans(files); }}
         disabled={uploadingFloorplan}
         aria-label="選擇格局圖"
         style={{ display: "none" }}
@@ -1651,6 +1656,7 @@ export default function Properties() {
               {detailTab === "files" && <>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
+                <FileDropZone label="拖曳物調資料到這裡" hint="PDF 或圖片，可多選；放開即上傳至本物件。手機請點選擇檔案。" accept=".pdf,application/pdf,image/*" disabled={uploadingSheet} onFiles={uploadSheets} />
                 <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => setSingleViewingPdfId(editingId)}>製作最新售價 PDF</button>
                 {singleViewingPdfId === editingId && <PropertyViewingPdf properties={[{ ...form, id: editingId }]} onClose={() => setSingleViewingPdfId(null)} onGenerated={pdfLibrary.saveGenerated} />}
                 {(form.sheetFiles || []).length === 0 ? (
@@ -1666,6 +1672,7 @@ export default function Properties() {
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>格局圖（{(form.floorplanFiles || []).length}）</div>
+                <FileDropZone label="拖曳格局圖到這裡" hint="JPG、PNG、WebP、HEIC，每張限 10MB；放開即上傳，並沿用門牌配對。" accept="image/jpeg,image/png,image/webp,image/heic" maxBytes={10 * 1024 * 1024} disabled={uploadingFloorplan} onFiles={uploadFloorplans} />
                 <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 9 }}>
                   {floorplanAddressKey(form.address)
                     ? "上傳後會記住此完整門牌；也可選擇一張圖，套用到其他案件。"
@@ -1784,11 +1791,7 @@ export default function Properties() {
 
             <div style={fieldStyle2}>
               <div className="form-field">
-                <label>社區名稱</label>
-                <input list="a7-community-options" value={form.communityName} onChange={(e) => setForm({ ...form, communityName: e.target.value })} placeholder="輸入或選擇社區名稱" />
-                <datalist id="a7-community-options">
-                  {A7_COMMUNITY_NAMES.map((name) => <option key={name} value={name} />)}
-                </datalist>
+                <SearchSelect label="社區名稱" value={form.communityName} options={communityChoices} onChange={value => setForm(current => ({ ...current, communityName: value }))} placeholder="輸入一個字找社區，也可自行輸入" />
               </div>
               <div className="form-field">
                 <label>商圈／區域</label>
@@ -1901,8 +1904,7 @@ export default function Properties() {
             </div>
 
             <div className="form-field">
-              <label>開發姓名（含電話）</label>
-              <input value={form.agentInfo} onChange={(e) => setForm({ ...form, agentInfo: e.target.value })} />
+              <SearchSelect label="負責業務（含電話）" value={form.agentInfo} options={agentChoices} onChange={value => setForm(current => ({ ...current, agentInfo: value }))} placeholder="輸入姓名或電話，找已記錄的業務" />
             </div>
             <div className="form-field">
               <label>官網點閱網址</label>
@@ -1958,10 +1960,7 @@ export default function Properties() {
                       </div>
                     </div>
                   ))}
-                  <label className="btn ghost" style={{ cursor: "pointer", display: "inline-block" }}>
-                    {uploadingSheet ? "上傳中…" : "新增檔案"}
-                    <input type="file" accept=".pdf,image/*" multiple onChange={handleSheetUpload} style={{ display: "none" }} disabled={uploadingSheet} />
-                  </label>
+                  <FileDropZone label="拖曳物調資料到這裡" hint="PDF 或圖片，可多選；放開即上傳至本物件。手機請點選擇檔案。" accept=".pdf,application/pdf,image/*" disabled={uploadingSheet} onFiles={uploadSheets} />
                 </>
               )}
             </div>
@@ -1969,9 +1968,7 @@ export default function Properties() {
             {editingId && (
               <div className="form-field">
                 <label>格局圖</label>
-                <label htmlFor="property-floorplan-upload" className="btn ghost" style={{ cursor: uploadingFloorplan ? "wait" : "pointer", width: "fit-content", marginBottom: 10 }}>
-                  {uploadingFloorplan ? "格局圖上傳中…" : "＋ 上傳格局圖"}
-                </label>
+                <FileDropZone label="拖曳格局圖到這裡" hint="JPG、PNG、WebP、HEIC，每張限 10MB；放開即上傳，並沿用門牌配對。" accept="image/jpeg,image/png,image/webp,image/heic" maxBytes={10 * 1024 * 1024} disabled={uploadingFloorplan} onFiles={uploadFloorplans} />
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {(form.floorplanFiles || []).map((file, idx) => (
                     <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="btn ghost" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", gap: 6, maxWidth: 180 }}>

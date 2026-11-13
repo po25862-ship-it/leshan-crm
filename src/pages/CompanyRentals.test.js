@@ -53,20 +53,21 @@ const fieldLabel = text => [...container.querySelectorAll("label")].find(node =>
 function select(element, value) { act(() => { element.value = value; element.dispatchEvent(new Event("change", { bubbles: true })); }); }
 test("new rental defaults to staff picker and saves another responsible colleague", async () => {
   render(); await click("＋ 新增租賃");
-  const picker = fieldLabel("案件負責人＊").querySelector("select");
-  expect(picker.value).toBe("staff"); expect(picker.textContent).toContain("同事乙");
-  expect(picker.textContent).not.toMatch(/我會寫扣|po25862z/);
-  select(picker, "staff-b"); await click("存成草稿");
+  const picker = container.querySelector('input[role="combobox"]');
+  expect(picker.value).toBe("小林（我）");
+  await act(async () => container.querySelector('.search-select-toggle').click());
+  expect(container.querySelector('.search-select-options').textContent).not.toMatch(/我會寫扣|po25862z/);
+  await act(async () => container.querySelector('[role="option"][aria-label="同事乙"]').click()); await click("存成草稿");
   expect(saveCompanyRental.mock.calls[0][0].form).toEqual(expect.objectContaining({ agentUid: "staff-b", agentName: "同事乙", agentPhone: "02-12345678" }));
 });
 
 test("an existing hidden assignee is preserved on save but cannot be chosen for a new assignment", async () => {
   mockRows[0].agentUid = "mTfncojmWcgx3XN3JYceTJFJtw03"; mockRows[0].agentName = "我會寫扣";
   render(); await click("查看資料"); await click("編輯資料");
-  const picker = fieldLabel("案件負責人＊").querySelector("select");
-  expect(picker.value).toBe(mockRows[0].agentUid);
-  expect(picker.selectedOptions[0].hidden).toBe(true); expect(picker.selectedOptions[0].disabled).toBe(true);
-  expect([...picker.options].filter(option => !option.hidden).map(option => option.textContent)).not.toContain("我會寫扣");
+  const picker = container.querySelector('input[role="combobox"]');
+  expect(picker.value).toBe("我會寫扣");
+  await act(async () => container.querySelector('.search-select-toggle').click());
+  expect(container.querySelector('.search-select-options').textContent).not.toContain("我會寫扣");
   await click("存成草稿");
   expect(saveCompanyRental.mock.calls[0][0].form.agentUid).toBe(mockRows[0].agentUid);
 });
@@ -116,7 +117,7 @@ test("expired website stays stored but is replaced with no-website text in detai
 });
 test("rental editor saves independent mandate and website dates and resets old URL expiry after a URL change", async () => {
   render(); await click("＋ 新增租賃");
-  await act(async () => [...container.querySelectorAll("[role=tab]")].find(node => node.textContent === "3. 網址、照片與內部資料").click());
+  await act(async () => [...container.querySelectorAll(".workflow-steps button")].find(node => node.getAttribute("aria-label") === "3. 網址、照片與內部資料").click());
   input(fieldLabel("物件網址").querySelector("input"), "https://rent.591.com.tw/22258856");
   input(fieldLabel("網站刊登到期日").querySelector("input"), "2026-11-29");
   input(fieldLabel("委託到期日").querySelector("input"), "2027-01-31");
@@ -138,9 +139,10 @@ test("today's mandate date reminds staff without hiding the website before its o
 });
 test("manual responsible agent and two separate service fees are retained on draft save", async () => {
   render(); await click("＋ 新增租賃");
-  select(fieldLabel("案件負責人＊").querySelector("select"), "__manual__");
+  await act(async () => container.querySelector(".search-select-toggle").click());
+  await act(async () => container.querySelector('[role="option"][aria-label="自行輸入業務"]').click());
   input(fieldLabel("業務姓名＊").querySelector("input"), "自填業務");
-  await act(async () => [...container.querySelectorAll("[role=tab]")].find(node => node.textContent === "2. 租金與條件").click());
+  await act(async () => [...container.querySelectorAll(".workflow-steps button")].find(node => node.getAttribute("aria-label") === "2. 租金與條件").click());
   input(fieldLabel("買方服務費（對客人顯示）").querySelector("input"), "半個月租金");
   input(fieldLabel("賣方服務費（僅同仁可見）").querySelector("input"), "屋主約定 20,000 元");
   await click("存成草稿");
@@ -153,7 +155,7 @@ test("customer share preview never includes seller fee from colleague-only detai
   expect(container.querySelector("textarea[aria-label='分享文字']").value).not.toMatch(/屋主私約費用|未拆分舊費用|賣方服務費/);
 });
 
-async function rentalConditions() { await act(async () => [...container.querySelectorAll("[role=tab]")].find(node => node.textContent === "2. 租金與條件").click()); }
+async function rentalConditions() { await act(async () => [...container.querySelectorAll(".workflow-steps button")].find(node => node.getAttribute("aria-label") === "2. 租金與條件").click()); }
 const equipmentCheckbox = name => [...container.querySelectorAll(".cr-checks label")].find(label => label.textContent === name)?.querySelector("input");
 test("custom equipment is added checked, can be unchecked and selected again with Enter, and saved once", async () => {
   render(); await click("＋ 新增租賃"); await rentalConditions();
@@ -287,7 +289,7 @@ test("after a 591 import only missing private details are requested, and shortcu
   input(fieldLabel("完整門牌＊（內部）").querySelector("input"),"測試完整門牌");
   expect(container.querySelector("[role=alert]").querySelector("p").textContent).toBe("還需要補上：帶看方式。");
   await click("補帶看方式");
-  expect([...container.querySelectorAll(".cr-steps button")].find(node=>node.getAttribute("aria-selected")==="true").textContent).toContain("3.");
+  expect([...container.querySelectorAll(".workflow-steps button")].find(node=>node.getAttribute("aria-current")==="step").getAttribute("aria-label")).toContain("3.");
   expect(document.activeElement.getAttribute("data-rental-field")).toBe("viewingInstructions");
   input(fieldLabel("帶看方式＊").querySelector("textarea"),"請先聯繫負責同事");
   expect(container.querySelector("[role=alert]")).toBeNull();

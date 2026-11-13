@@ -1,6 +1,7 @@
 import React, { useId, useState } from "react";
 import { choiceKey, choiceText, propertyTags, uniqueChoices, filterPropertyChoices, PROPERTY_TAG_LENGTH, PROPERTY_TAG_LIMIT, VIEWING_METHOD_LENGTH } from "../lib/propertyChoices";
 import "./PropertyChoices.css";
+import SearchSelect from "../components/SearchSelect";
 
 export default function PropertyTagPicker({ value, choices = [], onChange, label = "小標籤", help, creatable = true, limit = PROPERTY_TAG_LIMIT }) {
   const id = useId();
@@ -45,21 +46,7 @@ export default function PropertyTagPicker({ value, choices = [], onChange, label
 }
 
 export function PropertyViewingMethodField({ value, choices = [], onChange }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const id = useId();
-  const matches = filterPropertyChoices(choices, query);
-  return <div className="form-field property-viewing-method">
-    <label htmlFor="property-viewing-method">帶看方式</label>
-    <div className="property-viewing-input-row"><input id="property-viewing-method" value={value || ""} maxLength={VIEWING_METHOD_LENGTH} placeholder="自行輸入，或從常用選取" onChange={event => onChange(event.target.value)} /><button type="button" className="property-viewing-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>常用 <span aria-hidden="true">{open ? "▴" : "▾"}</span></button></div>
-    {open && <div id={id} className="property-viewing-options">
-      {choices.length > 5 && <input aria-label="搜尋常用帶看方式" placeholder="輸入文字找方式" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }} />}
-      {matches.slice(0, 8).map(method => <button type="button" key={choiceKey(method)} onClick={() => { onChange(method); setOpen(false); setQuery(""); }}>{method}</button>)}
-      {!matches.length && <small>{choices.length ? "沒有符合的方式。" : "儲存帶看方式後，就會記在這裡。"}</small>}
-      {matches.length > 8 && <small>輸入更多文字縮小範圍。</small>}
-    </div>}
-    <small>儲存後記住，大家下次都能選用。</small>
-  </div>;
+  return <div className="form-field property-viewing-method"><SearchSelect label="帶看方式" value={value} options={choices} onChange={onChange} maxLength={VIEWING_METHOD_LENGTH} placeholder="輸入文字找常用方式，或自行填寫" help="儲存後記住，大家下次都能選用。" /></div>;
 }
 
 export function PropertyTagBadges({ value }) {
