@@ -71,7 +71,7 @@ export default function TextSizeSettings() {
       <div className="text-size-heading"><strong>字體大小</strong><button type="button" aria-label="關閉字體設定" onClick={() => { setOpen(false); buttonRef.current?.focus(); }}>×</button></div>
       <fieldset><legend>選擇適合你的閱讀大小</legend>
         <div className="text-size-options">{TEXT_SIZE_OPTIONS.map((option) => <label key={option.value} data-selected={size === option.value}>
-          <input type="radio" name={`text-size-${id}`} value={option.value} checked={size === option.value} onChange={() => selectSize(option.value)} />
+          <input type="radio" aria-label={option.label} name={`text-size-${id}`} value={option.value} checked={size === option.value} onChange={() => selectSize(option.value)} />
           <span className={`text-size-example text-size-example--${option.value}`} aria-hidden="true">字</span>
           <span>{option.label}</span>
         </label>)}</div>

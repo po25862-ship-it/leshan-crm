@@ -35,7 +35,7 @@ test("invalid, corrupt and unavailable storage safely fall back to standard", ()
 
 test("the three radio choices immediately apply and survive remounting", () => {
   render(); open();
-  expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(3);
+  expect([...container.querySelectorAll('input[type="radio"]')].map((input) => input.getAttribute("aria-label"))).toEqual(["標準", "大", "特大"]);
   const draft = container.querySelector('input[aria-label="未儲存內容"]');
   draft.value = "還沒儲存的客需";
   select("xlarge");
