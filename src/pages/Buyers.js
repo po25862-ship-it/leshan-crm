@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useId } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useCollection } from "../hooks/useCollection";
@@ -11,7 +11,8 @@ import { useAuth } from "../AuthContext";
 import { useNeedsCollection } from "../hooks/useNeedsCollection";
 import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { timestampToMillis } from "../lib/propertyPresentation";
-import { choiceKey, choiceText, uniqueChoices } from "../lib/propertyChoices";
+import { uniqueChoices } from "../lib/propertyChoices";
+import SearchSelect from "../components/SearchSelect";
 import ContactConversationAnalyses from "./ContactConversationAnalyses";
 
 const emptyForm = {
@@ -25,36 +26,11 @@ const emptyForm = {
 };
 
 function BuyerSourceField({ value, choices, onChange }) {
-  const id = useId();
-  const [custom, setCustom] = useState(false);
-  const current = choiceText(value);
-  const currentKey = choiceKey(current);
-  const selected = choices.find((source) => choiceKey(source) === currentKey) || current;
-  const options = selected && !choices.includes(selected) ? [selected, ...choices] : choices;
-
-  const selectSource = (event) => {
-    const option = event.target.value;
-    setCustom(option === "custom");
-    onChange(option.startsWith("source:") ? option.slice("source:".length) : "");
-  };
-
-  return (
-    <div className="form-field">
-      <label htmlFor={id}>客戶來源</label>
-      <select id={id} value={custom ? "custom" : selected ? `source:${selected}` : ""} onChange={selectSource}>
-        <option value="">選擇來源（選填）</option>
-        {options.map((source) => <option key={source} value={`source:${source}`}>{source}</option>)}
-        <option value="custom">＋ 自行新增來源</option>
-      </select>
-      {custom && (
-        <div style={{ marginTop: 10 }}>
-          <label htmlFor={`${id}-custom`}>新來源</label>
-          <input id={`${id}-custom`} value={value || ""} onChange={(event) => onChange(event.target.value)} placeholder="例如：591 智富館、朋友介紹" />
-          <small>儲存買方後，下次就能選用這個來源。</small>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="form-field"><SearchSelect
+    label="客戶來源" value={value || ""} options={choices} onChange={onChange}
+    placeholder="搜尋已記住的來源，或直接輸入新來源"
+    help="原本記住的來源會保留。沒有的直接輸入，儲存買方後，下次就能搜尋選用。"
+  /></div>;
 }
 
 function BuyerDetailValue({ label, value }) {
