@@ -1,7 +1,7 @@
 import SearchSelect from "../components/SearchSelect";
 import FileDropZone from "../components/FileDropZone";
 import PropertyRentalFields from "../components/PropertyRentalFields";
-import { propertyRentalIncome, propertyRentalIncomeFields, propertyRentalIncomeImportFields, formatPropertyMonthlyRent, formatPropertyRentalYield } from "../lib/propertyRentalIncome";
+import { propertyRentalIncome, propertyRentalIncomeFields, propertyRentalIncomeImportFields, formatPropertyMonthlyRent, formatPropertyRentalYield, formatPropertyLease, propertyRentFeeNote } from "../lib/propertyRentalIncome";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -124,6 +124,9 @@ const emptyForm = {
   parkingCount: "",
   totalPrice: "",
   monthlyRent: "",
+  leaseStartDate: "",
+  leaseEndDate: "",
+  rentFeeNote: "",
   managementFee: "",
   occupancy: "",
   laneWidth: "",
@@ -973,6 +976,14 @@ export default function Properties() {
     let relinkedCount = 0;
     const finalMatchedIds = new Set();
 
+    // Validate the combined lease before constructing any writes. Partial Excel
+    // columns must not create a reversed lease against manually saved dates.
+    try {
+      clearRows.forEach(({ row, existing }) => propertyRentalIncomeFields({ ...existing, ...row }));
+      newRows.forEach(row => propertyRentalIncomeFields(row));
+      ambiguousPairs.forEach((pair, idx) => propertyRentalIncomeFields(decisions[idx] === "merge" ? { ...pair.existing, ...pair.row } : pair.row));
+    } catch (err) { alert(`匯入資料有誤：${err.message}`); return; }
+
     const applyUpdate = (row, existing, relinked) => {
       finalMatchedIds.add(existing.id);
       const { address, notes, totalPrice, ...rest } = row;
@@ -1164,7 +1175,7 @@ export default function Properties() {
     const HEADER = [
       "店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向",
       "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名",
-      "官網點閱網址", "詳細資料表", "備註", "管理費", "月租金（元／月）", "年租金報酬率（%・未扣費用）",
+      "官網點閱網址", "詳細資料表", "備註", "管理費", "月租金（元／月）", "年租金報酬率（%・未扣費用）", "租金費用說明", "租約起日", "租約到期日",
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1214,6 +1225,7 @@ export default function Properties() {
           getPropertyManagementFee(p),
           propertyRentalIncome(p).monthlyRent ?? "",
           propertyRentalIncome(p).annualYield === null ? "" : Number(propertyRentalIncome(p).annualYield.toFixed(2)),
+          p.rentFeeNote || "", p.leaseStartDate || "", p.leaseEndDate || "",
         ]);
       });
       const sheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -1651,6 +1663,8 @@ export default function Properties() {
                 <DetailValue label="管理費" value={formatPropertyManagementFee(form) || "未提供"} />
                 <DetailValue label="月租金" value={formatPropertyMonthlyRent(form)} />
                 <DetailValue label="年租金報酬率（未扣費用）" value={formatPropertyRentalYield(form)} />
+                <DetailValue label="租金費用說明" value={propertyRentFeeNote(form)} />
+                <DetailValue label="租期" value={formatPropertyLease(form)} />
                 <DetailValue label="車位價格" value={formatPropertyParkingPrice(form)} />
                 <DetailValue label="帶看確認" value={({ available: "已確認可帶看", appointment: "需先預約確認", unavailable: "目前無法帶看" })[form.viewingStatus] || "尚未確認"} />
                 <DetailValue label="帶看方式" value={form.viewingMethod} />
@@ -1669,7 +1683,7 @@ export default function Properties() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
                 <FileDropZone label="拖曳物調資料到這裡" hint="PDF、JPG、PNG、WebP、HEIC，每份限 10MB；可多選，放開即上傳本物件。" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" maxBytes={10 * 1024 * 1024} disabled={uploadingSheet} onFiles={uploadSheets} />
-                <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => setSingleViewingPdfId(editingId)}>製作最新售價 PDF</button>
+                <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => setSingleViewingPdfId(editingId)}>製作分享物調</button>
                 {singleViewingPdfId === editingId && <PropertyViewingPdf properties={[{ ...form, id: editingId }]} onClose={() => setSingleViewingPdfId(null)} onGenerated={pdfLibrary.saveGenerated} />}
                 {(form.sheetFiles || []).length === 0 ? (
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未上傳資料表</div>
@@ -1680,7 +1694,7 @@ export default function Properties() {
                     ))}
                   </div>
                 )}
-                {(form.sheetFiles || []).length > 0 && <p style={{ fontSize: 12, color: "var(--muted)" }}>上方檔案保留原始物調；分享給客人前，請用「製作最新售價 PDF」套用目前價格。</p>}
+                {(form.sheetFiles || []).length > 0 && <p style={{ fontSize: 12, color: "var(--muted)" }}>上方檔案保留原始物調；分享給客人前，請用「製作分享物調」套用目前售價、租金與租期。</p>}
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>格局圖（{(form.floorplanFiles || []).length}）</div>
@@ -1909,7 +1923,7 @@ export default function Properties() {
                 <label>空／自</label>
                 <input value={form.occupancy} onChange={(e) => setForm({ ...form, occupancy: e.target.value })} placeholder="空屋／自住／出租中" />
               </div>
-              <PropertyRentalFields property={form} onChange={monthlyRent => setForm(current => ({ ...current, monthlyRent }))} />
+              <PropertyRentalFields property={form} onChange={fields => setForm(current => ({ ...current, ...fields }))} />
               <div className="form-field">
                 <label>巷寬</label>
                 <input value={form.laneWidth} onChange={(e) => setForm({ ...form, laneWidth: e.target.value })} />
@@ -2078,7 +2092,7 @@ export default function Properties() {
                 </div>
               )}
               {formatUnitPrice(p, unitPriceBasis) !== "未提供" && <div className="meta">{unitPriceBasis === "net" ? "扣車位單價" : "含車簡算單價"}：{formatUnitPrice(p, unitPriceBasis)}</div>}
-              {propertyRentalIncome(p).monthlyRent !== null && <div className="property-rental-inline"><span>月租金 <strong>{formatPropertyMonthlyRent(p)}</strong></span><span>年租金報酬率 <strong>{formatPropertyRentalYield(p)}</strong>（未扣費用）</span></div>}
+              {propertyRentalIncome(p).monthlyRent !== null && <div className="property-rental-inline"><span>月租金 <strong>{formatPropertyMonthlyRent(p)}</strong>（{propertyRentFeeNote(p)}）</span><span>年租金報酬率 <strong>{formatPropertyRentalYield(p)}</strong>（未扣費用）</span><span>租期 {formatPropertyLease(p)}</span></div>}
               {(p.mainBuildingPing != null || p.auxiliaryBuildingPing != null || p.commonAreaPing != null || p.parkingPing != null) && (
                 <div className="meta">
                   {p.mainBuildingPing != null && <>主建 {p.mainBuildingPing} 坪　</>}

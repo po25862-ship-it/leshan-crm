@@ -113,3 +113,14 @@ test.each([
 ])("缺少有效降價或異動紀錄與目前價格不一致時不產生通知 %j", (lastPriceChange) => {
   expect(buildPropertyShareText([{ ...flat, lastPriceChange }], DEFAULT_PRICE_DROP_INTRO, "06459", false, "price-drop")).toBe("");
 });
+
+test("income-property copy shows approved rent, lease, fees and gross yield without private fields or a precise door number", () => {
+  const property = { id: 'income', title: 'A7玉子園金店面', address: '桃園市龜山區樂學路472號', totalPrice: 2788, monthlyRent: 46649, leaseStartDate: '2025-06-25', leaseEndDate: '2029-07-31', rentFeeNote: '含稅、含管理費', occupancy: '出租', titlePing: 44.6, parkingPing: 7.482, sellerName: '私人姓名', notes: '內部備註', developer: '內部電話', websiteUrl: 'https://www.twhg.com.tw/buy/DD02603101?agid=06459' };
+  const text = buildPropertyShareText([property], '收租介紹', '12345', false, 'income');
+  ['【售價】2,788 萬', '【月租金】46,649 元，含稅、含管理費', '2025/06/25～2029/07/31', '55.98 萬', '約 2.01%', '尚未扣除成本', '含車位 7.48 坪', '扣車面積約 37.12 坪', 'agid=12345'].forEach(value => expect(text).toContain(value));
+  ['472號', '私人姓名', '內部備註', '內部電話', '保證', '穩定'].forEach(value => expect(text).not.toContain(value));
+  expect(buildPropertyShareText([{ ...property, totalPrice: 3000 }], '', '', false, 'income')).toContain('1.87%');
+  const unknown = buildPropertyShareText([{ ...property, occupancy: '', leaseStartDate: '', leaseEndDate: '', rentFeeNote: '' }], '', '', false, 'income');
+  expect(unknown).toContain('租期待確認'); expect(unknown).toContain('包含費用待確認'); expect(unknown).not.toContain('｜出租中');
+  expect(buildPropertyShareText([{ monthlyRent: '' }, { monthlyRent: 0 }], '', '', false, 'income')).toBe('');
+});

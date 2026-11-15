@@ -6,6 +6,9 @@ import { useAuth } from "../AuthContext";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { pdfLibraryError } from "../lib/propertyPdfLibrary";
 import { readLatestPdfProperties } from "../lib/propertyPdfLatest";
+import { renderAnnotatedPropertyImage } from "../lib/propertyAnnotatedImage";
+
+const isImageSheet = file => file && (/^image\//i.test(file.type) || /\.(?:jpe?g|png|webp|heic|heif|gif|tiff?)$/i.test(file.name));
 
 export default function PropertyViewingPdf({ properties, buyerId, onClose, onGenerated }) {
   const { user } = useAuth();
@@ -15,22 +18,29 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [imageResult, setImageResult] = useState(null);
   const [storageNotice, setStorageNotice] = useState("");
   const [storageWarning, setStorageWarning] = useState("");
   const requestId = useRef(0);
   const plan = getPropertySheetPlan(properties);
-  const selectionKey = JSON.stringify(properties.map((p) => [p.id, p.totalPrice, p.sheetFiles, p.sheetFileUrl]));
+  const selectionKey = JSON.stringify(properties.map((p) => [p.id, p.totalPrice, p.monthlyRent, p.rentFeeNote, p.leaseStartDate, p.leaseEndDate, p.sheetFiles, p.sheetFileUrl]));
   const unavailable = plan.filter((entry) => entry.invalid);
   const summaryCount = plan.filter((entry) => entry.missing).length;
   const fileCount = plan.reduce((count, entry) => count + entry.files.length, 0);
+  const canCreateImage = plan.length === 1 && !plan[0].invalid && isImageSheet(plan[0].files[0]);
 
   useEffect(() => () => {
     if (result?.url) URL.revokeObjectURL(result.url);
   }, [result]);
+  useEffect(() => () => {
+    if (imageResult?.url) URL.revokeObjectURL(imageResult.url);
+  }, [imageResult]);
 
   useEffect(() => {
     requestId.current += 1;
     setResult(null);
+    setImageResult(null);
+    setError("");
     setBusy(false);
     setStorageNotice("");
     setStorageWarning("");
@@ -48,7 +58,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
     try {
       const latest = await readLatestPdfProperties(properties);
       if (request !== requestId.current) return;
-      const merged = await mergePropertySheets(latest, (url) => downloadPropertySheet(url, user), undefined, { latestPrices: true });
+      const merged = await mergePropertySheets(latest, (url) => downloadPropertySheet(url, user), undefined, { latestPrices: true, rentalInfo: true });
       if (request !== requestId.current) return;
       const url = URL.createObjectURL(new Blob([merged.bytes], { type: "application/pdf" }));
       const filename = `帶看物件資料表_${safeBuyerName ? `${safeBuyerName}_` : ""}${todayStr()}_${properties.length}間.pdf`;
@@ -74,6 +84,28 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
     }
   };
 
+  const createImage = async () => {
+    if (busy || !canCreateImage) return;
+    const request = ++requestId.current;
+    setBusy(true); setError(""); setImageResult(null);
+    try {
+      const latest = await readLatestPdfProperties(properties);
+      if (request !== requestId.current) return;
+      const latestPlan = getPropertySheetPlan(latest), file = latestPlan[0]?.files[0];
+      if (!isImageSheet(file) || !file.url) throw new Error("最新資料表不是圖片，請使用製作 PDF。");
+      const loaded = await downloadPropertySheet(file.url, user);
+      if (request !== requestId.current) return;
+      const image = await renderAnnotatedPropertyImage(latest[0], file, loaded);
+      if (request !== requestId.current) return;
+      const filename = `${latest[0].listingNo || "物件"}_分享物調.png`.replace(/[\\/:*?"<>|]/g, "");
+      setImageResult({ url: URL.createObjectURL(new Blob([image.bytes], { type: "image/png" })), filename, rentalPlacement: image.rentalPlacement });
+    } catch (err) {
+      if (request === requestId.current) setError(err.message || "分享圖片製作失敗，請確認原始資料表。");
+    } finally {
+      if (request === requestId.current) setBusy(false);
+    }
+  };
+
   return (
     <section className="panel property-viewing-pdf" aria-label="合併帶看物件資料表">
       <div className="property-viewing-pdf-head">
@@ -82,6 +114,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
           {buyerName && <p>準備介紹給：{buyerName}</p>}
           <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留；完成後自動暫存在這台裝置，不會上傳合併檔。</p>
           <p>製作時重新讀取最新售價，以紅色粗體大字標示；有調價時將原表舊價打叉，不顯示調價日期。無法確認售價位置的格式，會在頁首另列最新售價，避免蓋到其他資料。</p>
+          <p>有填租金或租期的物件，會一起加上月租金、包含費用與租期。原物調有合適的空白欄位就放入欄位；其他格式另加資訊列，保留原始內容。單間圖片物調也可製作 PNG 傳給客人。</p>
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>關閉</button>
       </div>
@@ -110,19 +143,24 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
       {error && <p className="property-viewing-pdf-warning" role="alert">{error}</p>}
       <div className="property-viewing-pdf-actions">
         <button type="button" className="btn" onClick={createPdf} disabled={busy || unavailable.length > 0}>
-          {busy ? "正在合併資料表…" : "製作合併 PDF"}
+          {busy ? "正在製作資料表…" : "製作合併 PDF"}
         </button>
+        {canCreateImage && <button type="button" className="btn ghost" onClick={createImage} disabled={busy}>製作分享圖片 PNG</button>}
         {result && (
           <>
             <a className="btn" href={result.url} target="_blank" rel="noreferrer">開啟 PDF／列印</a>
             <a className="btn ghost" href={result.url} download={result.filename}>下載 PDF</a>
           </>
         )}
+        {imageResult && <a className="btn" href={imageResult.url} download={imageResult.filename}>下載分享圖片</a>}
       </div>
+      {imageResult && <p className="property-viewing-pdf-ready" role="status">分享圖片已完成，可下載後傳給客人。{imageResult.rentalPlacement === "cell" ? "租金與租期已放入物調空白欄位。" : imageResult.rentalPlacement === "header" ? "租金與租期已放在新增的資訊列。" : ""}原始檔保留，沒有另存到雲端。</p>}
       {result && <p className="property-viewing-pdf-ready" role="status">已整理 {result.fileCount} 份原始資料表、{result.summaryCount} 頁系統摘要，共 {result.pageCount} 頁。開啟後可一次列印全部頁面。</p>}
       {result?.priceOverlayCount > 0 && <p className="property-viewing-pdf-ready">{result.priceOverlayCount} 頁已在原售價欄標示最新售價；價格相同時不畫叉。</p>}
       {result?.priceHeaderCount > 0 && <p className="property-viewing-pdf-summary-note">{result.priceHeaderCount} 頁未能確認原售價位置，已在頁首清楚標示最新售價。</p>}
-      {result && <p className="property-viewing-pdf-summary-note">已下載或暫存的 PDF 不會自行改價；之後若有調價，請重新製作。</p>}
+      {result?.rentalOverlayCount > 0 && <p className="property-viewing-pdf-ready">{result.rentalOverlayCount} 頁已在物調空白欄位標示租金與租期。</p>}
+      {result?.rentalHeaderCount > 0 && <p className="property-viewing-pdf-summary-note">{result.rentalHeaderCount} 頁已另加租金與租期資訊列。</p>}
+      {(result || imageResult) && <p className="property-viewing-pdf-summary-note">已下載或暫存的檔案不會自行更新；售價、租金或租期變更後，請重新製作。</p>}
       {storageNotice && <p className="property-viewing-pdf-ready" role="status">{storageNotice}</p>}
       {storageWarning && <p className="property-viewing-pdf-warning" role="alert">{storageWarning} 仍可使用上方的下載按鈕保留檔案。</p>}
     </section>

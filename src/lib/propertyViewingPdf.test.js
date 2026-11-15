@@ -210,3 +210,28 @@ test("reports which file failed instead of returning a partial PDF", async () =>
     { id: "one", title: "第一間", sheetFiles: [{ url: "https://example.com/broken.pdf", name: "broken.pdf" }] },
   ], async () => { throw new Error("檔案下載失敗"); })).rejects.toThrow("第一間」的「broken.pdf");
 });
+
+describe('rental annotations', () => {
+  const p = { id: 'rent', title: '收租物件', monthlyRent: 46649, rentFeeNote: '含稅、含管', leaseStartDate: '2025-06-25', leaseEndDate: '2029-07-31' };
+  test('uses an empty image cell, and falls back to a separate band for an occupied or unreadable layout', async () => {
+    for (const rect of [{ x: .45, y: .16, width: .25, height: .07 }, null]) {
+      const renderRental = jest.fn(async () => tinyPng);
+      const result = await mergePropertySheets([{ ...p, sheetFiles: [{ url: 'a.png' }] }], async () => tinyPng, undefined,
+        { rentalInfo: true, renderRental, locateRental: async () => rect });
+      expect(result).toMatchObject({ pageCount: 1, rentalOverlayCount: rect ? 1 : 0, rentalHeaderCount: rect ? 0 : 1, priceHeaderCount: 0 });
+      expect(renderRental.mock.calls[0][0].property.monthlyRent).toBe(46649);
+    }
+  });
+  test('summary and every PDF page retain all content below rental and price bands', async () => {
+    const source = await PDFDocument.create(); source.addPage([595,842]).setRotation(degrees(90)); source.addPage([400,600]).drawText('ORIGINAL');
+    const result = await mergePropertySheets([{ ...p, sheetFiles: [{ url: 'a.pdf' }] }, { ...p, id: 'summary' }], async () => await source.save(), async () => tinyPng,
+      { latestPrices: true, rentalInfo: true, renderPrice: async () => tinyPng, renderRental: async () => tinyPng });
+    expect(result).toMatchObject({ pageCount: 3, rentalOverlayCount: 0, rentalHeaderCount: 3, priceHeaderCount: 2, summaryCount: 1 });
+    const pdf = await PDFDocument.load(result.bytes); expect(pdf.getPage(0).getWidth()).toBe(842);
+  });
+  test('ordinary listings never add rental bands or invent rent', async () => {
+    const renderRental = jest.fn();
+    const result = await mergePropertySheets([{ id: 'sale', sheetFiles: [{ url: 'a.png' }] }], async () => tinyPng, undefined, { rentalInfo: true, renderRental });
+    expect(result.rentalHeaderCount).toBe(0); expect(renderRental).not.toHaveBeenCalled();
+  });
+});

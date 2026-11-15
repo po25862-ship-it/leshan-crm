@@ -1,6 +1,9 @@
 import { renderPropertySummaryPng } from "./propertySummaryCanvas";
 import { renderPropertyPricePng } from "./propertyPriceCanvas";
 import { validPriceMark } from "./propertySheetPrice";
+import { renderPropertyRentalPng } from "./propertyRentalCanvas";
+import { hasPropertyRentalInfo } from "./propertyRentalIncome";
+import { loadSheetRaster, rentalCellForCanvas } from "./propertySheetRaster";
 
 const A4 = [595.28, 841.89];
 const PAGE_MARGIN = 24;
@@ -151,7 +154,12 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
   let fileCount = 0;
   let summaryCount = 0;
   let priceOverlayCount = 0, priceHeaderCount = 0;
+  let rentalOverlayCount = 0, rentalHeaderCount = 0;
   const renderPrice = options.renderPrice || renderPropertyPricePng;
+  const renderRental = options.renderRental || renderPropertyRentalPng;
+  const locateRental = options.locateRental || (async (bytes, contentType) => rentalCellForCanvas(await loadSheetRaster(bytes, contentType)));
+  const priceBandHeight = page => Math.min(70, page.getHeight() * 0.16);
+  const rentalBandHeight = page => Math.min(64, page.getHeight() * 0.14);
   async function markMatchesBytes(mark, bytes) {
     if (!mark || !globalThis.crypto?.subtle) return false;
     const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
@@ -165,19 +173,36 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
     priceOverlayCount++;
   }
   async function drawHeader(page, property) {
-    const height = Math.min(70, page.getHeight() * 0.16), width = page.getWidth();
+    const height = priceBandHeight(page), width = page.getWidth();
     const card = await merged.embedPng(await renderPrice({ property, header: true, aspectRatio: width / height }));
     page.drawImage(card, { x: 0, y: page.getHeight() - height, width, height });
     priceHeaderCount++;
     return height;
   }
+  async function drawRental(page, property, rect, placement) {
+    const width = placement.width * rect.width, height = placement.height * rect.height;
+    const card = await merged.embedPng(await renderRental({ property, aspectRatio: width / height }));
+    page.drawImage(card, { x: placement.x + placement.width * rect.x, y: placement.y + placement.height * (1 - rect.y - rect.height), width, height });
+    rentalOverlayCount++;
+  }
+  async function drawRentalHeader(page, property, offset = 0) {
+    const height = rentalBandHeight(page), width = page.getWidth();
+    const card = await merged.embedPng(await renderRental({ property, aspectRatio: width / height }));
+    page.drawImage(card, { x: 0, y: page.getHeight() - offset - height, width, height });
+    rentalHeaderCount++;
+  }
 
   for (const [index, property] of plan.entries()) {
+    const sourceProperty = properties[index];
+    const hasRental = options.rentalInfo && hasPropertyRentalInfo(sourceProperty);
     if (property.missing) {
       try {
         const image = await merged.embedPng(await renderSummary(properties[index]));
         const page = merged.addPage(A4);
-        page.drawImage(image, { x: 0, y: 0, width: A4[0], height: A4[1] });
+        const band = hasRental ? rentalBandHeight(page) : 0;
+        const scale = (A4[1] - band) / A4[1];
+        page.drawImage(image, { x: A4[0] * (1 - scale) / 2, y: 0, width: A4[0] * scale, height: A4[1] * scale });
+        if (hasRental) await drawRentalHeader(page, sourceProperty);
         summaryCount += 1;
       } catch (error) {
         throw new Error(`「${property.title}」的系統摘要無法製作：${error.message || "未知錯誤"}`);
@@ -200,7 +225,7 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
           const form = source.getForm();
           if (form.getFields().length > 0) form.flatten();
           if (source.getPageCount() === 0) throw new Error("PDF 沒有頁面");
-          if (!options.latestPrices) {
+          if (!options.latestPrices && !hasRental) {
             const pages = await merged.copyPages(source, source.getPageIndices());
             pages.forEach((page) => merged.addPage(page));
           } else {
@@ -210,7 +235,8 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
               const sideways = angle === 90 || angle === 270;
               const width = sideways ? sourceHeight : sourceWidth, height = sideways ? sourceWidth : sourceHeight;
               const page = merged.addPage([width, height]);
-              const band = Math.min(70, height * 0.16);
+              const priceBand = options.latestPrices ? priceBandHeight(page) : 0;
+              const band = priceBand + (hasRental ? rentalBandHeight(page) : 0);
               const scale = (height - band) / height;
               // Keep all source content below a separate price band; no guessed
               // location or source price is used for unrecognized PDF layouts.
@@ -222,7 +248,8 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
                     : angle === 270 ? { x: x + sourceHeight * scale, y: 0, rotate: degrees(90) } : { x, y: 0 };
                 page.drawPage(embedded, { ...placement, width: sourceWidth * scale, height: sourceHeight * scale });
               }
-              await drawHeader(page, properties[index]);
+              if (options.latestPrices) await drawHeader(page, sourceProperty);
+              if (hasRental) await drawRentalHeader(page, sourceProperty, priceBand);
             }
           }
         } else if (type === "png" || type === "jpg" || type === "other-image") {
@@ -230,7 +257,15 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
           const image = type === "jpg" ? await merged.embedJpg(imageBytes) : await merged.embedPng(imageBytes);
           const pageSize = image.width > image.height ? [A4[1], A4[0]] : A4;
           const page = merged.addPage(pageSize);
-          const band = options.latestPrices && !mark ? Math.min(70, pageSize[1] * 0.16) : 0;
+          // Only write inside an image when this exact image has an empty,
+          // unambiguous cell. A document header keeps every other layout intact.
+          let rentRect = null;
+          if (hasRental) {
+            try { rentRect = await locateRental(imageBytes, type === "jpg" ? "image/jpeg" : "image/png"); }
+            catch { /* Unsupported raster analysis safely falls back to a header. */ }
+          }
+          const priceBand = options.latestPrices && !mark ? priceBandHeight(page) : 0;
+          const band = priceBand + (hasRental && !rentRect ? rentalBandHeight(page) : 0);
           const fitted = image.scaleToFit(pageSize[0] - PAGE_MARGIN * 2, pageSize[1] - PAGE_MARGIN * 2 - band);
           const placement = {
             x: (pageSize[0] - fitted.width) / 2,
@@ -240,8 +275,12 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
           };
           page.drawImage(image, placement);
           if (options.latestPrices) {
-            if (mark) await drawPrice(page, properties[index], mark, placement);
-            else await drawHeader(page, properties[index]);
+            if (mark) await drawPrice(page, sourceProperty, mark, placement);
+            else await drawHeader(page, sourceProperty);
+          }
+          if (hasRental) {
+            if (rentRect) await drawRental(page, sourceProperty, rentRect, placement);
+            else await drawRentalHeader(page, sourceProperty, priceBand);
           }
         } else {
           throw new Error("格式不支援；請使用 PDF、JPG 或 PNG，其他圖片需能在瀏覽器開啟");
@@ -256,5 +295,5 @@ export async function mergePropertySheets(properties, loadFile = loadFileFromUrl
     }
   }
 
-  return { bytes: await merged.save(), pageCount: merged.getPageCount(), fileCount, summaryCount, priceOverlayCount, priceHeaderCount };
+  return { bytes: await merged.save(), pageCount: merged.getPageCount(), fileCount, summaryCount, priceOverlayCount, priceHeaderCount, rentalOverlayCount, rentalHeaderCount };
 }

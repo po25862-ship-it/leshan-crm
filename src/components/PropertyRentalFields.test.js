@@ -7,7 +7,7 @@ test("rent input and total-price edits immediately recalculate the labelled outp
   const host = document.createElement("div"); document.body.appendChild(host); const root = createRoot(host);
   function Form() {
     const [property, setProperty] = useState({ totalPrice: "1500", monthlyRent: "" });
-    return <><label>總價<input id="test-price" value={property.totalPrice} onChange={event => setProperty({ ...property, totalPrice: event.target.value })} /></label><PropertyRentalFields property={property} onChange={monthlyRent => setProperty({ ...property, monthlyRent })} /></>;
+    return <><label>總價<input id="test-price" value={property.totalPrice} onChange={event => setProperty({ ...property, totalPrice: event.target.value })} /></label><PropertyRentalFields property={property} onChange={fields => setProperty({ ...property, ...fields })} /></>;
   }
   const type = async (id, value) => act(async () => { const input = host.querySelector(id); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
   try {

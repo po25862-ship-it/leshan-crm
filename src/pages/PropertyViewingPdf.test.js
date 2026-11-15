@@ -2,14 +2,17 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import PropertyViewingPdf from "./PropertyViewingPdf";
 import { mergePropertySheets } from "../lib/propertyViewingPdf";
+import { renderAnnotatedPropertyImage } from "../lib/propertyAnnotatedImage";
+import { downloadPropertySheet } from "../lib/propertySheetDownload";
 import { readLatestPdfProperties } from "../lib/propertyPdfLatest";
 
+jest.mock("../lib/propertyAnnotatedImage", () => ({ renderAnnotatedPropertyImage: jest.fn() }));
 jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "test-staff" } }) }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: [{ id: "buyer-a", name: "測試買方" }, { id: "buyer-b", name: "另一買方" }] }) }));
 jest.mock("../lib/propertySheetDownload", () => ({ downloadPropertySheet: jest.fn() }));
 jest.mock("../lib/propertyPdfLatest", () => ({ readLatestPdfProperties: jest.fn(async (properties) => properties) }));
 jest.mock("../lib/propertyViewingPdf", () => ({
-  getPropertySheetPlan: (properties) => properties.map((property) => ({ ...property, files: [], missing: true })),
+  getPropertySheetPlan: (properties) => properties.map((property) => ({ ...property, files: property.sheetFiles || [], missing: !property.sheetFiles?.length })),
   mergePropertySheets: jest.fn(),
 }));
 
@@ -47,7 +50,7 @@ test("generation uses fresh cloud prices and files instead of the displayed olde
   const onGenerated = jest.fn(async () => ({ slot: 0 }));
   act(() => root.render(<PropertyViewingPdf properties={properties} onGenerated={onGenerated} />));
   await create();
-  expect(mergePropertySheets).toHaveBeenCalledWith(latest, expect.any(Function), undefined, { latestPrices: true });
+  expect(mergePropertySheets).toHaveBeenCalledWith(latest, expect.any(Function), undefined, { latestPrices: true, rentalInfo: true });
   expect(onGenerated.mock.calls[0][0].properties).toEqual(latest);
 });
 
@@ -101,4 +104,19 @@ test("failed PDF generation never consumes a draft slot", async () => {
   expect(onGenerated).not.toHaveBeenCalled();
   expect(container.textContent).toContain("資料表下載失敗");
   log.mockRestore();
+});
+
+
+test("single-image export uses current cloud rental fields and invalidates a previously made image on lease edits", async () => {
+  const selected = [{ id: "one", totalPrice: 2788, monthlyRent: 30000, sheetFiles: [{url:"old.jpg",name:"old.jpg",type:"image/jpeg"}] }];
+  const latest = [{...selected[0],monthlyRent:46649,leaseEndDate:"2029-07-31",sheetFiles:[{url:"latest.jpg",name:"latest.jpg",type:"image/jpeg"}]}];
+  readLatestPdfProperties.mockResolvedValue(latest);downloadPropertySheet.mockResolvedValue({bytes:new Uint8Array([1])});renderAnnotatedPropertyImage.mockResolvedValue({bytes:new Uint8Array([2]),rentalPlacement:"cell"});
+  const onGenerated=jest.fn();act(()=>root.render(<PropertyViewingPdf properties={selected} onGenerated={onGenerated}/>));
+  await act(async()=>[...container.querySelectorAll("button")].find(b=>b.textContent==="製作分享圖片 PNG").click());
+  expect(downloadPropertySheet).toHaveBeenCalledWith("latest.jpg",{uid:"test-staff"});
+  expect(renderAnnotatedPropertyImage.mock.calls[0][0]).toEqual(latest[0]);
+  expect(container.textContent).toContain("租金與租期已放入");expect(onGenerated).not.toHaveBeenCalled();
+  expect(container.querySelector("a[download]")).not.toBeNull();
+  act(()=>root.render(<PropertyViewingPdf properties={[{...selected[0],leaseEndDate:"2030-01-01"}]}/>));
+  expect(container.querySelector("a[download]")).toBeNull();
 });

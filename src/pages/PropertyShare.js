@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useSharedCollection } from "../hooks/useSharedCollection";
-import { buildPropertyShareText, DEFAULT_PROPERTY_SHARE_INTRO, DEFAULT_PRICE_DROP_INTRO, propertySharePriceDrop } from "../lib/propertyShareText";
+import { buildPropertyShareText, DEFAULT_PROPERTY_SHARE_INTRO, DEFAULT_PRICE_DROP_INTRO, DEFAULT_INCOME_PROPERTY_INTRO, propertySharePriceDrop } from "../lib/propertyShareText";
+import { isIncomeProperty } from "../lib/propertyRentalIncome";
 import { todayStr } from "../lib/dates";
 import { useAuth } from "../AuthContext";
 import { usePersonalAgid } from "../hooks/usePersonalAgid";
@@ -18,8 +19,8 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyers = contacts.filter((c) => (c.tags || []).includes("買方"));
 
-  const [messageMode, setMessageMode] = useState("recommend");
-  const [intros, setIntros] = useState({ recommend: DEFAULT_PROPERTY_SHARE_INTRO, "price-drop": DEFAULT_PRICE_DROP_INTRO });
+  const [messageMode, setMessageMode] = useState(() => properties.length > 0 && properties.every(isIncomeProperty) ? "income" : "recommend");
+  const [intros, setIntros] = useState({ recommend: DEFAULT_PROPERTY_SHARE_INTRO, "price-drop": DEFAULT_PRICE_DROP_INTRO, income: DEFAULT_INCOME_PROPERTY_INTRO });
   const intro = intros[messageMode];
   const [previewText, setPreviewText] = useState("");
   const [buyerId, setBuyerId] = useState(defaultBuyerId);
@@ -31,8 +32,9 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
   const [introductionDone, setIntroductionDone] = useState(false);
   const [introductionError, setIntroductionError] = useState("");
   const priceDropProperties = useMemo(() => properties.filter(propertySharePriceDrop), [properties]);
-  const sharedProperties = messageMode === "price-drop" ? priceDropProperties : properties;
-  const excludedProperties = messageMode === "price-drop" ? properties.filter((property) => !propertySharePriceDrop(property)) : [];
+  const incomeProperties = useMemo(() => properties.filter(isIncomeProperty), [properties]);
+  const sharedProperties = messageMode === "price-drop" ? priceDropProperties : messageMode === "income" ? incomeProperties : properties;
+  const excludedProperties = useMemo(() => messageMode === "price-drop" ? properties.filter(property => !propertySharePriceDrop(property)) : messageMode === "income" ? properties.filter(property => !isIncomeProperty(property)) : [], [properties, messageMode]);
   const sharedPropertyKey = sharedProperties.map((property) => property.id).join("|");
   const hasShareContent = sharedProperties.length > 0 && !!previewText.trim();
   const canIntroduce = !!onIntroduced && !!defaultBuyerId && recipientId === defaultBuyerId;
@@ -127,7 +129,9 @@ export default function PropertyShare({ properties, onClose, defaultBuyerId = ""
       <div role="group" aria-label="訊息類型" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
         <button type="button" className={`btn ${messageMode === "recommend" ? "" : "ghost"}`} aria-pressed={messageMode === "recommend"} disabled={logging} onClick={() => setMessageMode("recommend")}>一般推薦</button>
         <button type="button" className={`btn ${messageMode === "price-drop" ? "" : "ghost"}`} aria-pressed={messageMode === "price-drop"} disabled={logging} onClick={() => setMessageMode("price-drop")}>降價通知</button>
+        <button type="button" className={`btn ${messageMode === "income" ? "" : "ghost"}`} aria-pressed={messageMode === "income"} disabled={logging} onClick={() => setMessageMode("income")}>收租物件介紹</button>
       </div>
+      {messageMode === "income" && <div role="status" style={{ background: "#edf5ef", padding: "10px 12px", borderRadius: 10, marginBottom: 14, lineHeight: 1.7 }}>將帶入 {sharedProperties.length} 筆已填有效月租金的物件。{excludedProperties.length > 0 && <div>以下 {excludedProperties.length} 筆尚未填有效月租金，不列入本次介紹：{excludedProperties.map(property => property.title || "未命名物件").join("、")}。</div>}租金包含費用、租期與未扣成本說明會一起保留，報酬率依目前總售價試算。</div>}
       {messageMode === "price-drop" && (
         <div role="status" style={{ background: "var(--brass-soft)", color: "var(--ink)", padding: "10px 12px", borderRadius: 10, marginBottom: 14, fontSize: 12, lineHeight: 1.7 }}>
           將帶入 {sharedProperties.length} 筆降價物件。

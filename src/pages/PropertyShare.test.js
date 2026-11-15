@@ -120,3 +120,19 @@ test("先記錄推薦後仍可另記錄降價通知，使用不同事件並傳�
   expect(notification.communication).toContain("最新售價｜1,598 萬");
   expect(notification.properties).toEqual([discounted]);
 });
+
+
+test("income mode keeps copy, map numbering and recipient record aligned, and preserves the final manual message", async () => {
+  const income={...properties[0],id:"rent",title:"收租店面",monthlyRent:46649,rentFeeNote:"含稅、含管理費",leaseStartDate:"2025-06-25",leaseEndDate:"2029-07-31"};
+  act(()=>root.render(<PropertyShare key="income" properties={[income]} selectedBuyerId="buyer1" onClose={()=>{}}/>));
+  expect(host.querySelectorAll("textarea")[1].value).toContain("【月租金】46,649 元");
+  expect(button("收租物件介紹").getAttribute("aria-pressed")).toBe("true");
+  act(()=>root.render(<PropertyShare key="mixed" properties={[properties[0],income]} selectedBuyerId="buyer1" onClose={()=>{}}/>));
+  await act(async()=>button("收租物件介紹").click());
+  expect(host.querySelector('[data-testid="map-order"]').textContent).toBe("1. 收租店面");
+  const preview=host.querySelectorAll("textarea")[1];expect(preview.value).not.toContain("2. ");
+  act(()=>Simulate.change(preview,{target:{value:preview.value+"\n請參考租約"}}));
+  await act(async()=>button("複製文字").click());expect(navigator.clipboard.writeText).toHaveBeenCalledWith(preview.value);
+  await act(async()=>button("記錄到互動紀錄").click());
+  expect(addDoc).toHaveBeenCalledWith("contacts/buyer1/interactions",expect.objectContaining({properties:[{label:"收租店面",propertyId:"rent"}]}));
+});

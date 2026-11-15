@@ -2,9 +2,11 @@ import { truncateAddress } from "./address";
 import { buildMapSearchUrl } from "./googleMaps";
 import { withAgid } from "./url";
 import { nonNegativeNumber, resolvePropertyParkingPrice } from "./propertyUnitPrice";
+import { isIncomeProperty, propertyRentalIncome, propertyRentFeeNote, formatPropertyLease } from "./propertyRentalIncome";
 
 export const DEFAULT_PROPERTY_SHARE_INTRO = "幫您挑了幾間物件，整理重點給您比較看看：";
 export const DEFAULT_PRICE_DROP_INTRO = "這幾間物件有降價，整理最新售價給您參考，看看有沒有感興趣的 👇";
+export const DEFAULT_INCOME_PROPERTY_INTRO = "分享目前有租金資料的物件給您參考：";
 
 const numberText = (value) => value.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
 
@@ -80,11 +82,30 @@ function publicPropertyAddress(address) {
   return String(address || "").match(/^.*?[縣市].*?[區鄉鎮市]/)?.[0] || "";
 }
 
+function incomeShareDetails(property, priceDrop) {
+  const { monthlyRent, annualRent, annualYield } = propertyRentalIncome(property), price = nonNegativeNumber(property.totalPrice);
+  const lines = [];
+  if (priceDrop) lines.push(`前次售價｜${numberText(priceDrop.oldPrice)} 萬`);
+  lines.push(`【${priceDrop ? "最新售價" : "售價"}】${price > 0 ? `${numberText(price)} 萬` : "待確認"}`);
+  if (priceDrop) lines.push(`⬇️ 本次調降 ${numberText(priceDrop.amount)} 萬`);
+  lines.push(`【月租金】${numberText(monthlyRent)} 元，${propertyRentFeeNote(property)}`);
+  lines.push(`【租期】${formatPropertyLease(property)}`);
+  if (annualRent !== null) lines.push("", `全年租金約 ${numberText(annualRent / 10000)} 萬`);
+  lines.push(`年租金報酬率${annualYield === null ? "：總價待確認" : `約 ${annualYield.toFixed(2)}%`}`);
+  lines.push("（依表載租金及售價試算，尚未扣除成本）", "");
+  const total = nonNegativeNumber(property.titlePing), parking = shareParking(property), main = nonNegativeNumber(property.mainBuildingPing);
+  const carArea = !parking.contradictory && parking.area > 0 && total > parking.area ? parking.area : null;
+  if (total > 0) lines.push(`權狀 ${numberText(total)} 坪${carArea ? `，含車位 ${numberText(carArea)} 坪` : ""}`);
+  if (carArea && !(main > total - carArea)) lines.push(`扣車面積約 ${numberText(total - carArea)} 坪`);
+  return { lines, parking: {}, hasNetArea: false, hasNetUnit: false };
+}
+
 export function buildPropertyShareText(properties, intro, agid, includeMaps = true, mode = "recommend") {
   const priceDropMode = mode === "price-drop";
-  const included = priceDropMode ? properties.filter(propertySharePriceDrop) : properties;
-  if (priceDropMode && !included.length) return "";
-  const details = included.map((property) => propertyShareDetails(property, priceDropMode ? propertySharePriceDrop(property) : null));
+  const incomeMode = mode === "income";
+  const included = priceDropMode ? properties.filter(propertySharePriceDrop) : incomeMode ? properties.filter(isIncomeProperty) : properties;
+  if ((priceDropMode || incomeMode) && !included.length) return "";
+  const details = included.map((property) => (isIncomeProperty(property) ? incomeShareDetails : propertyShareDetails)(property, priceDropMode ? propertySharePriceDrop(property) : null));
   const presets = [...new Set(details.filter((detail) => detail.hasNetUnit && detail.parking.source === "preset")
     .map(({ parking }) => `${parking.kind}車位每個${parking.perSpace}萬`))];
   const notes = [];
@@ -97,8 +118,10 @@ export function buildPropertyShareText(properties, intro, agid, includeMaps = tr
       const publicAddress = publicPropertyAddress(property.address);
       const location = [...new Set([property.communityName, property.area, publicAddress].filter(Boolean))]
         .join("・");
-      const lines = [`${index + 1}. ${property.title || "物件"}`, ...details[index].lines];
-      if (location) lines.push(location);
+      const rented = /^(?:出租|出租中|已出租|承租中|租賃中)$/.test(String(property.occupancy || "").trim());
+      const lines = [`${index + 1}. ${property.title || "物件"}${isIncomeProperty(property) && rented ? "｜出租中" : ""}`];
+      if (isIncomeProperty(property)) { if (location) lines.push(`📍 ${location}`); lines.push("", ...details[index].lines); }
+      else { lines.push(...details[index].lines); if (location) lines.push(location); }
       if (property.websiteUrl) lines.push(withAgid(property.websiteUrl, agid));
       if (includeMaps) {
         const mapAddress = shareableMapAddress(property.address);
@@ -107,6 +130,6 @@ export function buildPropertyShareText(properties, intro, agid, includeMaps = tr
       return [...lines, ""];
     }),
     ...(notes.length ? [`※${notes.join("；")}。`, ""] : []),
-    ...(included.length ? [priceDropMode ? "有哪一間想了解，回覆編號就可以，我再提供詳細資料。" : "有想了解的物件，回覆編號就可以。"] : []),
+    ...(included.length ? [incomeMode || included.every(isIncomeProperty) ? "如果您有興趣，回覆物件編號，我可以再幫您確認租約內容與帶看安排。" : priceDropMode ? "有哪一間想了解，回覆編號就可以，我再提供詳細資料。" : "有想了解的物件，回覆編號就可以。"] : []),
   ].join("\n").trim();
 }
