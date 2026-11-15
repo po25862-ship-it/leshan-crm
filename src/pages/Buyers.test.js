@@ -7,6 +7,8 @@ import Buyers from "./Buyers";
 let mockContacts;
 const mockAdd = jest.fn(async data => { mockContacts = [...mockContacts, { ...data, id: "new-buyer" }]; return "new-buyer"; });
 const mockUpdate = jest.fn(async (id, data) => { mockContacts = mockContacts.map(item => item.id === id ? { ...item, ...data } : item); });
+const mockSaveSources = jest.fn();
+jest.mock("../lib/buyerSourceRepository", () => ({ saveBuyerSourceChanges: (...args) => mockSaveSources(...args) }));
 jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "staff" } }) }));
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: mockContacts, add: mockAdd, update: mockUpdate, remove: jest.fn() }) }));
 jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [] }) }));
@@ -27,6 +29,7 @@ beforeEach(() => {
   ];
   mockAdd.mockReset().mockImplementation(async data => { mockContacts = [...mockContacts, { ...data, id: "new-buyer" }]; return "new-buyer"; });
   mockUpdate.mockReset().mockImplementation(async (id, data) => { mockContacts = mockContacts.map(item => item.id === id ? { ...item, ...data } : item); });
+  mockSaveSources.mockReset().mockImplementation(async (_, changes) => { mockContacts = mockContacts.map(buyer => { const change = changes.find(row => row.id === buyer.id); return change ? { ...buyer, source: change.after } : buyer; }); return changes; });
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
@@ -67,4 +70,40 @@ test("editing keeps the existing source unless the user changes it, and cancelli
   await click("＋ 新增買方"); await type(source(), "未儲存的來源"); await click("取消");
   await click("＋ 新增買方"); await act(async () => container.querySelector('.search-select-toggle').click());
   expect(options()).not.toContain("未儲存的來源");
+});
+
+const action = async label => act(async () => container.querySelector(`button[aria-label="${label}"]`).click());
+test("source manager previews and confirms a merge, then the picker keeps the merged choice", async () => {
+  mockContacts.push({ id: "four", name: "重複來源客戶", source: "591 typo", tags: ["買方"], ownerUid: "staff" });
+  render(); await click("管理來源"); await action("修改或合併來源：591 typo");
+  await type(source(), "591 智富館");
+  expect(container.textContent).toContain("整理後這個來源共有 2 位買方");
+  expect(mockSaveSources).not.toHaveBeenCalled();
+  await click("確認合併來源"); render();
+  expect(mockSaveSources).toHaveBeenCalledWith("staff", [{ id: "four", before: "591 typo", after: "591 智富館" }]);
+  expect(container.textContent).toContain("已整理 1 位買方的來源");
+  await click("關閉管理來源"); await click("＋ 新增買方");
+  await act(async () => container.querySelector('.search-select-toggle').click());
+  expect(options()).toContain("591 智富館"); expect(options()).not.toContain("591 typo");
+});
+
+test("deletion needs confirmation, cancelling does nothing, and undo keeps every buyer", async () => {
+  render(); await click("管理來源"); await action("刪除來源：FB 社團");
+  expect(container.textContent).toContain("來源欄位會清空"); expect(mockSaveSources).not.toHaveBeenCalled();
+  await click("取消整理"); expect(mockSaveSources).not.toHaveBeenCalled();
+  await action("刪除來源：FB 社團"); await click("確認刪除來源"); render();
+  expect(mockContacts).toHaveLength(3); expect(mockContacts.find(b => b.id === "three").source).toBe("");
+  await click("復原上次整理"); render();
+  expect(mockContacts.find(b => b.id === "three").source).toBe("FB 社團");
+  expect(container.textContent).toContain("已復原 1 位買方的來源");
+});
+
+test("source manager handles write failure and prevents changes while a buyer draft is open", async () => {
+  render(); await click("＋ 新增買方");
+  expect([...container.querySelectorAll("button")].find(b => b.textContent === "管理來源").disabled).toBe(true);
+  await click("取消"); await click("管理來源"); await action("修改或合併來源：FB 社團"); await type(source(), "Facebook");
+  mockSaveSources.mockRejectedValueOnce(new Error("另一裝置已修改，本次沒有修改資料。"));
+  await click("確認修改來源");
+  expect(container.querySelector('[role="alert"]').textContent).toContain("本次沒有修改資料");
+  expect(mockContacts.find(b => b.id === "three").source).toBe("FB 社團");
 });

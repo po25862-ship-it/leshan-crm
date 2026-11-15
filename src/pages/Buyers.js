@@ -13,6 +13,7 @@ import { matchPropertiesForNeed } from "../lib/needsMatch";
 import { timestampToMillis } from "../lib/propertyPresentation";
 import { uniqueChoices } from "../lib/propertyChoices";
 import SearchSelect from "../components/SearchSelect";
+import BuyerSourceManager from "../components/BuyerSourceManager";
 import ContactConversationAnalyses from "./ContactConversationAnalyses";
 
 const emptyForm = {
@@ -58,6 +59,7 @@ export default function Buyers() {
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [keyword, setKeyword] = useState("");
+  const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const buyers = useMemo(() => items.filter((c) => (c.tags || []).includes("買方")), [items]);
@@ -81,6 +83,7 @@ export default function Buyers() {
   }, [buyers, needs, properties]);
 
   const openNew = () => {
+    setSourceManagerOpen(false);
     setForm(emptyForm);
     setEditingId(null);
     setEditMode(true);
@@ -171,19 +174,25 @@ export default function Buyers() {
     <main>
       <div className="top-actions">
         <div className="section-title">買方客戶（{buyers.length}）</div>
-        <button className="btn" onClick={openNew}>
-          ＋ 新增買方
-        </button>
+        <div className="buyer-source-toolbar">
+          <button className="btn ghost" type="button" disabled={sourceManagerOpen || (editMode && (showForm || !!editingId))} onClick={() => { closeInline(); setSourceManagerOpen(true); }}>管理來源</button>
+          <button className="btn" onClick={openNew} disabled={sourceManagerOpen}>
+            ＋ 新增買方
+          </button>
+        </div>
       </div>
 
-      <div style={{ marginBottom: 18 }}>
+      {editMode && (showForm || !!editingId) && <p className="buyer-source-edit-hint">整理來源前，請先儲存或取消目前的買方編輯。</p>}
+      {sourceManagerOpen && <BuyerSourceManager buyers={buyers} uid={user.uid} onClose={() => setSourceManagerOpen(false)} />}
+
+      {!sourceManagerOpen && <div style={{ marginBottom: 18 }}>
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="搜尋姓名、電話、來源、備註…"
           style={{ width: "100%", maxWidth: 360, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 14 }}
         />
-      </div>
+      </div>}
 
       {showForm && !editingId && (
         <div style={{ marginBottom: 24 }}>
@@ -235,7 +244,7 @@ export default function Buyers() {
         </div>
       )}
 
-      <div className="panel buyers-v2-list">
+      {!sourceManagerOpen && <div className="panel buyers-v2-list">
         {filtered.length > 0 && <div className="buyer-table-head"><span>買方</span><span>客需數</span><span>未聯絡</span><span>符合物件</span><span>新配對</span><span>最高配對</span><span>操作</span></div>}
         {filtered.length === 0 && (
           <div className="empty-state">
@@ -397,7 +406,7 @@ export default function Buyers() {
             </React.Fragment>
           );
         })}
-      </div>
+      </div>}
     </main>
   );
 }

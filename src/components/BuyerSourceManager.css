@@ -1,0 +1,41 @@
+.buyer-source-manager { margin-bottom: 24px; min-width: 0; }
+.buyer-source-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.buyer-source-heading h2, .buyer-source-confirm h3 { margin: 0 0 8px; font-size: calc(22px * var(--crm-font-scale, 1)); }
+.buyer-source-heading p { margin: 0; color: var(--muted); }
+.buyer-source-scope { padding: 12px 14px; background: #f3f6f3; border-radius: 10px; line-height: 1.7; color: #55665c; font-size: calc(14px * var(--crm-font-scale, 1)); }
+.buyer-source-success, .buyer-source-error { margin: 14px 0; padding: 12px 14px; border-radius: 10px; line-height: 1.6; }
+.buyer-source-success { background: #eaf5ef; color: #1f5943; }
+.buyer-source-error { background: #fff0ed; color: #a72e21; }
+.buyer-source-search { display: grid; gap: 8px; max-width: 460px; margin-top: 20px; font-weight: 700; }
+.buyer-source-search input { width: 100%; box-sizing: border-box; }
+.buyer-source-count { margin: 12px 0; color: var(--muted); font-size: calc(14px * var(--crm-font-scale, 1)); }
+.buyer-source-list { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.buyer-source-list:empty { display: none; }
+.buyer-source-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.buyer-source-row:last-child { border-bottom: 0; }
+.buyer-source-row > div:first-child { min-width: 0; display: grid; gap: 5px; overflow-wrap: anywhere; }
+.buyer-source-row strong { font-size: calc(16px * var(--crm-font-scale, 1)); }
+.buyer-source-row span, .buyer-source-undo small { font-size: calc(14px * var(--crm-font-scale, 1)); color: var(--muted); line-height: 1.6; }
+.buyer-source-row-actions, .buyer-source-confirm-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.buyer-source-row-actions .btn { padding: 8px 12px; min-height: 42px; white-space: nowrap; font-size: calc(14px * var(--crm-font-scale, 1)); }
+.buyer-source-row-actions .buyer-source-delete { color: #af3828; }
+.buyer-source-confirm { margin-top: 20px; max-width: 660px; border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.buyer-source-original { display: grid; gap: 6px; margin: 18px 0; overflow-wrap: anywhere; }
+.buyer-source-original span { color: var(--muted); font-size: calc(14px * var(--crm-font-scale, 1)); }
+.buyer-source-original strong { font-size: calc(20px * var(--crm-font-scale, 1)); }
+.buyer-source-preview, .buyer-source-confirm p { line-height: 1.7; overflow-wrap: anywhere; }
+.buyer-source-confirm details { margin: 16px 0; }
+.buyer-source-confirm summary { cursor: pointer; color: #275f49; }
+.buyer-source-confirm ul { max-height: 220px; overflow: auto; line-height: 1.8; }
+.buyer-source-undo { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+.buyer-source-undo small { max-width: 460px; }
+.buyer-source-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.buyer-source-edit-hint { color: var(--muted); font-size: calc(14px * var(--crm-font-scale, 1)); margin: 0 0 14px; }
+@media (max-width: 759px) {
+  .buyer-source-row { align-items: flex-start; flex-direction: column; gap: 12px; padding: 14px; }
+  .buyer-source-row-actions { width: 100%; }
+  .buyer-source-row-actions .btn { flex: 1; }
+  .buyer-source-confirm { padding: 16px; }
+  .buyer-source-heading h2 { font-size: calc(20px * var(--crm-font-scale, 1)); }
+  .buyer-source-confirm-actions .btn { flex: 1; min-width: 100px; }
+}
