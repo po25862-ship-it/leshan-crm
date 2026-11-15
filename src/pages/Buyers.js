@@ -174,12 +174,12 @@ export default function Buyers() {
     <main>
       <div className="top-actions">
         <div className="section-title">買方客戶（{buyers.length}）</div>
-        <div className="buyer-source-toolbar">
-          <button className="btn ghost" type="button" disabled={sourceManagerOpen || (editMode && (showForm || !!editingId))} onClick={() => { closeInline(); setSourceManagerOpen(true); }}>管理來源</button>
-          <button className="btn" onClick={openNew} disabled={sourceManagerOpen}>
+        {!sourceManagerOpen && <div className="buyer-source-toolbar">
+          <button className="btn ghost" type="button" disabled={editMode && (showForm || !!editingId)} onClick={() => { closeInline(); setSourceManagerOpen(true); }}>管理來源</button>
+          <button className="btn" onClick={openNew}>
             ＋ 新增買方
           </button>
-        </div>
+        </div>}
       </div>
 
       {editMode && (showForm || !!editingId) && <p className="buyer-source-edit-hint">整理來源前，請先儲存或取消目前的買方編輯。</p>}
