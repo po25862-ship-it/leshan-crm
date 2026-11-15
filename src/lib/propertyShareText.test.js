@@ -130,3 +130,9 @@ test('a listing confirmed absent from the official website keeps its URL interna
   const text=buildPropertyShareText([property],'','12345',false,'income');
   expect(text).not.toContain('twhg.com.tw');expect(text).toContain('46,649');expect(property.websiteUrl).toContain('DD02603101');
 });
+
+
+test('expired sheet leases ask to confirm renewal rather than asserting a current tenancy', () => {
+  const text=buildPropertyShareText([{ title:"收租店面",occupancy:"出租中",monthlyRent:30000,totalPrice:1500,leaseEndDate:"2020-01-01" }],"","",false,"income");
+  expect(text).toContain("續租狀況待確認");expect(text).toContain("表載租期已到期");expect(text).not.toContain("｜出租中");
+});

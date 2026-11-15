@@ -23,7 +23,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
   const [storageWarning, setStorageWarning] = useState("");
   const requestId = useRef(0);
   const plan = getPropertySheetPlan(properties);
-  const selectionKey = JSON.stringify(properties.map((p) => [p.id, p.totalPrice, p.monthlyRent, p.rentFeeNote, p.leaseStartDate, p.leaseEndDate, p.sheetFiles, p.sheetFileUrl]));
+  const selectionKey = JSON.stringify(properties.map((p) => [p.id, p.totalPrice, p.monthlyRent, p.rentFeeNote, p.leaseStartDate, p.leaseEndDate, p.leaseTermNote, p.sheetFiles, p.sheetFileUrl]));
   const unavailable = plan.filter((entry) => entry.invalid);
   const summaryCount = plan.filter((entry) => entry.missing).length;
   const fileCount = plan.reduce((count, entry) => count + entry.files.length, 0);

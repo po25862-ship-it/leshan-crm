@@ -287,6 +287,19 @@ async function main() {
     summary.reviewQueue = writeReviewQueue(results);
   }
   await context.close?.();
+  if (applyMode) {
+    try {
+      await new Promise((resolve, reject) => {
+        const child = require("child_process").spawn(process.execPath, [path.join(appDir, "rental-backfill.js"), "--apply"], { cwd: appDir, env: process.env, stdio: "inherit" });
+        child.on("error", reject);
+        child.on("close", code => code === 0 ? resolve() : reject(new Error(`租金租期辨識結束代碼 ${code}`)));
+      });
+      summary.rentalBackfill = { ok: true };
+    } catch (error) {
+      summary.rentalBackfill = { ok: false, error: error.message };
+      console.error(`租金租期補入尚未完成（不影響原始物調匯入）：${error.message}`);
+    }
+  }
   const report = { generatedAt: new Date().toISOString(), sourceDir, applyMode, summary, results };
   fs.writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify({ reportFile, summary }, null, 2));

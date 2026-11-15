@@ -126,6 +126,7 @@ const emptyForm = {
   monthlyRent: "",
   leaseStartDate: "",
   leaseEndDate: "",
+  leaseTermNote: "",
   rentFeeNote: "",
   managementFee: "",
   occupancy: "",
@@ -1175,7 +1176,7 @@ export default function Properties() {
     const HEADER = [
       "店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向",
       "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名",
-      "官網點閱網址", "詳細資料表", "備註", "管理費", "月租金（元／月）", "年租金報酬率（%・未扣費用）", "租金費用說明", "租約起日", "租約到期日",
+      "官網點閱網址", "詳細資料表", "備註", "管理費", "月租金（元／月）", "年租金報酬率（%・未扣費用）", "租金費用說明", "租約起日", "租約到期日", "租期補充",
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1225,7 +1226,7 @@ export default function Properties() {
           getPropertyManagementFee(p),
           propertyRentalIncome(p).monthlyRent ?? "",
           propertyRentalIncome(p).annualYield === null ? "" : Number(propertyRentalIncome(p).annualYield.toFixed(2)),
-          p.rentFeeNote || "", p.leaseStartDate || "", p.leaseEndDate || "",
+          p.rentFeeNote || "", p.leaseStartDate || "", p.leaseEndDate || "", p.leaseTermNote || "",
         ]);
       });
       const sheet = XLSX.utils.aoa_to_sheet(aoa);

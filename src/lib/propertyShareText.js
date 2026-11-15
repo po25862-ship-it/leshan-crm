@@ -2,7 +2,7 @@ import { truncateAddress } from "./address";
 import { buildMapSearchUrl } from "./googleMaps";
 import { withAgid } from "./url";
 import { nonNegativeNumber, resolvePropertyParkingPrice } from "./propertyUnitPrice";
-import { isIncomeProperty, propertyRentalIncome, propertyRentFeeNote, formatPropertyLease } from "./propertyRentalIncome";
+import { isIncomeProperty, propertyRentalIncome, propertyRentFeeNote, formatPropertyLease, propertyLeaseEnded } from "./propertyRentalIncome";
 
 export const DEFAULT_PROPERTY_SHARE_INTRO = "幫您挑了幾間物件，整理重點給您比較看看：";
 export const DEFAULT_PRICE_DROP_INTRO = "這幾間物件有降價，整理最新售價給您參考，看看有沒有感興趣的 👇";
@@ -119,7 +119,7 @@ export function buildPropertyShareText(properties, intro, agid, includeMaps = tr
       const location = [...new Set([property.communityName, property.area, publicAddress].filter(Boolean))]
         .join("・");
       const rented = /^(?:出租|出租中|已出租|承租中|租賃中)$/.test(String(property.occupancy || "").trim());
-      const lines = [`${index + 1}. ${property.title || "物件"}${isIncomeProperty(property) && rented ? "｜出租中" : ""}`];
+      const lines = [`${index + 1}. ${property.title || "物件"}${isIncomeProperty(property) && propertyLeaseEnded(property) ? "｜續租狀況待確認" : isIncomeProperty(property) && rented ? "｜出租中" : ""}`];
       if (isIncomeProperty(property)) { if (location) lines.push(`📍 ${location}`); lines.push("", ...details[index].lines); }
       else { lines.push(...details[index].lines); if (location) lines.push(location); }
       if (property.websiteUrl && property.websitePublished !== false) lines.push(withAgid(property.websiteUrl, agid));
