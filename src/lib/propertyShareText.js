@@ -122,7 +122,7 @@ export function buildPropertyShareText(properties, intro, agid, includeMaps = tr
       const lines = [`${index + 1}. ${property.title || "物件"}${isIncomeProperty(property) && rented ? "｜出租中" : ""}`];
       if (isIncomeProperty(property)) { if (location) lines.push(`📍 ${location}`); lines.push("", ...details[index].lines); }
       else { lines.push(...details[index].lines); if (location) lines.push(location); }
-      if (property.websiteUrl) lines.push(withAgid(property.websiteUrl, agid));
+      if (property.websiteUrl && property.websitePublished !== false) lines.push(withAgid(property.websiteUrl, agid));
       if (includeMaps) {
         const mapAddress = shareableMapAddress(property.address);
         lines.push(mapAddress ? `📍位置（路段參考）：${buildMapSearchUrl(mapAddress)}` : "📍位置：地址待確認");

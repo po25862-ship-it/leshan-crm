@@ -124,3 +124,9 @@ test("income-property copy shows approved rent, lease, fees and gross yield with
   expect(unknown).toContain('租期待確認'); expect(unknown).toContain('包含費用待確認'); expect(unknown).not.toContain('｜出租中');
   expect(buildPropertyShareText([{ monthlyRent: '' }, { monthlyRent: 0 }], '', '', false, 'income')).toBe('');
 });
+
+test('a listing confirmed absent from the official website keeps its URL internally but does not send that link to customers', () => {
+  const property={title:'收租店面',monthlyRent:46649,totalPrice:2788,websiteUrl:'https://www.twhg.com.tw/buy/DD02603101?agid=06459',websitePublished:false};
+  const text=buildPropertyShareText([property],'','12345',false,'income');
+  expect(text).not.toContain('twhg.com.tw');expect(text).toContain('46,649');expect(property.websiteUrl).toContain('DD02603101');
+});
