@@ -1,5 +1,7 @@
 import SearchSelect from "../components/SearchSelect";
 import FileDropZone from "../components/FileDropZone";
+import PropertyRentalFields from "../components/PropertyRentalFields";
+import { propertyRentalIncome, propertyRentalIncomeFields, propertyRentalIncomeImportFields, formatPropertyMonthlyRent, formatPropertyRentalYield } from "../lib/propertyRentalIncome";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -121,6 +123,7 @@ const emptyForm = {
   layout: "",
   parkingCount: "",
   totalPrice: "",
+  monthlyRent: "",
   managementFee: "",
   occupancy: "",
   laneWidth: "",
@@ -442,6 +445,9 @@ export default function Properties() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || savingProperty) return;
+    let rentalFields;
+    try { rentalFields = propertyRentalIncomeFields(form); }
+    catch (error) { setPropertySaveError(error.message); document.getElementById("property-monthly-rent")?.focus(); return; }
     setSavingProperty(true);
     setPropertySaveError("");
     try {
@@ -460,6 +466,7 @@ export default function Properties() {
         ? (items.find((p) => p.id === editingId)?.viewingStatus === "available" && form.viewingConfirmedAt
           ? form.viewingConfirmedAt : new Date().toISOString()) : "",
       managementFee: String(form.managementFee ?? "").trim(),
+      ...rentalFields,
       ...(!editingId || String(form.commonAreaPing) !== String(items.find((item) => item.id === editingId)?.commonAreaPing)
         ? { commonAreaBasis: EXCLUDING_PARKING } : {}),
       floorplanAddressFiles: mergeFloorplanFiles(rememberedFiles),
@@ -871,6 +878,7 @@ export default function Properties() {
             websiteUrl: withoutAgid(String(r[15] || "")),
             notes: String(r[17] || ""),
             ...managementFeeImportFields(rows[0], r),
+            ...propertyRentalIncomeImportFields(rows[0], r),
             category: cat,
           });
         }
@@ -1156,7 +1164,7 @@ export default function Properties() {
     const HEADER = [
       "店名", "委託書編號", "案名", "地址", "地坪", "權狀坪", "樓別", "座向",
       "屋齡", "格局", "車位", "總價(萬)", "空／自", "巷寬", "開發姓名",
-      "官網點閱網址", "詳細資料表", "備註", "管理費",
+      "官網點閱網址", "詳細資料表", "備註", "管理費", "月租金（元／月）", "年租金報酬率（%・未扣費用）",
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1204,6 +1212,8 @@ export default function Properties() {
           "",
           p.notes || "",
           getPropertyManagementFee(p),
+          propertyRentalIncome(p).monthlyRent ?? "",
+          propertyRentalIncome(p).annualYield === null ? "" : Number(propertyRentalIncome(p).annualYield.toFixed(2)),
         ]);
       });
       const sheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -1639,6 +1649,8 @@ export default function Properties() {
                 ].filter(Boolean).join("・")} />
                 <DetailValue label="車位編號" value={form.parkingNumber} />
                 <DetailValue label="管理費" value={formatPropertyManagementFee(form) || "未提供"} />
+                <DetailValue label="月租金" value={formatPropertyMonthlyRent(form)} />
+                <DetailValue label="年租金報酬率（未扣費用）" value={formatPropertyRentalYield(form)} />
                 <DetailValue label="車位價格" value={formatPropertyParkingPrice(form)} />
                 <DetailValue label="帶看確認" value={({ available: "已確認可帶看", appointment: "需先預約確認", unavailable: "目前無法帶看" })[form.viewingStatus] || "尚未確認"} />
                 <DetailValue label="帶看方式" value={form.viewingMethod} />
@@ -1897,6 +1909,7 @@ export default function Properties() {
                 <label>空／自</label>
                 <input value={form.occupancy} onChange={(e) => setForm({ ...form, occupancy: e.target.value })} placeholder="空屋／自住／出租中" />
               </div>
+              <PropertyRentalFields property={form} onChange={monthlyRent => setForm(current => ({ ...current, monthlyRent }))} />
               <div className="form-field">
                 <label>巷寬</label>
                 <input value={form.laneWidth} onChange={(e) => setForm({ ...form, laneWidth: e.target.value })} />
@@ -2065,6 +2078,7 @@ export default function Properties() {
                 </div>
               )}
               {formatUnitPrice(p, unitPriceBasis) !== "未提供" && <div className="meta">{unitPriceBasis === "net" ? "扣車位單價" : "含車簡算單價"}：{formatUnitPrice(p, unitPriceBasis)}</div>}
+              {propertyRentalIncome(p).monthlyRent !== null && <div className="property-rental-inline"><span>月租金 <strong>{formatPropertyMonthlyRent(p)}</strong></span><span>年租金報酬率 <strong>{formatPropertyRentalYield(p)}</strong>（未扣費用）</span></div>}
               {(p.mainBuildingPing != null || p.auxiliaryBuildingPing != null || p.commonAreaPing != null || p.parkingPing != null) && (
                 <div className="meta">
                   {p.mainBuildingPing != null && <>主建 {p.mainBuildingPing} 坪　</>}

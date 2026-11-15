@@ -1,0 +1,4 @@
+.property-rental-output { display: flex; align-items: center; min-height: 46px; padding: 10px 12px; box-sizing: border-box; border: 1px solid #cbded2; background: #f0f6f2; border-radius: 8px; color: #245c44; font-size: calc(18px * var(--crm-font-scale, 1)); font-weight: 800; overflow-wrap: anywhere; }
+.property-rental-help { display: block; color: var(--muted); font-size: calc(14px * var(--crm-font-scale, 1)); line-height: 1.6; margin-top: 5px; }
+.property-rental-inline { display: flex; align-items: baseline; gap: 6px 16px; flex-wrap: wrap; margin: 7px 0; color: #38634d; font-size: calc(14px * var(--crm-font-scale, 1)); line-height: 1.6; }
+.property-rental-inline strong { font-weight: 750; }
