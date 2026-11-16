@@ -428,7 +428,11 @@ export default function Properties() {
     if (openId) {
       const found = items.find((p) => p.id === openId);
       if (found) {
+        clearAllFilters();
+        setViewMode(found.status || "active");
+        setKeyword(found.listingNo || found.title || "");
         openEdit(found);
+        setDetailRowPosition(0);
         setSearchParams({}, { replace: true });
       }
     }

@@ -118,6 +118,7 @@ export default function Buyers() {
     if (openId) {
       const found = items.find((c) => c.id === openId);
       if (found) {
+        setKeyword("");
         openEdit(found);
         setSearchParams({}, { replace: true });
       }

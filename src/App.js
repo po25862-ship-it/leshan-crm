@@ -48,7 +48,6 @@ import {
   WandSparkles,
   Settings as SettingsIcon,
   LogOut,
-  Search,
   Bell,
   X,
   ShieldCheck,
@@ -57,6 +56,7 @@ import {
   Mail,
 } from "lucide-react";
 import TextSizeSettings, { TextSizeProvider } from "./components/TextSizeSettings";
+import WorkspaceSearch from "./components/WorkspaceSearch";
 import "./mobile.css";
 
 const desktopNavItems = [
@@ -130,7 +130,7 @@ function DesktopTopBar() {
   const recentPriceDrops = properties.filter((property) => getRecentPriceDrop(property)).length;
   const notificationCount = pendingRecommendations + recentPriceDrops;
   return <header className="desktop-topbar">
-    <label><Search size={15} /><input placeholder="搜尋工作台" /></label>
+    <WorkspaceSearch />
     <div className="desktop-topbar-actions">
       <TextSizeSettings />
       <div className="notification-wrap">

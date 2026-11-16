@@ -35,7 +35,7 @@ function CompanyRentalListings({ navigation }) {
     const id=params.get("rentalOpen");
     const row=id && storedItems.find(item=>item.id===id);
     if (!row) return;
-    setStatus(row.status);setOpenId(id);
+    setKeyword("");setArea("");setColleague("");setExpiryOnly(false);setStatus(row.status);setOpenId(id);
     const next=new URLSearchParams(params);next.delete("rentalOpen");setParams(next,{replace:true});
   }, [params,setParams,storedItems]);
   const checks = useRentalWebsiteChecks(storedItems, user, !editing && !loading);

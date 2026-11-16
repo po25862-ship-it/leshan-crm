@@ -52,7 +52,7 @@ export default function Needs({ contactId = "", contactName = "", embedded = fal
   useEffect(() => {
     if (embedded) return;
     const openId = searchParams.get("open");
-    if (openId) { const found = items.find(n => n.id === openId); if (found) { openEdit(found); setSearchParams({}, { replace: true }); } }
+    if (openId) { const found = items.find(n => n.id === openId); if (found) { setKeyword(""); setScope("all"); setStatus(""); openEdit(found); setSearchParams({}, { replace: true }); } }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, searchParams, embedded]);
   const listedItems = useMemo(() => items.filter(n => !embedded || n.contactId === contactId), [items, embedded, contactId]);

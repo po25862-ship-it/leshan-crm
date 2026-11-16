@@ -46,6 +46,7 @@ export function useSharedCollection(name, orderField, currentUid) {
   );
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(Boolean(currentUid));
+  const [error, setError] = useState(null);
 
   const load = useCallback((force = false) => {
     if (!currentUid) return Promise.resolve([]);
@@ -73,11 +74,13 @@ export function useSharedCollection(name, orderField, currentUid) {
     if (!currentUid) {
       setItems([]);
       setLoading(false);
+      setError(null);
       return undefined;
     }
     const unsubscribe = subscribeReadCache(key, (state) => {
       if (state.data !== undefined) setItems(sortItems(state.data, orderField));
       setLoading(state.loading && state.data === undefined);
+      setError(state.error);
     });
     load(false);
     return unsubscribe;
@@ -103,5 +106,5 @@ export function useSharedCollection(name, orderField, currentUid) {
     syncLocal((current) => current.filter((item) => item.id !== id));
   };
 
-  return { items, loading, add, update, remove, refresh: () => load(true), realtime: false };
+  return { items, loading, error, add, update, remove, refresh: () => load(true), realtime: false };
 }
