@@ -4,7 +4,7 @@ import PropertyRentalFields from "../components/PropertyRentalFields";
 import { propertyRentalIncome, propertyRentalIncomeFields, propertyRentalIncomeImportFields, formatPropertyMonthlyRent, formatPropertyRentalYield, formatPropertyLease, propertyRentFeeNote } from "../lib/propertyRentalIncome";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -1699,6 +1699,7 @@ export default function Properties() {
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>物件資料表（{(form.sheetFiles || []).length}）</div>
                 <FileDropZone label="拖曳物調資料到這裡" hint="PDF、JPG、PNG、WebP、HEIC，每份限 10MB；可多選，放開即上傳本物件。" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" maxBytes={10 * 1024 * 1024} disabled={uploadingSheet} onFiles={uploadSheets} />
                 <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => setSingleViewingPdfId(editingId)}>製作分享物調</button>
+                <Link className="btn ghost" style={{ marginBottom: 12, marginLeft: 8 }} to={`/property-survey?propertyId=${encodeURIComponent(editingId)}`}>帶入資料製作物調</Link>
                 {singleViewingPdfId === editingId && <PropertyViewingPdf properties={[{ ...form, id: editingId }]} onClose={() => setSingleViewingPdfId(null)} onGenerated={pdfLibrary.saveGenerated} />}
                 {(form.sheetFiles || []).length === 0 ? (
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>尚未上傳資料表</div>

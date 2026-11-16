@@ -7,7 +7,9 @@ property-sync/*.log
 .env
 .env.local
 .env.*.local
+api/_data/property-survey-initial.private.json
 __pycache__/
 *.py[cod]
 crawler-worker/.env
 crawler-worker/.venv/
+.env*

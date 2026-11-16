@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node --test scripts/property-survey.test.cjs && CI=true npm test -- --watchAll=false --runInBand --testPathPattern=PropertySurvey && npm run build"
+}

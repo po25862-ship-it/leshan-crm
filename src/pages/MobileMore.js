@@ -8,6 +8,7 @@ export default function MobileMore() {
   return (
     <main>
       <div className="section-title">更多</div>
+      <Link to="/property-survey" className="mobile-more-row">物調製作・預覽與下載 <span className="arrow">›</span></Link>
       <Link to="/market-cases" className="mobile-more-row">市場案件・接手追蹤 <span className="arrow">›</span></Link>
       <Link to="/outreach" className="mobile-more-row">私人開發信・標籤列印 <span className="arrow">›</span></Link>
       <Link to="/cases" className="mobile-more-row">
