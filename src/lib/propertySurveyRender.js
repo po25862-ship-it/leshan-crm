@@ -1,13 +1,8 @@
 import model from './propertySurveyModel';
+import {imageOf} from './propertySurveyPhoto';
+export {imageOf,prepareSurveyPhoto} from './propertySurveyPhoto';
 
 export const SURVEY_FONT='"Hannotate TC","物調文楷","PingFang TC","Microsoft JhengHei",sans-serif';
-export async function imageOf(url) { return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('照片無法讀取，請重新選取。'));image.src=url;}); }
-export async function prepareSurveyPhoto(file) {
-  if(!file||file.size>15*1024*1024)throw new Error('請選擇 15MB 以內的照片。');
-  const url=URL.createObjectURL(file);
-  try { const image=await imageOf(url),scale=Math.min(1,1600/image.width,1600/image.height),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);for(const quality of [.88,.78,.65,.5,.35]){const result=canvas.toDataURL('image/jpeg',quality);if(result.length<=500000)return result;}throw new Error('照片仍然過大，請先裁減或縮小照片。'); }
-  finally { URL.revokeObjectURL(url); }
-}
 export function downloadSurvey(blob,name) { const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name.replace(/[\\/:*?"<>|]/g,'');document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000); }
 export async function renderSurveyCanvas(record) {
   await document.fonts?.load('20px "物調文楷"');await document.fonts?.ready;
