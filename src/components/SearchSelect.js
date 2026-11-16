@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import "./WorkflowControls.css";
 
 const key = text => String(text ?? "").normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase();
-export default function SearchSelect({ label, value = "", onChange, options = [], allowCustom = true, placeholder = "輸入文字搜尋或選擇", disabled = false, maxLength, fallbackLabel, inputProps = {}, maxVisible = 80, help }) {
+export default function SearchSelect({ label, value = "", onChange, options = [], allowCustom = true, placeholder = "輸入文字搜尋或選擇", disabled = false, maxLength, fallbackLabel, inputProps = {}, maxVisible = 80, help, filterOption, onSearchInput }) {
   const generated = useId(), id = inputProps.id || `search-select-${generated}`, listId = `${id}-list`;
   const root = useRef(null), input = useRef(null), list = useRef(null), suppressFocus = useRef(false);
   const [above, setAbove] = useState(false);
@@ -16,7 +16,7 @@ export default function SearchSelect({ label, value = "", onChange, options = []
   }, [options]);
   const selected = rows.find(row => String(row.value) === String(value));
   const currentLabel = selected?.label ?? fallbackLabel ?? value;
-  const matches = rows.filter(row => !row.disabled && key(`${row.label} ${row.searchText || ""}`).includes(key(query)));
+  const matches = rows.filter(row => !row.disabled && (filterOption ? filterOption(row, query) : key(`${row.label} ${row.searchText || ""}`).includes(key(query))));
   const visible = matches.slice(0, maxVisible);
   const choose = option => { onChange(option.value); setQuery(""); setOpen(false); setActive(-1); if (document.activeElement !== input.current) { suppressFocus.current = true; input.current?.focus(); } };
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function SearchSelect({ label, value = "", onChange, options = []
   return <div className="search-select" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setActive(-1); } }}>
     <label className="search-select-label" htmlFor={id}>{label}</label>
     <div className="search-select-control">
-      <input {...inputProps} ref={input} id={id} type="text" role="combobox" aria-autocomplete="list" aria-expanded={open && !disabled} aria-controls={open ? listId : undefined} aria-activedescendant={open && active >= 0 && visible[active] ? `${listId}-${active}` : undefined} autoComplete="off" disabled={disabled} value={open ? query : currentLabel} maxLength={maxLength} placeholder={placeholder} onFocus={() => { if (suppressFocus.current) { suppressFocus.current = false; return; } start(); }} onChange={event => { setQuery(event.target.value); setOpen(true); setActive(-1); if (allowCustom) onChange(event.target.value); }} onKeyDown={keyboard} />
+      <input {...inputProps} ref={input} id={id} type="text" role="combobox" aria-autocomplete="list" aria-expanded={open && !disabled} aria-controls={open ? listId : undefined} aria-activedescendant={open && active >= 0 && visible[active] ? `${listId}-${active}` : undefined} autoComplete="off" disabled={disabled} value={open ? query : currentLabel} maxLength={maxLength} placeholder={placeholder} onFocus={() => { if (suppressFocus.current) { suppressFocus.current = false; return; } start(); }} onChange={event => { setQuery(event.target.value); setOpen(true); setActive(-1); onSearchInput?.(event.target.value); if (allowCustom) onChange(event.target.value); }} onKeyDown={keyboard} />
       <button type="button" className="search-select-toggle" disabled={disabled} aria-label={`${open ? "收起" : "展開"}${label.replace(/＊/g, "")}選單`} aria-expanded={open} onMouseDown={event => event.preventDefault()} onClick={() => open ? setOpen(false) : start(true)}><span aria-hidden="true">⌄</span></button>
       {open && !disabled && <div className={`search-select-dropdown${above ? " is-above" : ""}`}>
         {!allowCustom && value && <p className="search-select-current">目前：{currentLabel}</p>}
