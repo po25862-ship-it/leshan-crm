@@ -1,4 +1,5 @@
 import { propertyWebsiteStatus } from "./propertyWebsite";
+import { displayPropertyAgent } from "./propertyAgent";
 
 export const AUDIT_STORE = "捷運樂善直營店";
 export const AUDIT_FIELDS = [
@@ -13,6 +14,45 @@ export const auditPrice = value => { const n = Number(text(value).replace(/,/g, 
 export const auditMoney = row => auditPrice(row.totalPrice) === null ? "待補價格" : `${auditPrice(row.totalPrice).toLocaleString("zh-TW", { maximumFractionDigits: 2 })} 萬`;
 export const auditStatusLabel = status => ({ active: "在售", onHold: "暫時不賣", sold: "已售出" }[status || "active"] || "其他狀態");
 export const auditWebsiteLabel = row => ({ published: "已上架", unpublished: "未上架", unknown: "待確認" }[propertyWebsiteStatus(row)]);
+export const UNASSIGNED_AUDIT_AGENT = "__unassigned__";
+export function auditAgentNames(row) {
+  if (!text(row?.agentInfo)) return [];
+  const decoded = displayPropertyAgent(row.agentInfo).normalize("NFKC");
+  const names = decoded
+    .replace(/(?:\+?886[-\s]?)?0\d{1,3}[-\s]?\d{6,8}(?:\s*(?:#|分機)\s*\d+)?/g, "|")
+    .split(/[|、,，;；.。/／&\n]+/)
+    .map(value => value.replace(/^(?:負責業務|開發業務|開發姓名|開發)\s*[:：]?\s*/, "").replace(/[()（）]/g, "").trim())
+    .map(value => /[\u3400-\u9fff]/.test(value) ? value.replace(/\s+/g, "") : value.replace(/\s+/g, " "))
+    .filter(value => value && !/^[\d\s+\-#]+$/.test(value) && !["尚未填寫", "未填寫", "待確認"].includes(value));
+  return [...new Set(names)];
+}
+export function matchesAuditAgent(row, agent = "") {
+  const names = auditAgentNames(row);
+  return !agent || (agent === UNASSIGNED_AUDIT_AGENT ? !names.length : names.includes(agent));
+}
+export function auditAgentOptions(rows) {
+  const counts = new Map();
+  for (const row of rows) {
+    const names = auditAgentNames(row);
+    for (const name of names.length ? names : [UNASSIGNED_AUDIT_AGENT]) counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  return [...counts].map(([value, count]) => ({ value, name: value === UNASSIGNED_AUDIT_AGENT ? "尚未填業務" : value, count }))
+    .sort((a, b) => a.value === UNASSIGNED_AUDIT_AGENT ? 1 : b.value === UNASSIGNED_AUDIT_AGENT ? -1 : a.name.localeCompare(b.name, "zh-Hant"));
+}
+export function groupAuditRows(rows, selectedAgent = "") {
+  const groups = new Map();
+  for (const row of rows) {
+    const names = auditAgentNames(row).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    const key = selectedAgent || (names.length ? JSON.stringify(names) : UNASSIGNED_AUDIT_AGENT);
+    const label = selectedAgent ? selectedAgent === UNASSIGNED_AUDIT_AGENT ? "尚未填業務" : selectedAgent : names.join("、") || "尚未填業務";
+    if (!groups.has(key)) groups.set(key, { key, label, shared: !selectedAgent && names.length > 1, rows: [] });
+    groups.get(key).rows.push(row);
+  }
+  let startIndex = 0;
+  return [...groups.values()].sort((a, b) => a.key === UNASSIGNED_AUDIT_AGENT ? 1 : b.key === UNASSIGNED_AUDIT_AGENT ? -1 : a.label.localeCompare(b.label, "zh-Hant")).map(group => {
+    const result = { ...group, startIndex }; startIndex += group.rows.length; return result;
+  });
+}
 export function auditWebsiteUrl(row) {
   try { const url = new URL(row.websiteUrl); return ["http:", "https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; }
 }
@@ -38,12 +78,13 @@ export function duplicateAuditCodes(rows) {
   for (const row of rows.filter(isAuditStore)) { const code = text(row.listingNo).toUpperCase(); if (code) counts.set(code, (counts.get(code) || 0) + 1); }
   return new Map([...counts].filter(([, count]) => count > 1));
 }
-export function filterAuditRows(rows, { status = "active", query = "", review = "all" } = {}) {
+export function filterAuditRows(rows, { status = "active", query = "", review = "all", agent = "" } = {}) {
   const words = text(query).toLowerCase().replace(/臺/g, "台").split(/\s+/).filter(Boolean);
   const duplicates = duplicateAuditCodes(rows);
   return rows.filter(isAuditStore).filter(row => {
     if (status !== "all" && (row.status || "active") !== status) return false;
-    const haystack = [row.title, row.listingNo, row.address, row.agentInfo, row.auditChecklist?.note?.text].map(text).join(" ").replace(/臺/g, "台").toLowerCase();
+    if (!matchesAuditAgent(row, agent)) return false;
+    const haystack = [row.title, row.listingNo, row.address, ...auditAgentNames(row), row.agentInfo, row.auditChecklist?.note?.text].map(text).join(" ").replace(/臺/g, "台").toLowerCase();
     if (!words.every(word => haystack.includes(word))) return false;
     const state = auditProgress(row);
     return review === "all" || review === "pending" && !state.complete || review === "done" && state.complete || review === "stale" && state.stale || review === "notes" && !!text(row.auditChecklist?.note?.text) || review === "duplicates" && duplicates.has(text(row.listingNo).toUpperCase());

@@ -1,4 +1,4 @@
-import { AUDIT_FIELDS, auditCheckState, auditFingerprint, auditProgress, auditMoney, auditWebsiteLabel, auditWebsiteUrl, filterAuditRows, duplicateAuditCodes, withoutPropertyAudit } from "./propertyAudit";
+import { AUDIT_FIELDS, UNASSIGNED_AUDIT_AGENT, auditAgentNames, auditAgentOptions, auditCheckState, auditFingerprint, auditProgress, auditMoney, auditWebsiteLabel, auditWebsiteUrl, filterAuditRows, groupAuditRows, duplicateAuditCodes, withoutPropertyAudit } from "./propertyAudit";
 const row = { id: "p1", store: "捷運樂善直營店", listingNo: "DE02601414", title: "金捷市兩房車", address: "桃園市龜山區樂善二路１８５號十七樓", totalPrice: 1650, websitePublished: true, websiteUrl: "https://www.twhg.com.tw/buy/DE02601414?agid=06459" };
 const complete = source => ({ ...source, auditChecklist: { checks: Object.fromEntries(AUDIT_FIELDS.map(field => [field.key, { checked: true, fingerprint: auditFingerprint(source, field.key), byName: "同事甲" }])) } });
 test("store, status and keyword filters match the printed count; legacy active cases remain visible", () => {
@@ -35,4 +35,23 @@ test("blank prices are not represented as zero and normal property saves omit ol
   expect(auditMoney({ totalPrice: "" })).toBe("待補價格");
   expect(withoutPropertyAudit(complete(row))).not.toHaveProperty("auditChecklist");
   expect(withoutPropertyAudit(complete(row))).toMatchObject({ totalPrice: 1650, address: row.address });
+});
+test("agent identity ignores phone formatting and decodes names without guessing a primary agent", () => {
+  expect(auditAgentNames({agentInfo:"劉昭佑 03-3288283．董 韋 伶 03-3288283"})).toEqual(["劉昭佑", "董韋伶"]);
+  expect(auditAgentNames({agentInfo:"阮&#23032;臻 03-3281000、阮姸臻 03-3281000"})).toEqual(["阮姸臻"]);
+  expect(auditAgentNames({agentInfo:"董韋伶 03-3288283 劉昭佑 03-3288283"})).toEqual(["董韋伶", "劉昭佑"]);
+  expect(auditAgentNames({agentInfo:"03-3288283"})).toEqual([]);
+});
+test("each colleague can find jointly responsible properties; full grouped list retains each property once", () => {
+  const rows=[{...row,id:"a",agentInfo:"董韋伶 03-3288283"},{...row,id:"b",agentInfo:"劉昭佑 03-3288283.董韋伶 03-3288283"},{...row,id:"c",agentInfo:"董韋伶 03-3288283、劉昭佑 03-3288283"},{...row,id:"d",agentInfo:""}];
+  expect(filterAuditRows(rows,{agent:"董韋伶"}).map(r=>r.id)).toEqual(["a","b","c"]);
+  expect(filterAuditRows(rows,{agent:"劉昭佑"}).map(r=>r.id)).toEqual(["b","c"]);
+  expect(filterAuditRows(rows,{agent:UNASSIGNED_AUDIT_AGENT}).map(r=>r.id)).toEqual(["d"]);
+  expect(auditAgentOptions(rows).find(o=>o.value==="董韋伶").count).toBe(3);
+  const grouped=groupAuditRows(rows);
+  expect(grouped.flatMap(g=>g.rows)).toHaveLength(4);
+  expect(new Set(grouped.flatMap(g=>g.rows.map(r=>r.id))).size).toBe(4);
+  expect(grouped.find(g=>g.shared).rows.map(r=>r.id)).toEqual(["b","c"]);
+  expect(grouped.at(-1).key).toBe(UNASSIGNED_AUDIT_AGENT);
+  expect(groupAuditRows(filterAuditRows(rows,{agent:"董韋伶"}),"董韋伶")).toMatchObject([{label:"董韋伶",startIndex:0,rows:expect.any(Array)}]);
 });

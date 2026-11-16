@@ -59,3 +59,22 @@ test('failed cloud checkbox save cannot show a verified document', async () => {
   expect(check.checked).toBe(false);
   expect(container.querySelector('[role=alert]').textContent).toContain('連線失敗');
 });
+
+test('agent picker includes joint cases once and updates the status counts and printable group', async () => {
+  mockRows=[{...row('DE1'),agentInfo:'董韋伶 03-3288283'},{...row('DE2'),agentInfo:'劉昭佑 03-3288283.董韋伶 03-3288283'},{...row('DE3'),agentInfo:'劉昭佑 03-3288283'},{...row('DE4','onHold'),agentInfo:'董韋伶 03-3288283'}];
+  await render();
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(3);
+  expect(new Set([...container.querySelectorAll('tbody .pa-code')].map(el=>el.textContent)).size).toBe(3);
+  const picker=container.querySelector('[aria-label="篩選負責業務"]');
+  act(()=>Simulate.focus(picker));
+  act(()=>[...container.querySelectorAll('[role=option]')].find(el=>el.textContent.includes('董韋伶')).click());
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+  expect(container.querySelectorAll('.pa-agent-group')).toHaveLength(1);
+  expect(container.querySelector('.pa-group-title strong').textContent).toBe('董韋伶');
+  expect(container.querySelector('tbody').textContent).not.toContain('測試物件DE3');
+  expect(button('暫時不賣').textContent).toContain('1');
+  expect(container.querySelector('.pa-print-title').textContent).toContain('負責業務：董韋伶');
+  act(()=>button('暫時不賣').click());
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+  expect(container.querySelector('tbody').textContent).toContain('DE4');
+});
