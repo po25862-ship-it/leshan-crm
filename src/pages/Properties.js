@@ -5,6 +5,7 @@ import { propertyRentalIncome, propertyRentalIncomeFields, propertyRentalIncomeI
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
+import { withoutPropertyAudit } from "../lib/propertyAudit";
 import * as XLSX from "xlsx";
 import { writeBatch, doc, collection, addDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -476,7 +477,7 @@ export default function Properties() {
       ? floorplansByAddress.get(addressKey)
       : mergeFloorplanFiles(form.floorplanAddressFiles, floorplansByAddress.get(addressKey));
     const formToSave = {
-      ...withoutWebsiteScanFields(withKnownFloorplans(form)),
+      ...withoutPropertyAudit(withoutWebsiteScanFields(withKnownFloorplans(form))),
       ...propertyChoiceFields(form, items.find((item) => item.id === editingId)),
       ...(!editingId || form.status !== (items.find((item) => item.id === editingId)?.status || "active")
         ? { statusChangedAt: new Date().toISOString() } : {}),
@@ -1293,6 +1294,7 @@ export default function Properties() {
             </button>
           )}
           {!isMobile && <button className="btn ghost" onClick={handleExport}>匯出 Excel</button>}
+          {!isMobile && <Link to="/property-audit" className="btn ghost" style={{ textDecoration: "none" }}>物件核對</Link>}
           {!isMobile && (
             <label className="btn ghost" style={{ cursor: "pointer" }}>
               {importing ? "處理中…" : "匯入／更新 Excel"}
@@ -1318,6 +1320,7 @@ export default function Properties() {
 
       {isMobile && showMobileTools && (
         <div className="panel properties-mobile-tools">
+          <Link to="/property-audit" className="btn ghost" style={{ textDecoration: "none" }}>物件核對</Link>
           <button className="btn ghost" onClick={handleExport}>匯出 Excel</button>
           <label className="btn ghost" style={{ cursor: "pointer" }}>
             {importing ? "處理中…" : "匯入／更新 Excel"}
