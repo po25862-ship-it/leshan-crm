@@ -33,9 +33,9 @@ test("invalid, corrupt and unavailable storage safely fall back to standard", ()
   expect(writeTextSizes(unavailable, "a", { desktop: "large" })).toBe(false);
 });
 
-test("the three radio choices immediately apply and survive remounting", () => {
+test("the four radio choices immediately apply and survive remounting", () => {
   render(); open();
-  expect([...container.querySelectorAll('input[type="radio"]')].map((input) => input.getAttribute("aria-label"))).toEqual(["標準", "大", "特大"]);
+  expect([...container.querySelectorAll('input[type="radio"]')].map((input) => input.getAttribute("aria-label"))).toEqual(["小", "標準", "大", "特大"]);
   const draft = container.querySelector('input[aria-label="未儲存內容"]');
   draft.value = "還沒儲存的客需";
   select("xlarge");
@@ -47,6 +47,12 @@ test("the three radio choices immediately apply and survive remounting", () => {
   act(() => root.render(null));
   render();
   expect(size()).toBe("xlarge");
+  open(); select("small");
+  expect(size()).toBe("small");
+  expect(container.querySelector(".crm-font-scope").style.getPropertyValue("--crm-font-scale")).toBe("0.875");
+  act(() => root.render(null));
+  render();
+  expect(size()).toBe("small");
 });
 
 test("each account and mobile/desktop profile keeps its own choice", () => {

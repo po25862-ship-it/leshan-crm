@@ -1,4 +1,5 @@
 export const TEXT_SIZE_OPTIONS = [
+  { value: "small", label: "小", scale: 0.875 },
   { value: "standard", label: "標準", scale: 1 },
   { value: "large", label: "大", scale: 1.125 },
   { value: "xlarge", label: "特大", scale: 1.25 },
