@@ -40,4 +40,4 @@
 }
 
 .pa-duplicate-notice{font-size:calc(13px * var(--crm-font-scale,1));color:#8a652d;padding:10px 14px;background:#fff7e9;border:1px solid #eddfc5;border-radius:9px}.pa-name>.pa-duplicate-tag{color:#9e642d}
-@media print{.pa-print-blank .pa-index small{display:none}}
+@media print{.pa-print-blank .pa-index small{display:none}.pa-col-index{width:4%}.pa-col-note{width:17%}.pa-table .pa-index{padding-left:2px!important;padding-right:2px!important;white-space:nowrap}}
