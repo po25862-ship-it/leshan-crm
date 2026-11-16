@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSharedCollection } from "../hooks/useSharedCollection";
 import { useCollection } from "../hooks/useCollection";
@@ -56,6 +56,8 @@ export default function Buyers() {
   };
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const detailRef = useRef(null);
+  const [focusDeepLink, setFocusDeepLink] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [keyword, setKeyword] = useState("");
@@ -120,6 +122,7 @@ export default function Buyers() {
       if (found) {
         setKeyword("");
         openEdit(found);
+        setFocusDeepLink(true);
         setSearchParams({}, { replace: true });
       }
     } else if (draftNote) {
@@ -131,6 +134,12 @@ export default function Buyers() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, searchParams]);
+
+  useEffect(() => {
+    if (!focusDeepLink || !detailRef.current) return;
+    detailRef.current.scrollIntoView?.({ block: "start" });
+    setFocusDeepLink(false);
+  }, [focusDeepLink, editingId]);
 
   const toggleTag = (tag) => {
     setForm((f) => ({
@@ -295,9 +304,11 @@ export default function Buyers() {
 
               {isOpen && (
                 <div
+                  ref={detailRef}
                   onClick={(e) => e.stopPropagation()}
                   style={{
                     display: "grid",
+                    scrollMarginTop: 110,
                     gridTemplateColumns: "minmax(320px, 640px) 1fr",
                     gap: 24,
                     margin: "0 0 20px",

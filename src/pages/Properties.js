@@ -240,6 +240,9 @@ export default function Properties() {
   const { items: needs, update: updateNeed } = useNeedsCollection(user.uid);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [detailTarget, setDetailTarget] = useState(null);
+  const detailTargetRef = useCallback(node => setDetailTarget(node), []);
+  const [focusDeepLink, setFocusDeepLink] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [detailTab, setDetailTab] = useState("overview");
   const [detailRowPosition, setDetailRowPosition] = useState(0);
@@ -433,11 +436,18 @@ export default function Properties() {
         setKeyword(found.listingNo || found.title || "");
         openEdit(found);
         setDetailRowPosition(0);
+        setFocusDeepLink(true);
         setSearchParams({}, { replace: true });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, searchParams]);
+
+  useEffect(() => {
+    if (!focusDeepLink || !showForm || detailTarget?.id !== `property-detail-${editingId}`) return;
+    detailTarget.scrollIntoView?.({ block: "start" });
+    setFocusDeepLink(false);
+  }, [focusDeepLink, showForm, detailTarget, editingId]);
 
   const addCustomField = () => {
     setForm({ ...form, customFields: [...form.customFields, { label: "", value: "" }] });
@@ -2031,8 +2041,7 @@ export default function Properties() {
           </div>
         </section>
         );
-        const target = editingId && displayedProperties.some((item) => item.id === editingId) &&
-          typeof document !== "undefined" ? document.getElementById(`property-detail-${editingId}`) : null;
+        const target = editingId && detailTarget?.id === `property-detail-${editingId}` && displayedProperties.some((item) => item.id === editingId) ? detailTarget : null;
         return target ? createPortal(detail, target) : !editingId || editMode ? detail : null;
       })()}
 
@@ -2161,7 +2170,7 @@ export default function Properties() {
               <button className="btn ghost" onClick={() => selectionMode ? toggleSelect(p.id) : togglePropertyDetail(p)}>{selectionMode ? selectedIds.has(p.id) ? "取消勾選" : "勾選" : showForm && editingId === p.id ? "收起資料" : "查看資料"}</button>
             </div>
           </div>
-          <div id={`property-detail-${p.id}`} className="property-inline-detail-host" />
+          <div id={`property-detail-${p.id}`} ref={p.id === editingId ? detailTargetRef : null} className="property-inline-detail-host" style={{ scrollMarginTop: 110 }} />
           </React.Fragment>
         ))}
       </div>
