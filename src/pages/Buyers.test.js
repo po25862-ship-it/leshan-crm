@@ -13,10 +13,10 @@ jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "staff" } })
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: mockContacts, add: mockAdd, update: mockUpdate, remove: jest.fn() }) }));
 jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [] }) }));
 jest.mock("../hooks/useNeedsCollection", () => ({ useNeedsCollection: () => ({ items: [] }) }));
-jest.mock("./BuyerActivityLog", () => () => null);
-jest.mock("./BuyerNeeds", () => () => null);
+jest.mock("./BuyerActivityLog", () => ({contactId,initialType,focusRequest}) => <div data-testid="activity" data-contact={contactId} data-type={initialType} data-focus={focusRequest?.type || ""}><textarea aria-label="測試談話草稿" /></div>);
+jest.mock("./BuyerNeeds", () => () => <div data-testid="buyer-needs" />);
 jest.mock("./ShareWithPicker", () => () => null);
-jest.mock("./ContactConversationAnalyses", () => () => null);
+jest.mock("./ContactConversationAnalyses", () => () => <div data-testid="buyer-analyses" />);
 
 let container, root;
 beforeEach(() => {
@@ -106,4 +106,19 @@ test("source manager handles write failure and prevents changes while a buyer dr
   await click("確認修改來源");
   expect(container.querySelector('[role="alert"]').textContent).toContain("本次沒有修改資料");
   expect(mockContacts.find(b => b.id === "three").source).toBe("FB 社團");
+});
+test("opening a buyer puts the conversation first and keeps reference panels collapsed until requested",async()=>{
+ render();await click("查看資料");const work=container.querySelector('.buyer-detail-workspace'),activity=work.querySelector('[data-testid="activity"]'),aside=work.querySelector('aside');
+ expect(activity.dataset.type).toBe('interaction');expect(activity.compareDocumentPosition(aside)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ const panels=work.querySelectorAll('aside>details');expect(panels).toHaveLength(3);expect([...panels].every(panel=>!panel.open)).toBe(true);
+ expect(work.querySelector('[data-testid="buyer-needs"]')).toBeNull();expect(work.querySelector('[data-testid="buyer-analyses"]')).toBeNull();
+ await act(async()=>{panels[1].open=true;panels[1].dispatchEvent(new Event('toggle'));});expect(work.querySelector('[data-testid="buyer-needs"]')).not.toBeNull();
+ await act(async()=>{panels[1].open=false;panels[1].dispatchEvent(new Event('toggle'));});expect(work.querySelector('[data-testid="buyer-needs"]')).not.toBeNull();
+});
+test("header shortcuts target the current activity form and editing buyer details preserves the conversation draft",async()=>{
+ render();await click("查看資料");const work=container.querySelector('.buyer-detail-workspace'),draft=work.querySelector('textarea');
+ act(()=>Simulate.change(draft,{target:{value:'尚未儲存的談話'}}));draft.value='尚未儲存的談話';await click('約帶看');expect(work.querySelector('[data-testid="activity"]').dataset.focus).toBe('appointment');
+ await click('記錄談話');expect(work.querySelector('[data-testid="activity"]').dataset.focus).toBe('interaction');await click('編輯資料');
+ expect(work.querySelector('aside>details').open).toBe(true);expect(work.querySelector('textarea[aria-label="測試談話草稿"]')).toBe(draft);expect(draft.value).toBe('尚未儲存的談話');
+ expect(document.activeElement).toBe(work.querySelector('input[placeholder="例如：陳小姐"]'));
 });

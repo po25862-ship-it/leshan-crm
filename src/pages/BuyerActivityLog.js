@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useCollection } from "../hooks/useCollection";
 import { useGoogleAuth } from "../GoogleAuthContext";
 import { formatDate, todayStr, todayTaipeiStr } from "../lib/dates";
@@ -33,7 +33,7 @@ const makeApptRow = (date) => ({
   notes: "",
 });
 
-export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
+export default function BuyerActivityLog({ contactId, contactName, onLogged, initialType = "appointment", focusRequest }) {
   const { user } = useAuth();
   const { isConnected, createEvent, updateEvent, deleteEvent } = useGoogleAuth();
   const { items: properties } = useCollection("properties", "title");
@@ -54,7 +54,15 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
     `contacts/${contactId}/interactions`, "date"
   );
 
-  const [activeType, setActiveType] = useState("appointment");
+  const [activeType, setActiveType] = useState(initialType);
+  const communicationRef = useRef(null), appointmentRef = useRef(null), interactionSaving = useRef(false);
+  const [pendingFocus, setPendingFocus] = useState(null);
+  useEffect(() => { if (focusRequest?.contactId !== contactId) return; setActiveType(focusRequest.type); setPendingFocus(focusRequest.type); }, [focusRequest, contactId]);
+  useEffect(() => {
+    if (!pendingFocus || pendingFocus !== activeType) return;
+    const input = pendingFocus === "interaction" ? communicationRef.current : appointmentRef.current;
+    input?.focus({ preventScroll: true }); input?.scrollIntoView?.({ block: "center", behavior: "smooth" }); setPendingFocus(null);
+  }, [pendingFocus, activeType]);
 
   // 約帶看欄位（可一次新增多筆，每筆各自的日期／時間／物件）
   const [apptRows, setApptRows] = useState([makeApptRow(todayStr())]);
@@ -72,6 +80,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
   const [feedback, setFeedback] = useState("");
   const [communication, setCommunication] = useState("");
   const [iSync, setISync] = useState(false);
+  const [iSaving, setISaving] = useState(false), [iError, setIError] = useState(""), [iStatus, setIStatus] = useState("");
 
   const merged = [
     ...appts.map((i) => ({ ...i, _type: "appointment" })),
@@ -230,7 +239,9 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
 
   const submitInteraction = async (e) => {
     e.preventDefault();
+    if (interactionSaving.current) return;
     if (!feedback.trim() && !communication.trim() && resolveProperties().length === 0) return;
+    interactionSaving.current = true; setISaving(true); setIError(""); setIStatus("");
 
     const docData = {
       date: iDate,
@@ -242,6 +253,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
       byUid: user.uid,
     };
 
+    try {
     if (iSync && isConnected) {
       try {
         const created = await createEvent({
@@ -260,13 +272,16 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
 
     if (onLogged) {
       const summary = communication.trim() || feedback.trim() || "";
-      onLogged({ date: iDate, summary });
+      try { await onLogged({ date: iDate, summary }); } catch { setIError("談話已儲存，但最後聯絡日期尚未更新，請重新整理確認。"); }
     }
 
     setPropertyInputs([emptyPropertyRow]);
     setFeedback("");
     setCommunication("");
     setISync(false);
+    setIStatus("談話已儲存，可在下方「歷程紀錄」查看。");
+    } catch { setIError("談話儲存失敗，輸入內容已保留，請稍後再試。"); }
+    finally { interactionSaving.current = false; setISaving(false); }
   };
 
   const removeEntry = (item) => {
@@ -277,19 +292,19 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
   const inputStyle = { width: "100%", padding: "9px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13, fontFamily: "inherit" };
 
   return (
-    <div>
-      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>客戶紀錄</div>
+    <div className="buyer-activity-log">
+      <h4 className="buyer-activity-heading">聯絡與帶看</h4>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+      <div className="buyer-activity-tabs" aria-label="客戶紀錄類型">
         {Object.entries(TYPE_LABELS).map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setActiveType(key)}
             className={activeType === key ? "btn" : "btn ghost"}
-            style={{ fontSize: 12 }}
+            aria-pressed={activeType === key}
           >
-            {TYPE_ICONS[key]} {label}
+            {TYPE_ICONS[key]} {key === "interaction" ? "記錄談話" : label}
           </button>
         ))}
       </div>
@@ -320,7 +335,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                <input type="date" value={row.date} onChange={(e) => updateApptRow(row.key, "date", e.target.value)} style={{ ...inputStyle, flex: "1 1 145px", minWidth: 0 }} />
+                <input ref={idx === 0 ? appointmentRef : undefined} aria-label={`第 ${idx+1} 筆帶看日期`} type="date" value={row.date} onChange={(e) => updateApptRow(row.key, "date", e.target.value)} style={{ ...inputStyle, flex: "1 1 145px", minWidth: 0 }} />
                 <ManualTimeInput value={row.time} onChange={(value) => updateApptRow(row.key, "time", value)} style={inputStyle} />
               </div>
               <div style={{ marginBottom: 8 }}>
@@ -359,53 +374,29 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
       )}
 
       {activeType === "interaction" && (
-        <form onSubmit={submitInteraction} style={{ marginBottom: 20, background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
-          <div style={{ marginBottom: 8 }}>
-            <input type="date" value={iDate} onChange={(e) => setIDate(e.target.value)} style={{ ...inputStyle, width: 150 }} />
-          </div>
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>看過的物件（可從清單選，也可直接打新的地址／名稱）</div>
-          {propertyInputs.map((val, idx) => (
-            <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-              <div style={{ flex: 1 }}>
-                <PropertyPicker
-                  properties={properties}
-                  value={val}
-                  onChange={(v) => updatePropertyRow(idx, v)}
-                  placeholder="例如：A7 重劃區 OO 社區 3F"
-                />
+        <form onSubmit={submitInteraction} className="buyer-interaction-form" aria-label="記錄談話">
+          <fieldset disabled={iSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            <label className="buyer-interaction-date">聯絡日期<input aria-label="談話聯絡日期" className="buyer-activity-input" type="date" value={iDate} onChange={e => setIDate(e.target.value)} required /></label>
+            <label className="buyer-interaction-message">這次談了什麼？<textarea ref={communicationRef} aria-label="這次談話內容" className="buyer-activity-input" rows="4" value={communication} onChange={e => setCommunication(e.target.value)} placeholder="例如：客人覺得總價可以，想再確認車位，下週六可帶看。" /></label>
+            <details className="buyer-interaction-extras">
+              <summary>補充客戶回饋、看過的物件（選填）</summary>
+              <div>
+                <label>客戶回饋<textarea className="buyer-activity-input" rows="2" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="客戶對物件的反應、喜好或疑慮…" /></label>
+                <strong>看過的物件（可選，也可自行輸入）</strong>
+                {propertyInputs.map((val, idx) => <div key={idx} className="buyer-interaction-properties"><div><PropertyPicker properties={properties} value={val} onChange={v => updatePropertyRow(idx, v)} placeholder="例如：A7 重劃區 OO 社區 3F" /></div>{propertyInputs.length > 1 && <button type="button" className="btn ghost" onClick={() => removePropertyRow(idx)}>刪除</button>}</div>)}
+                <button type="button" className="btn ghost" onClick={addPropertyRow}>＋ 再加一間</button>
               </div>
-              {propertyInputs.length > 1 && (
-                <button type="button" className="btn ghost" onClick={() => removePropertyRow(idx)}>刪除</button>
-              )}
-            </div>
-          ))}
-          <button type="button" className="btn ghost" onClick={addPropertyRow} style={{ marginBottom: 12 }}>＋ 再加一間</button>
-
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>客戶回饋</div>
-            <textarea rows="2" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="客戶對這些物件的反應、喜好、疑慮…" style={inputStyle} />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>這次溝通內容</div>
-            <textarea rows="2" value={communication} onChange={(e) => setCommunication(e.target.value)} placeholder="這次聊了什麼、下一步約定…" style={inputStyle} />
-          </div>
-
-          {isConnected && (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 12, cursor: "pointer" }}>
-              <input type="checkbox" checked={iSync} onChange={(e) => setISync(e.target.checked)} />
-              同步到 Google 行事曆
-            </label>
-          )}
-
-          <button className="btn" type="submit">新增互動紀錄</button>
+            </details>
+            {isConnected && <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}><input type="checkbox" checked={iSync} onChange={e => setISync(e.target.checked)} />同步到 Google 行事曆</label>}
+            <div className="buyer-interaction-submit"><button className="btn" type="submit" disabled={iSaving || (!feedback.trim() && !communication.trim() && !resolveProperties().length)}>{iSaving ? "儲存談話中…" : "儲存談話紀錄"}</button><p>儲存後會更新最後聯絡日期。</p></div>
+          </fieldset>
+          {iError && <p role="alert" className="buyer-interaction-error">{iError}</p>}
+          {iStatus && <p role="status" className="buyer-interaction-status">{iStatus}</p>}
         </form>
       )}
 
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
-        以下依時間排列，約帶看跟互動紀錄都在同一條時間軸上：
-      </div>
+      <details className="buyer-activity-history">
+      <summary>歷程紀錄（{merged.length}）</summary><p>約帶看與互動紀錄依日期排列，最新的在前面。</p>
 
       {merged.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>還沒有任何紀錄</div>}
       {merged.map((item) => {
@@ -499,6 +490,7 @@ export default function BuyerActivityLog({ contactId, contactName, onLogged }) {
           </div>
         );
       })}
+      </details>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { uniqueChoices } from "../lib/propertyChoices";
 import SearchSelect from "../components/SearchSelect";
 import BuyerSourceManager from "../components/BuyerSourceManager";
 import ContactConversationAnalyses from "./ContactConversationAnalyses";
+import "./Buyers.css";
 
 const emptyForm = {
   name: "",
@@ -36,9 +37,9 @@ function BuyerSourceField({ value, choices, onChange }) {
 
 function BuyerDetailValue({ label, value }) {
   return (
-    <div style={{ background: "#FAFAF8", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
-      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 5 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 650, overflowWrap: "anywhere" }}>{value || "—"}</div>
+    <div className="buyer-detail-value">
+      <div>{label}</div>
+      <strong>{value || "—"}</strong>
     </div>
   );
 }
@@ -56,7 +57,9 @@ export default function Buyers() {
   };
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const detailRef = useRef(null);
+  const detailRef = useRef(null), basicRef = useRef(null);
+  const [activityFocus, setActivityFocus] = useState(null);
+  const [needsVisited, setNeedsVisited] = useState(false), [analysisVisited, setAnalysisVisited] = useState(false);
   const [focusDeepLink, setFocusDeepLink] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -93,6 +96,7 @@ export default function Buyers() {
   };
 
   const openEdit = (item) => {
+    setActivityFocus(null); setNeedsVisited(false); setAnalysisVisited(false);
     setForm({
       name: item.name || "",
       phone: item.phone || "",
@@ -140,6 +144,17 @@ export default function Buyers() {
     detailRef.current.scrollIntoView?.({ block: "start" });
     setFocusDeepLink(false);
   }, [focusDeepLink, editingId]);
+
+  useEffect(() => {
+    if (!editMode || !editingId || !basicRef.current) return;
+    basicRef.current.open = true;
+    basicRef.current.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    basicRef.current.querySelector("input")?.focus({ preventScroll: true });
+  }, [editMode, editingId]);
+
+  function focusActivity(type) {
+    setActivityFocus(current => ({ contactId: editingId, type, sequence: (current?.sequence || 0) + 1 }));
+  }
 
   const toggleTag = (tag) => {
     setForm((f) => ({
@@ -303,42 +318,34 @@ export default function Buyers() {
               </div>
 
               {isOpen && (
-                <div
-                  ref={detailRef}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    display: "grid",
-                    scrollMarginTop: 110,
-                    gridTemplateColumns: "minmax(320px, 640px) 1fr",
-                    gap: 24,
-                    margin: "0 0 20px",
-                    padding: "18px 4px 4px",
-                    borderTop: "1px dashed var(--border)",
-                    alignItems: "start",
-                  }}
-                >
-                  <div>
-                    {!editMode && (
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
-                          <div>
-                            <div className="section-title" style={{ fontSize: 22, marginBottom: 8 }}>{form.name || "未命名客戶"}</div>
-                            {(form.tags || []).map((tag) => <span key={tag} className={`tag ${tag === "買方" ? "buyer" : ""}`} style={{ marginRight: 5 }}>{tag}</span>)}
-                          </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            {form.phone && <a className="btn ghost" href={`tel:${form.phone}`} style={{ textDecoration: "none" }}>撥打電話</a>}
-                            <button className="btn" type="button" onClick={() => setEditMode(true)}>編輯資料</button>
-                            <button className="btn ghost" type="button" onClick={closeInline}>收合</button>
-                          </div>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
-                          <BuyerDetailValue label="電話" value={form.phone} />
-                          <BuyerDetailValue label="客戶來源" value={form.source} />
-                          <BuyerDetailValue label="最後聯絡" value={formatDate(form.lastContactDate)} />
-                        </div>
-                        <BuyerDetailValue label="備註／需求摘要" value={form.notes} />
-                      </div>
-                    )}
+                <section ref={detailRef} className="buyer-detail-workspace" onClick={e => e.stopPropagation()} aria-label={`${form.name || "買方"}的客戶工作區`}>
+                  <header className="buyer-detail-header">
+                    <div className="buyer-detail-identity">
+                      <h3 className="section-title">{form.name || "未命名客戶"}</h3>
+                      <div className="buyer-tags">{(form.tags || []).map(tag => <span key={tag} className={`tag ${tag === "買方" ? "buyer" : ""}`}>{tag}</span>)}{form.source && <span className="tag buyer-source">來源：{form.source}</span>}</div>
+                      <p>{form.phone || "尚未填電話"}<span>最後聯絡：{formatDate(items.find(contact => contact.id === editingId)?.lastContactDate || form.lastContactDate)}</span></p>
+                    </div>
+                    <div className="buyer-detail-actions">
+                      <button className="btn" type="button" onClick={() => focusActivity("interaction")}>記錄談話</button>
+                      <button className="btn ghost" type="button" onClick={() => focusActivity("appointment")}>約帶看</button>
+                      {form.phone && <a className="btn ghost" href={`tel:${form.phone}`}>撥打電話</a>}
+                      {!editMode && <span className="buyer-detail-edit-button"><button className="btn" type="button" onClick={() => setEditMode(true)}>編輯資料</button></span>}
+                      <button className="btn ghost" type="button" onClick={closeInline}>收合</button>
+                    </div>
+                  </header>
+                  <div className="buyer-detail-columns">
+                    <section className="panel buyer-detail-activity" aria-label="記錄談話與約帶看">
+                      <BuyerActivityLog key={editingId} contactId={editingId} contactName={form.name} initialType="interaction" focusRequest={activityFocus}
+                        onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })} />
+                    </section>
+                    <aside className="buyer-detail-support" aria-label="客戶參考資料">
+                      <details className="buyer-detail-section panel" ref={basicRef}>
+                        <summary>基本資料<span>電話、來源與備註</span></summary>
+                        <div className="buyer-detail-section-body">
+                          {!editMode && <>
+                            <div className="buyer-detail-values"><BuyerDetailValue label="電話" value={form.phone} /><BuyerDetailValue label="客戶來源" value={form.source} /><BuyerDetailValue label="最後聯絡" value={formatDate(form.lastContactDate)} /></div>
+                            <BuyerDetailValue label="備註／需求摘要" value={form.notes} />
+                          </>}
                     {editMode && (
                       <form className="form-grid" onSubmit={onSubmit}>
                         <div className="form-field">
@@ -396,24 +403,19 @@ export default function Buyers() {
                         </div>
                       </form>
                     )}
+                        </div>
+                      </details>
+                      <details className="buyer-detail-section panel" onToggle={event => { if (event.currentTarget.open) setNeedsVisited(true); }}>
+                        <summary>客需（{needs.filter(need => need.contactId === editingId).length}）<span>需求與物件配對</span></summary>
+                        <div className="buyer-detail-section-body">{needsVisited && <BuyerNeeds contactId={editingId} contactName={form.name} />}</div>
+                      </details>
+                      <details className="buyer-detail-section panel" onToggle={event => { if (event.currentTarget.open) setAnalysisVisited(true); }}>
+                        <summary>對話分析<span>需要時展開查看</span></summary>
+                        <div className="buyer-detail-section-body">{analysisVisited && <ContactConversationAnalyses contactId={editingId} />}</div>
+                      </details>
+                    </aside>
                   </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                    <div className="panel">
-                      <ContactConversationAnalyses contactId={editingId} />
-                    </div>
-                    <div className="panel">
-                      <BuyerNeeds contactId={editingId} contactName={form.name} />
-                    </div>
-                    <div className="panel">
-                      <BuyerActivityLog
-                        contactId={editingId}
-                        contactName={form.name}
-                        onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })}
-                      />
-                    </div>
-                  </div>
-                </div>
+                </section>
               )}
             </React.Fragment>
           );

@@ -12,20 +12,23 @@ const mockProperties = [
 ];
 const mockAddAppt = jest.fn(async () => ({ id: 'new-appointment' }));
 const mockUpdateAppt = jest.fn(async () => {});
+const mockAddInteraction = jest.fn(async () => ({ id: 'new-interaction' }));
+const mockLogged = jest.fn(async () => {});
 const mockAppointments = [{ id: 'old-appointment', propertyId: 'sold-0', propertyLabel: '金捷已售0', date: '2026-10-20', time: '14:00' }];
 jest.mock('../AuthContext', () => ({ useAuth: () => ({ user: { uid: 'fixture-user' } }) }));
 jest.mock('../GoogleAuthContext', () => ({ useGoogleAuth: () => ({ isConnected: false }) }));
 jest.mock('../hooks/useCollection', () => ({ useCollection: (path) => ({
   items: path === 'properties' ? mockProperties : path.endsWith('/appointments') ? mockAppointments : [],
-  add: mockAddAppt, update: mockUpdateAppt, remove: jest.fn(),
+  add: path.endsWith('/interactions') ? mockAddInteraction : mockAddAppt, update: mockUpdateAppt, remove: jest.fn(),
 }) }));
 let host, root;
 const button = (text) => [...host.querySelectorAll('button')].find((element) => element.textContent.trim() === text);
 const input = () => host.querySelector('input[placeholder="搜尋在售物件案名或地址（可選填）"]');
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAddInteraction.mockReset().mockResolvedValue({id:'new-interaction'});mockLogged.mockReset().mockResolvedValue(undefined);Element.prototype.scrollIntoView=jest.fn();
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
-  act(() => root.render(<BuyerActivityLog contactId="buyer" contactName="測試買方" />));
+  act(() => root.render(<BuyerActivityLog contactId="buyer" contactName="測試買方" onLogged={mockLogged} />));
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); });
 
@@ -47,6 +50,7 @@ test('new viewing searches exclude sold/held listings before the twenty-result l
 });
 
 test('editing an old sold-property viewing preserves its link while only offering active replacements', async () => {
+  act(()=>{host.querySelector('.buyer-activity-history').open=true;});
   expect(host.textContent).toContain('金捷已售0');
   act(() => button('編輯').click());
   const fields = host.querySelectorAll('input[placeholder="搜尋在售物件案名或地址（可選填）"]');
@@ -62,8 +66,27 @@ test('editing an old sold-property viewing preserves its link while only offerin
 });
 
 test('recording a past interaction can still reference a sold listing', () => {
-  act(() => button('💬 互動紀錄').click());
+  act(() => button('💬 記錄談話').click());
   const field = host.querySelector('input[placeholder="例如：A7 重劃區 OO 社區 3F"]');
   act(() => Simulate.focus(field));
   expect(field.parentElement.textContent).toContain('金捷已售0');
+});
+const message=()=>host.querySelector('textarea[aria-label="這次談話內容"]');
+const writeMessage=value=>act(()=>Simulate.change(message(),{target:{value}}));
+test('conversation shortcuts focus the text box and switching to viewing and back preserves the draft',()=>{
+ act(()=>root.render(<BuyerActivityLog contactId="buyer" contactName="測試買方" focusRequest={{contactId:'buyer',type:'interaction',sequence:1}} onLogged={mockLogged}/>));
+ expect(document.activeElement).toBe(message());expect(host.querySelector('.buyer-interaction-extras').open).toBe(false);writeMessage('下週六可帶看');
+ act(()=>button('📅 約帶看').click());expect(message()).toBeNull();act(()=>button('💬 記錄談話').click());expect(message().value).toBe('下週六可帶看');
+});
+test('saving the talk writes the correct contact record and updates the last-contact summary',async()=>{
+ act(()=>button('💬 記錄談話').click());writeMessage('想先確認車位再約看');const date=host.querySelector('input[aria-label="談話聯絡日期"]');act(()=>Simulate.change(date,{target:{value:'2026-11-17'}}));
+ await act(async()=>Simulate.submit(host.querySelector('form[aria-label="記錄談話"]')));
+ expect(mockAddInteraction).toHaveBeenCalledWith(expect.objectContaining({date:'2026-11-17',communication:'想先確認車位再約看',byUid:'fixture-user'}));expect(mockLogged).toHaveBeenCalledWith({date:'2026-11-17',summary:'想先確認車位再約看'});
+ expect(message().value).toBe('');expect(host.querySelector('[role="status"]').textContent).toContain('談話已儲存');
+});
+test('failed saves preserve text and repeated submits cannot create duplicate records',async()=>{
+ act(()=>button('💬 記錄談話').click());writeMessage('不能弄丟的談話');mockAddInteraction.mockRejectedValueOnce(new Error('offline'));
+ await act(async()=>Simulate.submit(host.querySelector('form[aria-label="記錄談話"]')));expect(message().value).toBe('不能弄丟的談話');expect(host.querySelector('[role="alert"]').textContent).toContain('輸入內容已保留');expect(mockLogged).not.toHaveBeenCalled();
+ let finish;mockAddInteraction.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));act(()=>{Simulate.submit(host.querySelector('form[aria-label="記錄談話"]'));Simulate.submit(host.querySelector('form[aria-label="記錄談話"]'));});
+ expect(mockAddInteraction).toHaveBeenCalledTimes(2);expect(button('儲存談話中…').disabled).toBe(true);await act(async()=>finish({id:'saved'}));expect(mockLogged).toHaveBeenCalledTimes(1);
 });
