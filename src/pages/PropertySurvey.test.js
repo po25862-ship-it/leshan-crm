@@ -10,14 +10,15 @@ jest.mock('../hooks/useCollection',()=>({useCollection:name=>name==='colleagues'
 jest.mock('react-router-dom',()=>{const params=new URLSearchParams();return {useSearchParams:()=>[params]};});
 jest.mock('../lib/propertySurveyRender',()=>({renderSurveyCanvas:jest.fn(async()=>({toDataURL:()=> 'data:image/png;base64,preview'})),prepareSurveyPhoto:jest.fn(),surveyPdf:jest.fn(),downloadSurvey:jest.fn()}));
 jest.mock('../lib/propertySurveyWord',()=>({surveyWord:jest.fn()}));
-let root,container,calls,failSave;
+let root,container,calls,failSave,mockCloudDefaults,mockCases,mockLoadedCase;
 beforeEach(()=>{
  global.IS_REACT_ACT_ENVIRONMENT=true;localStorage.clear();calls=[];failSave=false;renderSurveyCanvas.mockReset().mockResolvedValue({toDataURL:()=> 'data:image/png;base64,preview'});
  prepareSurveyPhoto.mockReset();
+ mockCloudDefaults=null;mockCases=[];mockLoadedCase=null;
  mockStaffError=null;mockColleagues=[{id:'staff-a',name:'測試甲',phone:'0900-000-001',branch:'樂善店'},{id:'staff-b',name:'測試乙',phone:'0900-000-002'},{id:'staff-c',name:'測試丙',phone:''},{id:'mTfncojmWcgx3XN3JYceTJFJtw03',name:'我會寫扣',phone:'0999'}];
  mockProperties=[{id:'crm-1',title:'CRM 兩房',listingNo:'DE02601414',communityName:'金捷市',area:'A7重劃區',address:'桃園市龜山區樂善二路１９３號',agentInfo:'董 韋 伶 03-3288283',totalPrice:858,floor:'3/6'},{id:'crm-2',title:'智匯學兩房',listingNo:'DD02404966',address:'桃園市龜山區牛角坡路',totalPrice:1588,floor:'8/15'}];
- global.fetch=jest.fn(async(url,options)=>{calls.push({url,options});if(options.method==='POST'){const body=JSON.parse(options.body);if(body.action==='save')return {ok:!failSave,json:async()=>failSave?{error:'儲存失敗測試'}:{ok:true,id:'a'.repeat(32),revision:1,updatedAt:1000}};}
- return {ok:true,json:async()=>({cases:[]})};});
+ global.fetch=jest.fn(async(url,options)=>{calls.push({url,options});if(options.method==='POST'){const body=JSON.parse(options.body);if(body.action==='save')return {ok:!failSave,json:async()=>failSave?{error:'儲存失敗測試'}:{ok:true,id:'a'.repeat(32),revision:1,updatedAt:1000}};if(body.action==='sales-defaults'){mockCloudDefaults=body.salesData;return {ok:true,json:async()=>({ok:true,salesDefaults:mockCloudDefaults})};}}
+ return {ok:true,json:async()=>url.includes('?id=')?{record:mockLoadedCase}:{cases:mockCases,salesDefaults:mockCloudDefaults}};});
  container=document.createElement('div');document.body.appendChild(container);root=createRoot(container);
 });
 afterEach(()=>{act(()=>root.unmount());container.remove();});
@@ -176,4 +177,38 @@ test('an unverified automatic ratio cannot reuse an old result; users can confir
  edit('survey-ratio-mode','manual');expect(container.querySelector('#survey-common_ratio_percent').readOnly).toBe(false);edit('survey-common_ratio_percent','30.5');
  expect(container.querySelector('#survey-common_ratio_percent').value).toBe('30.5');edit('survey-ratio-mode','auto');edit('survey-parking_area_ping','');
  expect(container.querySelector('#survey-common_ratio_percent').value).toBe('');expect(container.querySelector('#survey-ratio-hint').textContent).toContain('無車位請填 0');
+});
+test('chosen reps are remembered without saving a case and restored from the account on another fresh session',async()=>{
+ jest.useFakeTimers();try{
+  await act(async()=>root.render(<PropertySurvey/>));chooseReps(3);staffSearch(1,'測試甲');choose('測試甲');staffSearch(2,'測試乙');choose('測試乙');edit('survey-sales_rep_3','第三位');edit('survey-sales_rep_phone_3','0900000003');
+  await act(async()=>jest.advanceTimersByTime(600));expect(mockCloudDefaults).toMatchObject({sales_rep_count:'3',sales_rep:'測試甲',sales_rep_2:'測試乙',sales_rep_3:'第三位'});
+  expect(calls.filter(c=>c.options.method==='POST'&&JSON.parse(c.options.body).action==='save')).toHaveLength(0);
+  act(()=>root.unmount());localStorage.clear();root=createRoot(container);await act(async()=>root.render(<PropertySurvey/>));
+  expect(container.querySelector('input[name="survey-sales-rep-count"]:checked').value).toBe('3');expect(container.querySelector('#survey-sales_rep_2').value).toBe('測試乙');expect(container.querySelector('#survey-sales_rep_phone_3').value).toBe('0900000003');
+ }finally{jest.useRealTimers();}
+});
+test('opening old cases preserves their team and does not replace personal defaults used for the next new case',async()=>{
+ mockCloudDefaults={sales_rep_count:'2',sales_rep:'常用甲',sales_rep_phone:'0900000001',sales_rep_2:'常用乙',sales_rep_phone_2:'0900000002'};
+ mockCases=[{id:'old',case_name:'舊案件',updatedAt:1000}];mockLoadedCase={id:'old',salesData:{case_name:'舊案件',sales_rep_count:'1',sales_rep:'舊案業務',sales_rep_phone:'舊案電話'}};
+ await act(async()=>root.render(<PropertySurvey/>));act(()=>button('案件記錄').click());await act(async()=>button('載入編輯').click());
+ expect(container.querySelector('#survey-sales_rep').value).toBe('舊案業務');expect(container.querySelector('#survey-sales_rep_phone').value).toBe('舊案電話');
+ act(()=>button('新案件').click());expect(container.querySelector('#survey-sales_rep').value).toBe('常用甲');expect(container.querySelector('#survey-sales_rep_2').value).toBe('常用乙');
+ expect(calls.filter(c=>c.options.method==='POST')).toHaveLength(0);
+});
+test('a delayed defaults response fills only contacts and never replaces already-edited contacts or property text',async()=>{
+ const confirm=jest.spyOn(window,'confirm').mockReturnValue(true);let finish;
+ global.fetch=jest.fn(()=>new Promise(resolve=>{finish=resolve;}));
+ try{
+  await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','正在填的物件');staffSearch(1,'測試乙');choose('測試乙');
+  await act(async()=>finish({ok:true,json:async()=>({cases:[],salesDefaults:{sales_rep:'舊預設甲',sales_rep_count:'1'}})}));
+  expect(container.querySelector('#survey-case_name').value).toBe('正在填的物件');expect(container.querySelector('#survey-sales_rep').value).toBe('測試乙');
+  act(()=>button('新案件').click());expect(container.querySelector('#survey-sales_rep').value).toBe('測試乙');
+ }finally{confirm.mockRestore();}
+});
+test('fresh cases update cached defaults from the account while keeping newly typed property text',async()=>{
+ localStorage.setItem('leshan-survey-sales-defaults-staff-a',JSON.stringify({salesData:{sales_rep:'快取舊名單',sales_rep_count:'1'},pending:false}));let finish;
+ global.fetch=jest.fn(()=>new Promise(resolve=>{finish=resolve;}));await act(async()=>root.render(<PropertySurvey/>));
+ expect(container.querySelector('#survey-sales_rep').value).toBe('快取舊名單');edit('survey-case_name','我剛輸入的案名');
+ await act(async()=>finish({ok:true,json:async()=>({cases:[],salesDefaults:{sales_rep:'帳號最新名單',sales_rep_count:'1',sales_rep_phone:'最新電話'}})}));
+ expect(container.querySelector('#survey-sales_rep').value).toBe('帳號最新名單');expect(container.querySelector('#survey-sales_rep_phone').value).toBe('最新電話');expect(container.querySelector('#survey-case_name').value).toBe('我剛輸入的案名');
 });

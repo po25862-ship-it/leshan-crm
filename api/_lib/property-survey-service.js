@@ -20,6 +20,9 @@ function createSurveyService(db,{now=()=>Date.now()}={}){
   }
   async function list(uid){const result=await cases(uid).orderBy('updatedAt','desc').limit(200).get();return result.docs.map(s=>{const d=s.data();return {id:s.id,case_name:d.salesData.case_name,address:d.salesData.address,price_wan:d.salesData.price_wan,updatedAt:d.updatedAt,revision:d.revision};});}
   async function get(uid,id){const snapshot=await ref(uid,id).get();if(!snapshot.exists)throw fail(404,'找不到這筆物調。');return {id:snapshot.id,...snapshot.data()};}
+  const defaultsRef=uid=>db.collection('propertySurveys').doc(uid).collection('meta').doc('sales-reps-v1');
+  async function getSalesDefaults(uid){const snapshot=await defaultsRef(uid).get();return snapshot.exists?model.salesRepDefaults(snapshot.data().salesData):null;}
+  async function saveSalesDefaults(uid,data){let salesData;try{salesData=model.salesRepDefaults(data);}catch(error){throw fail(400,error.message);}await defaultsRef(uid).set({salesData,ownerUid:uid,updatedAt:now()});return salesData;}
   async function seed(uid,initial){
     if(uid!==OWNER_UID||!Array.isArray(initial))return;
     const marker=db.collection('propertySurveys').doc(uid).collection('meta').doc('desktop-import-v1');
@@ -27,6 +30,6 @@ function createSurveyService(db,{now=()=>Date.now()}={}){
     for(const input of initial){const draft=validateDraft(input),target=ref(uid,caseId(draft.salesData.case_name));await db.runTransaction(async tx=>{if((await tx.get(target)).exists)return;const time=now();tx.set(target,{...draft,ownerUid:uid,revision:1,createdAt:time,updatedAt:time,importedFromDesktop:true});});}
     await marker.set({completedAt:now(),count:initial.length});
   }
-  return {save,list,get,seed};
+  return {save,list,get,seed,getSalesDefaults,saveSalesDefaults};
 }
 module.exports={createSurveyService,caseId,validateDraft,fail,OWNER_UID};

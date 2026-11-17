@@ -17,6 +17,13 @@ function salesRepCount(data={}) {
   return 1;
 }
 function salesReps(data={}) { return SALES_REP_FIELDS.slice(0,salesRepCount(data)).map(([name,phone])=>({name:text(data[name]),phone:text(data[phone])})); }
+function salesRepDefaults(data={}) {
+  if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('業務預設資料不正確。');
+  const result=Object.fromEntries(SALES_REP_KEYS.map(key=>[key,text(data[key])]));
+  if(result.sales_rep_count&&!/^[1-3]$/.test(result.sales_rep_count.normalize('NFKC')))throw new Error('業務人數請選擇 1 到 3 人。');
+  if(Object.values(result).some(value=>value.length>500))throw new Error('業務資料過長，請精簡後重試。');
+  result.sales_rep_count=String(salesRepCount(result));return result;
+}
 function number(value) { if (!text(value) || /^[-—]$/.test(text(value))) return null; const n=Number(text(value).normalize('NFKC').replace(/,/g,'')); return Number.isFinite(n)?n:null; }
 function commonRatioMode(data={}) { return data.common_ratio_mode==='manual'||(!text(data.common_ratio_mode)&&text(data.common_ratio_percent))?'manual':'auto'; }
 function commonRatio(data={}) {
@@ -89,4 +96,4 @@ function fromCrm(property={}) {
   if(floors){result.sale_floor=floors[1].trim();if(!result.total_floors)result.total_floors=floors[2];}
   return result;
 }
-module.exports={GROUPS,FIELD_KEYS,CONTACT_KEYS,SALES_REP_FIELDS,SALES_REP_KEYS,salesRepCount,salesReps,commonRatioMode,commonRatio,text,number,floorLine,sellingPoints,values,normalizeDraft,fromCrm};
+module.exports={GROUPS,FIELD_KEYS,CONTACT_KEYS,SALES_REP_FIELDS,SALES_REP_KEYS,salesRepCount,salesReps,salesRepDefaults,commonRatioMode,commonRatio,text,number,floorLine,sellingPoints,values,normalizeDraft,fromCrm};

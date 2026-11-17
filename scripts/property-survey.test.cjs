@@ -82,3 +82,18 @@ test('authenticated save/list/get use only the authenticated account',async()=>{
  const loaded=await call({method:'GET',query:{id:saved.value.id}});assert.equal(loaded.value.record.ownerUid,OWNER_UID);
  const snapshot=JSON.stringify([...db.rows]);await call({method:'POST',body:{action:'unknown'}});assert.equal(JSON.stringify([...db.rows]),snapshot);
 });
+test('remembered survey teams are private per account, bounded to three people and separate from existing cases',async()=>{
+ const db=database(),service=createSurveyService(db,{now:()=>123});const saved=await service.save('A',draft('保留案件'));
+ await service.saveSalesDefaults('A',{sales_rep_count:'3',sales_rep:'甲',sales_rep_phone:'0900000001',sales_rep_2:'乙',sales_rep_3:'丙',case_name:'不應記住的案件',ownerUid:'B'});
+ assert.equal((await service.getSalesDefaults('A')).sales_rep_3,'丙');assert.equal(await service.getSalesDefaults('B'),null);
+ assert.equal((await service.getSalesDefaults('A')).case_name,undefined);assert.equal((await service.get('A',saved.id)).salesData.sales_rep,'');
+ const snapshot=JSON.stringify([...db.rows]);await assert.rejects(service.saveSalesDefaults('A',{sales_rep_count:'4'}),e=>e.statusCode===400);await assert.rejects(service.saveSalesDefaults('A',{sales_rep:'x'.repeat(501)}),e=>e.statusCode===400);assert.equal(JSON.stringify([...db.rows]),snapshot);
+ await service.saveSalesDefaults('A',{sales_rep_count:'1'});assert.equal((await service.getSalesDefaults('A')).sales_rep,'');
+});
+test('defaults API derives ownership only from authentication and list responses include that account\'s preferences',async()=>{
+ const db=database(),handler=handlerFactory({authenticate:async()=>({uid:OWNER_UID}),admin:()=>({firestore:db}),initial:()=>[]});
+ const call=async req=>{const res={setHeader(){},status(code){this.code=code;return this;},json(value){this.value=value;return this;}};await handler(req,res);return res;};
+ const saved=await call({method:'POST',body:{action:'sales-defaults',uid:'other',salesData:{sales_rep_count:'2',sales_rep:'自己的甲',sales_rep_2:'自己的乙'}}});assert.equal(saved.code,200);
+ const listed=await call({method:'GET',query:{}});assert.equal(listed.value.salesDefaults.sales_rep_2,'自己的乙');assert.deepEqual(listed.value.cases,[]);
+ assert.equal(await createSurveyService(db).getSalesDefaults('other'),null);
+});
