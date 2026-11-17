@@ -30,6 +30,31 @@ test('all three contacts survive cloud save and reload; invalid counts cause no 
  assert.deepEqual(model.salesReps(loaded.salesData),[{name:'甲',phone:'0900000001'},{name:'乙',phone:'0900000002'},{name:'丙',phone:'0900000003'}]);
  const before=JSON.stringify([...db.rows]);await assert.rejects(service.save('A',{salesData:{...record.salesData,sales_rep_count:'4'}}),e=>e.statusCode===400);assert.equal(JSON.stringify([...db.rows]),before);
 });
+const ratioAreas={total_ping:'54.59',parking_area_ping:'11.01',main_area_ping:'27.36',attached_area_ping:'3.18'};
+test('common ratio recognizes both area conventions and never subtracts parking twice',()=>{
+ const gross=model.commonRatio({...ratioAreas,common_area_ping:'24.05'}),net=model.commonRatio({...ratioAreas,common_area_ping:'13.04'});
+ assert.equal(gross.value,'29.92');assert.equal(gross.basis,'including-parking');assert.equal(net.value,'29.92');assert.equal(net.basis,'excluding-parking');
+ assert.equal(model.commonRatio({total_ping:'30',parking_area_ping:'0',common_area_ping:'10'}).value,'33.33');
+ assert.equal(model.commonRatio({total_ping:'３０',parking_area_ping:'０',common_area_ping:'１０'}).value,'33.33');
+ assert.equal(model.commonRatio({...ratioAreas,common_area_ping:'10',main_area_ping:'',attached_area_ping:''}).value,'22.95');
+ assert.equal(model.commonRatio({total_ping:'44.6',parking_area_ping:'7.482',main_area_ping:'17.947',attached_area_ping:'7.611',common_area_ping:'11.563'}).value,'31.15');
+});
+test('missing, ambiguous and contradictory areas do not produce automatic ratios or keep stale results',()=>{
+ for(const change of [{parking_area_ping:''},{parking_area_ping:'54.59'},{parking_area_ping:'-1'},{common_area_ping:'-1'},{common_area_ping:'90'},{main_area_ping:'1'},{main_area_ping:'',attached_area_ping:''}]){
+  const data={case_name:'不確定',...ratioAreas,common_area_ping:'24.05',...change,common_ratio_mode:'auto',common_ratio_percent:'99'};
+  assert.equal(model.commonRatio(data).value,null);assert.equal(model.normalizeDraft({salesData:data}).salesData.common_ratio_percent,'');assert.equal(model.values(data).common_ratio_percent,'');
+ }
+ assert.equal(model.commonRatio({...ratioAreas,main_area_ping:'',attached_area_ping:'',common_area_ping:'24.05',common_area_basis:'including-parking'}).value,'29.92');
+ assert.equal(model.commonRatio({...ratioAreas,common_area_ping:'5',common_area_basis:'including-parking'}).value,null);
+});
+test('computed ratios survive saves and exports; legacy manual ratios remain explicit and CRM basis metadata is retained',async()=>{
+ const data={case_name:'自動公設',...ratioAreas,common_area_ping:'24.05',common_ratio_mode:'auto'};
+ const normalized=model.normalizeDraft({salesData:data});assert.equal(normalized.salesData.common_ratio_percent,'29.92');assert.equal(model.values(normalized.salesData).common_ratio_percent,'29.92');
+ const service=createSurveyService(database()),saved=await service.save('A',{salesData:data});assert.equal((await service.get('A',saved.id)).salesData.common_ratio_percent,'29.92');
+ const legacy=model.normalizeDraft({salesData:{case_name:'舊資料',common_ratio_percent:'31.5'}});assert.equal(legacy.salesData.common_ratio_mode,'manual');assert.equal(model.values(legacy.salesData).common_ratio_percent,'31.5');
+ const crm=model.fromCrm({title:'已扣車位',titlePing:54.59,parkingPing:11.01,commonAreaPing:13.04,commonAreaBasis:'excluding-parking'});
+ assert.equal(crm.common_area_basis,'excluding-parking');assert.equal(model.commonRatio(crm).value,'29.92');
+});
 test('cases are isolated by uid and an old revision cannot overwrite a newer record',async()=>{
  const db=database(),service=createSurveyService(db,{now:()=>100});const a=await service.save('A',draft('第一案'));
  assert.equal(a.revision,1);assert.equal((await service.list('B')).length,0);

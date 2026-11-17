@@ -5,8 +5,8 @@ import PropertySurvey from './PropertySurvey';
 import {prepareSurveyPhoto,renderSurveyCanvas} from '../lib/propertySurveyRender';
 
 jest.mock('../AuthContext',()=>{const user={uid:'staff-a',getIdToken:async()=>'test-token'};return {useAuth:()=>({user})};});
-let mockProperties=[];
-jest.mock('../hooks/useCollection',()=>({useCollection:()=>({items:mockProperties})}));
+let mockProperties=[],mockColleagues=[],mockStaffError=null;
+jest.mock('../hooks/useCollection',()=>({useCollection:name=>name==='colleagues'?{items:mockColleagues,error:mockStaffError}:{items:mockProperties}}));
 jest.mock('react-router-dom',()=>{const params=new URLSearchParams();return {useSearchParams:()=>[params]};});
 jest.mock('../lib/propertySurveyRender',()=>({renderSurveyCanvas:jest.fn(async()=>({toDataURL:()=> 'data:image/png;base64,preview'})),prepareSurveyPhoto:jest.fn(),surveyPdf:jest.fn(),downloadSurvey:jest.fn()}));
 jest.mock('../lib/propertySurveyWord',()=>({surveyWord:jest.fn()}));
@@ -14,6 +14,7 @@ let root,container,calls,failSave;
 beforeEach(()=>{
  global.IS_REACT_ACT_ENVIRONMENT=true;localStorage.clear();calls=[];failSave=false;renderSurveyCanvas.mockReset().mockResolvedValue({toDataURL:()=> 'data:image/png;base64,preview'});
  prepareSurveyPhoto.mockReset();
+ mockStaffError=null;mockColleagues=[{id:'staff-a',name:'測試甲',phone:'0900-000-001',branch:'樂善店'},{id:'staff-b',name:'測試乙',phone:'0900-000-002'},{id:'staff-c',name:'測試丙',phone:''},{id:'mTfncojmWcgx3XN3JYceTJFJtw03',name:'我會寫扣',phone:'0999'}];
  mockProperties=[{id:'crm-1',title:'CRM 兩房',listingNo:'DE02601414',communityName:'金捷市',area:'A7重劃區',address:'桃園市龜山區樂善二路１９３號',agentInfo:'董 韋 伶 03-3288283',totalPrice:858,floor:'3/6'},{id:'crm-2',title:'智匯學兩房',listingNo:'DD02404966',address:'桃園市龜山區牛角坡路',totalPrice:1588,floor:'8/15'}];
  global.fetch=jest.fn(async(url,options)=>{calls.push({url,options});if(options.method==='POST'){const body=JSON.parse(options.body);if(body.action==='save')return {ok:!failSave,json:async()=>failSave?{error:'儲存失敗測試'}:{ok:true,id:'a'.repeat(32),revision:1,updatedAt:1000}};}
  return {ok:true,json:async()=>({cases:[]})};});
@@ -137,4 +138,42 @@ test('new cases and CRM imports retain the chosen team while old drafts remain e
  search('CRM');choose('CRM 兩房');act(()=>button('帶入物件').click());
  expect(container.querySelector('input[name="survey-sales-rep-count"]:checked').value).toBe('3');expect(container.querySelector('#survey-sales_rep_2').value).toBe('第二位');
  confirm.mockRestore();
+});
+const staffSearch=(index,query)=>act(()=>{const input=container.querySelector(`[aria-label="第 ${index} 位業務：店內同事"]`);Simulate.focus(input);Simulate.change(input,{target:{value:query}});});
+test('all three rep slots select colleagues locally and bring in the matching phone; manual edits remain possible',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','名冊帶入');chooseReps(3);const initialCalls=calls.length;
+ staffSearch(1,'0900-000-001');choose('測試甲');staffSearch(2,'測試乙');choose('測試乙');staffSearch(3,'測試丙');choose('測試丙');
+ expect(container.querySelector('#survey-sales_rep').value).toBe('測試甲');expect(container.querySelector('#survey-sales_rep_phone').value).toBe('0900-000-001');
+ expect(container.querySelector('#survey-sales_rep_2').value).toBe('測試乙');expect(container.querySelector('#survey-sales_rep_phone_2').value).toBe('0900-000-002');
+ expect(container.querySelector('#survey-sales_rep_3').value).toBe('測試丙');expect(calls).toHaveLength(initialCalls);
+ edit('survey-sales_rep_phone_3','0900-000-003');await act(async()=>button('儲存案件').click());
+ expect(JSON.parse(calls.find(c=>c.options.method==='POST').options.body).record.salesData).toMatchObject({sales_rep:'測試甲',sales_rep_phone:'0900-000-001',sales_rep_2:'測試乙',sales_rep_phone_2:'0900-000-002',sales_rep_3:'測試丙',sales_rep_phone_3:'0900-000-003'});
+});
+test('choosing a colleague without a phone clears the old phone, hidden accounts are excluded, and unsuccessful searches do not replace contacts',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-sales_rep','原有業務');edit('survey-sales_rep_phone','舊電話');
+ staffSearch(1,'我會寫扣');expect(container.querySelectorAll('[role="option"]')).toHaveLength(0);expect(container.querySelector('#survey-sales_rep_phone').value).toBe('舊電話');
+ staffSearch(1,'測試丙');choose('測試丙');expect(container.querySelector('#survey-sales_rep_phone').value).toBe('');
+});
+test('directory failures retain manual contact editing',async()=>{
+ mockStaffError=new Error('directory unavailable');mockColleagues=[];await act(async()=>root.render(<PropertySurvey/>));
+ expect(container.textContent).toContain('名冊暫時無法讀取');edit('survey-sales_rep','自行輸入');edit('survey-sales_rep_phone','0900123456');
+ expect(container.querySelector('#survey-sales_rep').value).toBe('自行輸入');
+});
+const areaFields=common=>({total_ping:'54.59',parking_area_ping:'11.01',main_area_ping:'27.36',attached_area_ping:'3.18',common_area_ping:common});
+test('public area ratio detects gross and net common areas without double subtraction, and saves the computed value',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','公設自動換算');
+ for(const [key,value] of Object.entries(areaFields('24.05')))edit('survey-'+key,value);
+ const ratioInput=()=>container.querySelector('#survey-common_ratio_percent');expect(ratioInput().readOnly).toBe(true);expect(ratioInput().value).toBe('29.92');
+ expect(container.querySelector('#survey-ratio-hint').textContent).toContain('公設含車位');
+ edit('survey-common_area_ping','13.04');expect(ratioInput().value).toBe('29.92');expect(container.querySelector('#survey-ratio-hint').textContent).toContain('不再重複扣除');
+ await act(async()=>button('儲存案件').click());expect(JSON.parse(calls.find(c=>c.options.method==='POST').options.body).record.salesData).toMatchObject({common_ratio_percent:'29.92',common_ratio_mode:'auto'});
+});
+test('an unverified automatic ratio cannot reuse an old result; users can confirm its basis or preserve an explicit manual value',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));for(const [key,value] of Object.entries(areaFields('24.05')))edit('survey-'+key,value);
+ expect(container.querySelector('#survey-common_ratio_percent').value).toBe('29.92');edit('survey-main_area_ping','');
+ expect(container.querySelector('#survey-common_ratio_percent').value).toBe('');expect(container.querySelector('#survey-ratio-hint').textContent).toContain('還不能判斷');
+ edit('survey-common-basis','including-parking');expect(container.querySelector('#survey-common_ratio_percent').value).toBe('29.92');
+ edit('survey-ratio-mode','manual');expect(container.querySelector('#survey-common_ratio_percent').readOnly).toBe(false);edit('survey-common_ratio_percent','30.5');
+ expect(container.querySelector('#survey-common_ratio_percent').value).toBe('30.5');edit('survey-ratio-mode','auto');edit('survey-parking_area_ping','');
+ expect(container.querySelector('#survey-common_ratio_percent').value).toBe('');expect(container.querySelector('#survey-ratio-hint').textContent).toContain('無車位請填 0');
 });
