@@ -13,7 +13,7 @@ jest.mock("../AuthContext", () => ({ useAuth: () => ({ user: { uid: "staff" } })
 jest.mock("../hooks/useSharedCollection", () => ({ useSharedCollection: () => ({ items: mockContacts, add: mockAdd, update: mockUpdate, remove: jest.fn() }) }));
 jest.mock("../hooks/useCollection", () => ({ useCollection: () => ({ items: [] }) }));
 jest.mock("../hooks/useNeedsCollection", () => ({ useNeedsCollection: () => ({ items: [] }) }));
-jest.mock("./BuyerActivityLog", () => ({contactId,initialType,focusRequest}) => <div data-testid="activity" data-contact={contactId} data-type={initialType} data-focus={focusRequest?.type || ""}><textarea aria-label="測試談話草稿" /></div>);
+jest.mock("./BuyerActivityLog", () => ({contactId,initialType,focusRequest,onLogged}) => <div data-testid="activity" data-contact={contactId} data-type={initialType} data-focus={focusRequest?.type || ""}><textarea aria-label="測試談話草稿" /><button type="button" onClick={()=>onLogged({date:'2026-11-17',summary:'測試談話'})}>測試儲存談話</button></div>);
 jest.mock("./BuyerNeeds", () => () => <div data-testid="buyer-needs" />);
 jest.mock("./ShareWithPicker", () => () => null);
 jest.mock("./ContactConversationAnalyses", () => () => <div data-testid="buyer-analyses" />);
@@ -121,4 +121,9 @@ test("header shortcuts target the current activity form and editing buyer detail
  await click('記錄談話');expect(work.querySelector('[data-testid="activity"]').dataset.focus).toBe('interaction');await click('編輯資料');
  expect(work.querySelector('aside>details').open).toBe(true);expect(work.querySelector('textarea[aria-label="測試談話草稿"]')).toBe(draft);expect(draft.value).toBe('尚未儲存的談話');
  expect(document.activeElement).toBe(work.querySelector('input[placeholder="例如：陳小姐"]'));
+});
+test("saving buyer details after recording a talk preserves the updated last-contact date",async()=>{
+ mockContacts[0].lastContactDate='2026-08-23';render();await click('查看資料');await click('編輯資料');await click('測試儲存談話');
+ await act(async()=>Simulate.submit(container.querySelector('.buyer-detail-support form')));
+ expect(mockUpdate).toHaveBeenLastCalledWith('one',expect.objectContaining({lastContactDate:'2026-11-17'}));
 });

@@ -57,6 +57,8 @@ export default function Buyers() {
   };
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const activeBuyerId = useRef(editingId);
+  useEffect(() => { activeBuyerId.current = editingId; }, [editingId]);
   const detailRef = useRef(null), basicRef = useRef(null);
   const [activityFocus, setActivityFocus] = useState(null);
   const [needsVisited, setNeedsVisited] = useState(false), [analysisVisited, setAnalysisVisited] = useState(false);
@@ -154,6 +156,10 @@ export default function Buyers() {
 
   function focusActivity(type) {
     setActivityFocus(current => ({ contactId: editingId, type, sequence: (current?.sequence || 0) + 1 }));
+  }
+  async function activityLogged(contactId, { date, summary }) {
+    await update(contactId, { lastContactDate: date, lastContactNote: summary });
+    if (activeBuyerId.current === contactId) setForm(current => ({ ...current, lastContactDate: date }));
   }
 
   const toggleTag = (tag) => {
@@ -336,7 +342,7 @@ export default function Buyers() {
                   <div className="buyer-detail-columns">
                     <section className="panel buyer-detail-activity" aria-label="記錄談話與約帶看">
                       <BuyerActivityLog key={editingId} contactId={editingId} contactName={form.name} initialType="interaction" focusRequest={activityFocus}
-                        onLogged={({ date, summary }) => update(editingId, { lastContactDate: date, lastContactNote: summary })} />
+                        onLogged={entry => activityLogged(editingId, entry)} />
                     </section>
                     <aside className="buyer-detail-support" aria-label="客戶參考資料">
                       <details className="buyer-detail-section panel" ref={basicRef}>
