@@ -40,7 +40,10 @@ export async function renderSurveyCanvas(record) {
   function wrapped(size){ctx.font=`${size}px ${SURVEY_FONT}`;const lines=[];points.forEach((point,i)=>{let row=`${i+1}. `;for(const char of point){if(ctx.measureText(row+char).width>465){lines.push({text:row,index:i});row='　';}row+=char;}lines.push({text:row,index:i});});return lines;}
   let size=23,lines=wrapped(size);while(lines.length*size*1.2>158&&size>10){size--;lines=wrapped(size);}if(lines.length*size*1.2>158)throw new Error('介紹分析欄超過一頁版面，請精簡後產生預覽。');
   lines.forEach((row,i)=>write(row.text,290,y+69+i*size*1.2,474,size,row.index%2?green:ink,true));y+=216;
-  rectangle(x,y,260,96,'#efefef');rectangle(284,y,244,96);rectangle(528,y,242,96);write(shown('store_name'),32,y+48,244,28,'#203d4c',true,'center');write('店長：'+shown('store_manager'),290,y+39,232,18);write('不動產經紀人：'+shown('agent_broker'),290,y+64,232,18);write('不動產營業員',535,y+19,227,14);write(shown('sales_rep'),535,y+44,227,27,'#203d4c',true);write(shown('sales_rep_phone'),535,y+75,227,28,'#203d4c',true);
+  rectangle(x,y,260,96,'#efefef');rectangle(284,y,244,96);rectangle(528,y,242,96);write(shown('store_name'),32,y+48,244,28,'#203d4c',true,'center');write('店長：'+shown('store_manager'),290,y+39,232,18);write('不動產經紀人：'+shown('agent_broker'),290,y+64,232,18);write('不動產營業員',535,y+16,227,14);
+  const reps=model.salesReps(record.salesData);
+  if(reps.length===1){write(reps[0].name||'-',535,y+44,227,27,'#203d4c',true);write(reps[0].phone||'-',535,y+75,227,28,'#203d4c',true);}
+  else reps.forEach((rep,index)=>write(`${rep.name||'-'}　${rep.phone||'-'}`,535,y+(reps.length===2?43+index*30:37+index*23),227,reps.length===2?20:18,'#203d4c',true));
   return canvas;
 }
 export async function surveyPdf(canvas,title) { const {PDFDocument}=await import('pdf-lib');const pdf=await PDFDocument.create();pdf.setTitle(title);const image=await pdf.embedPng(canvas.toDataURL('image/png')),page=pdf.addPage([595.28,841.89]);page.drawImage(image,{x:0,y:0,width:595.28,height:841.89});return new Blob([await pdf.save()],{type:'application/pdf'}); }

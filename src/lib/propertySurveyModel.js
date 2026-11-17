@@ -3,11 +3,20 @@ const GROUPS = [
   ['坪數與車位', [['main_area_ping','主建物（坪）'],['attached_area_ping','附屬建物（坪）'],['common_area_ping','公設（坪）'],['parking_area_ping','車位（坪）'],['parking_type','車位類型'],['total_ping','總坪數（坪）'],['common_ratio_percent','公設比（%）'],['land_ping','土地坪數（坪）'],['land_share','基地持分']]],
   ['物件現況', [['building_type','房屋型式'],['sale_floor','出售樓層（樓）'],['total_floors','總樓層（層）'],['basement_floors','地下（層）'],['layout','格局（房／廳／衛／陽台）'],['has_suite','有無套房'],['has_addition','有無增建'],['completion_date','建築完成日期'],['community_units','社區總戶數'],['orientation','座向'],['lane_width','巷寬（米）'],['management_fee','管理費（元／月）'],['parking_spot','停車位'],['garbage','垃圾處理'],['gas','天然瓦斯'],['bathroom_window','廁所對外窗'],['security','警衛管理'],['occupancy','自住／空屋'],['frontage','面寬'],['rent','租金（元／月）'],['rent_period','租期']]],
   ['生活圈', [['school','學校'],['park','公園'],['market','市場'],['transport','交通'],['viewing_method','帶看方式'],['renovation','裝潢']]],
-  ['店家資訊', [['store_name','門市店名'],['store_manager','店長'],['agent_broker','不動產經紀人'],['sales_rep','不動產營業員'],['sales_rep_phone','營業員電話']]],
+  ['店家資訊', [['store_name','門市店名'],['store_manager','店長'],['agent_broker','不動產經紀人'],['sales_rep_count','業務人數'],['sales_rep','不動產營業員'],['sales_rep_phone','營業員電話'],['sales_rep_2','第二位營業員'],['sales_rep_phone_2','第二位營業員電話'],['sales_rep_3','第三位營業員'],['sales_rep_phone_3','第三位營業員電話']]],
 ];
 const FIELD_KEYS = GROUPS.flatMap(([, fields])=>fields.map(([key])=>key));
-const CONTACT_KEYS = ['phone','store_name','store_manager','agent_broker','sales_rep','sales_rep_phone'];
+const SALES_REP_FIELDS = [['sales_rep','sales_rep_phone'],['sales_rep_2','sales_rep_phone_2'],['sales_rep_3','sales_rep_phone_3']];
+const SALES_REP_KEYS = ['sales_rep_count',...SALES_REP_FIELDS.flat()];
+const CONTACT_KEYS = ['phone','store_name','store_manager','agent_broker',...SALES_REP_KEYS];
 function text(value) { return value == null ? '' : String(value).trim(); }
+function salesRepCount(data={}) {
+  const count=text(data.sales_rep_count).normalize('NFKC');
+  if(/^[1-3]$/.test(count))return Number(count);
+  for(let index=SALES_REP_FIELDS.length-1;index>0;index--)if(SALES_REP_FIELDS[index].some(key=>text(data[key])))return index+1;
+  return 1;
+}
+function salesReps(data={}) { return SALES_REP_FIELDS.slice(0,salesRepCount(data)).map(([name,phone])=>({name:text(data[name]),phone:text(data[phone])})); }
 function number(value) { if (!text(value) || /^[-—]$/.test(text(value))) return null; const n=Number(text(value).replace(/,/g,'')); return Number.isFinite(n)?n:null; }
 function floor(value,unit,prefix) { return (text(value).normalize('NFKC').replace(prefix,'').replace(/(?:樓|層|F)$/i,'').trim()||'-')+unit; }
 function floorLine(data) { return `出售樓層${floor(data.sale_floor,'樓',/^(?:出售樓層|出售|第)/)}　總樓層${floor(data.total_floors,'層',/^(?:總樓層|地上|共|第)/)}　地下${floor(data.basement_floors,'層',/^(?:地下總樓層|地下|B)/i)}`; }
@@ -28,6 +37,8 @@ function normalizeDraft(input={}) {
   const data=input.salesData||input.data||{};
   const salesData={};
   for(const key of FIELD_KEYS) { const value=text(data[key]);if(value.length>500)throw new Error('欄位內容過長，請精簡後儲存。');salesData[key]=value; }
+  if(text(data.sales_rep_count)&&!/^[1-3]$/.test(text(data.sales_rep_count).normalize('NFKC')))throw new Error('業務人數請選擇 1 到 3 人。');
+  salesData.sales_rep_count=String(salesRepCount(data));
   if(!salesData.case_name||salesData.case_name.length>120)throw new Error('請填寫 120 字以內的案名。');
   const rawText=text(input.rawText),sellingPointsText=text(input.sellingPointsText),notes=text(input.notes);
   if(rawText.length>80000||sellingPointsText.length>4000||notes.length>5000)throw new Error('文字資料過長，請分開整理後儲存。');
@@ -47,4 +58,4 @@ function fromCrm(property={}) {
   if(floors){result.sale_floor=floors[1].trim();if(!result.total_floors)result.total_floors=floors[2];}
   return result;
 }
-module.exports={GROUPS,FIELD_KEYS,CONTACT_KEYS,text,number,floorLine,sellingPoints,values,normalizeDraft,fromCrm};
+module.exports={GROUPS,FIELD_KEYS,CONTACT_KEYS,SALES_REP_FIELDS,SALES_REP_KEYS,salesRepCount,salesReps,text,number,floorLine,sellingPoints,values,normalizeDraft,fromCrm};

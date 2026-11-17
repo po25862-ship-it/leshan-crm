@@ -10,6 +10,21 @@ const width=text=>Array.from(text).reduce((sum,c)=>sum+(c.codePointAt(0)>0x2e80?
 export async function surveyWord(record){
   const response=await fetch('/survey/sales-sheet-a4.docx');if(!response.ok)throw new Error('Word 範本無法讀取，請稍後再試。');
   const zip=await JSZip.loadAsync(await response.arrayBuffer()),root=parse(await zip.file('word/document.xml').async('string')),v=model.values(record.salesData||{});
+  const reps=model.salesReps(record.salesData);
+  if(reps.length>1){
+    const cell=nodes(root,'tc').find(c=>c.textContent.includes('{{sales_rep}}'));
+    if(!cell)throw new Error('Word 範本缺少業務欄位。');
+    const paragraphs=nodes(cell,'p'),prototype=paragraphs.find(p=>p.textContent.includes('{{sales_rep}}'));
+    for(const p of paragraphs.slice(1))p.remove();
+    for(const [index,rep] of reps.entries()){
+      const p=prototype.cloneNode(true),texts=nodes(p,'t');
+      const key='survey_rep_'+index;v[key]=`${rep.name||'-'}　${rep.phone||'-'}`;
+      texts.forEach((t,i)=>{t.textContent=i===0?'{{'+key+'}}':'';});
+      for(const r of nodes(p,'r'))setSize(r,reps.length===3?11.5:13);
+      const spacing=nodes(p,'spacing')[0];if(spacing){spacing.setAttributeNS(W,'w:before',0);spacing.setAttributeNS(W,'w:after',0);spacing.setAttributeNS(W,'w:line',reps.length===3?300:420);spacing.setAttributeNS(W,'w:lineRule','exact');}
+      cell.append(p);
+    }
+  }
   for(const cell of nodes(root,'tc')){
     const prototype=nodes(cell,'p').find(p=>p.textContent.includes('{{selling_point}}'));
     if(prototype){const points=model.sellingPoints(record.sellingPointsText);if(!points.length)points.push('（尚未填寫賣點文案）');let font=17,gap=points.length<=3?20:4;for(;font>=10;font--)if(points.reduce((sum,point,i)=>sum+Math.ceil(width(`${i+1}. ${point}`)*font/350)*font*1.2+gap,0)<=125)break;if(font<10)throw new Error('介紹分析欄超過一頁版面，請精簡後下載 Word。');for(const [i,point]of points.entries()){const p=prototype.cloneNode(true);for(const t of nodes(p,'t'))if(t.textContent.includes('{{selling_point}}'))t.textContent=`${i+1}. ${point}`;for(const r of nodes(p,'r')){setSize(r,font);const color=nodes(r,'color')[0];if(color)color.setAttributeNS(W,'w:val',i%2?'23766C':'182431');}const spacing=nodes(p,'spacing')[0];if(spacing){spacing.setAttributeNS(W,'w:before',gap*10);spacing.setAttributeNS(W,'w:after',gap*10);spacing.setAttributeNS(W,'w:line',Math.round(font*1.14*20));spacing.setAttributeNS(W,'w:lineRule','exact');}cell.insertBefore(p,prototype);}prototype.remove();}

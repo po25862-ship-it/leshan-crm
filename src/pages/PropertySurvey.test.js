@@ -116,3 +116,25 @@ test('dragged file items work even when the browser supplies no FileList; folder
  act(()=>Simulate.drop(container.querySelector('.survey-photo-drop'),{dataTransfer:{files:[],items:[{kind:'file',webkitGetAsEntry:()=>({isDirectory:true})}]}}));
  expect(prepareSurveyPhoto).not.toHaveBeenCalled();expect(container.querySelector('.survey-photo-drop [role=alert]').textContent).toContain('資料夾');
 });
+const chooseReps=count=>act(()=>Simulate.change(container.querySelector(`input[name="survey-sales-rep-count"][value="${count}"]`)));
+test('rep count shows up to three editable contacts, keeps hidden entries and saves only the selected display count',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','三人共同服務');
+ expect(container.querySelector('input[name="survey-sales-rep-count"]:checked').value).toBe('1');expect(container.querySelector('#survey-sales_rep_2')).toBeNull();
+ edit('survey-sales_rep','第一位');edit('survey-sales_rep_phone','0900000001');chooseReps(3);
+ edit('survey-sales_rep_2','第二位');edit('survey-sales_rep_phone_2','0900000002');edit('survey-sales_rep_3','第三位');edit('survey-sales_rep_phone_3','0900000003');
+ expect(container.querySelectorAll('.survey-sales-contacts>fieldset')).toHaveLength(3);
+ chooseReps(1);expect(container.querySelector('#survey-sales_rep_3')).toBeNull();chooseReps(3);expect(container.querySelector('#survey-sales_rep_3').value).toBe('第三位');
+ chooseReps(2);await act(async()=>button('產生／更新預覽').click());
+ const body=JSON.parse(calls.find(c=>c.options.method==='POST').options.body);expect(body.record.salesData).toMatchObject({sales_rep_count:'2',sales_rep:'第一位',sales_rep_2:'第二位',sales_rep_3:'第三位'});
+ expect(renderSurveyCanvas).toHaveBeenCalledWith(expect.objectContaining({salesData:expect.objectContaining({sales_rep_count:'2',sales_rep_phone_2:'0900000002'})}));
+});
+test('new cases and CRM imports retain the chosen team while old drafts remain editable with one contact',async()=>{
+ const confirm=jest.spyOn(window,'confirm').mockReturnValue(true);
+ localStorage.setItem('leshan-survey-draft-staff-a',JSON.stringify({salesData:{case_name:'舊案件',sales_rep:'原有業務'}}));
+ await act(async()=>root.render(<PropertySurvey/>));expect(container.querySelector('#survey-sales_rep').value).toBe('原有業務');
+ chooseReps(3);edit('survey-sales_rep_2','第二位');edit('survey-sales_rep_3','第三位');act(()=>button('新案件').click());
+ expect(container.querySelector('#survey-case_name').value).toBe('');expect(container.querySelector('#survey-sales_rep_3').value).toBe('第三位');
+ search('CRM');choose('CRM 兩房');act(()=>button('帶入物件').click());
+ expect(container.querySelector('input[name="survey-sales-rep-count"]:checked').value).toBe('3');expect(container.querySelector('#survey-sales_rep_2').value).toBe('第二位');
+ confirm.mockRestore();
+});

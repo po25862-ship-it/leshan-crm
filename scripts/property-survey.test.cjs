@@ -12,6 +12,24 @@ test('floors, zero and inclusive parking price follow the approved format',()=>{
  assert.throws(()=>model.normalizeDraft({salesData:{}}),/案名/);
  assert.throws(()=>model.normalizeDraft({...draft('案件'),floorplanBase64:'https://foreign.invalid/photo.png'}),/照片/);
 });
+test('survey contacts support one to three reps without changing legacy names or losing hidden contacts',()=>{
+ const legacy=model.normalizeDraft({...draft('舊物調'),salesData:{case_name:'舊物調',sales_rep:'原有業務',sales_rep_phone:'0900-000-001'}});
+ assert.equal(legacy.salesData.sales_rep_count,'1');assert.deepEqual(model.salesReps(legacy.salesData),[{name:'原有業務',phone:'0900-000-001'}]);
+ const data={...legacy.salesData,sales_rep_count:'3',sales_rep_2:'第二位',sales_rep_phone_2:'0900-000-002',sales_rep_3:'第三位',sales_rep_phone_3:'0900-000-003'};
+ const normalized=model.normalizeDraft({salesData:data});assert.equal(model.salesReps(normalized.salesData).length,3);
+ assert.equal(model.salesRepCount({...data,sales_rep_count:''}),3);
+ const reduced=model.normalizeDraft({salesData:{...data,sales_rep_count:'1'}});
+ assert.deepEqual(model.salesReps(reduced.salesData),[{name:'原有業務',phone:'0900-000-001'}]);assert.equal(reduced.salesData.sales_rep_3,'第三位');
+ assert.equal(model.normalizeDraft({salesData:{...data,sales_rep_count:'３'}}).salesData.sales_rep_count,'3');
+ for(const count of ['0','4','30','1.5','兩人'])assert.throws(()=>model.normalizeDraft({salesData:{...data,sales_rep_count:count}}),/1 到 3/);
+ for(const key of model.SALES_REP_KEYS)assert.ok(model.CONTACT_KEYS.includes(key));
+});
+test('all three contacts survive cloud save and reload; invalid counts cause no database writes',async()=>{
+ const db=database(),service=createSurveyService(db);const record={...draft('三人案件'),salesData:{case_name:'三人案件',sales_rep_count:'3',sales_rep:'甲',sales_rep_phone:'0900000001',sales_rep_2:'乙',sales_rep_phone_2:'0900000002',sales_rep_3:'丙',sales_rep_phone_3:'0900000003'}};
+ const saved=await service.save('A',record),loaded=await service.get('A',saved.id);
+ assert.deepEqual(model.salesReps(loaded.salesData),[{name:'甲',phone:'0900000001'},{name:'乙',phone:'0900000002'},{name:'丙',phone:'0900000003'}]);
+ const before=JSON.stringify([...db.rows]);await assert.rejects(service.save('A',{salesData:{...record.salesData,sales_rep_count:'4'}}),e=>e.statusCode===400);assert.equal(JSON.stringify([...db.rows]),before);
+});
 test('cases are isolated by uid and an old revision cannot overwrite a newer record',async()=>{
  const db=database(),service=createSurveyService(db,{now:()=>100});const a=await service.save('A',draft('第一案'));
  assert.equal(a.revision,1);assert.equal((await service.list('B')).length,0);
