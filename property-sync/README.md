@@ -57,6 +57,8 @@ Mac 垃圾桶以「樂善同步報表_日期_批次」分組，搬移前先寫 `
 
 本機頁面會顯示處理張數、取回／重試／辨識／匯入階段。照片讀取、上傳或待確認清單備份失敗時會標示未完整完成，程序以代碼 2 結束；待人工確認的配對本身不算掃描故障。原始照片不因讀取失敗而刪除，內容完全相同且已讀取成功的重複照片才依原規則移至垃圾桶。
 
+待確認清單及掃描紀錄備份至 Google Drive 時，先完整複製到旁邊的暫存檔，驗證後才替換舊備份；暫時性錯誤最多嘗試三次。失敗時保留本機紀錄與舊備份，並在狀態顯示備份未完成。
+
 `node sheet-import.js --source-dir "照片資料夾" --report-file /private/tmp/物調掃描預覽.json` 只辨識與配對，不上傳；加 `--apply` 才匯入。`--only-file "照片.jpg"` 限定單張，`--skip-duplicate-cleanup` 可略過重複照片整理。`node --test sheet-file-reader.test.js sheet-rental.test.js sync-control.test.js` 驗證雲端重試、並行檔案隔離、狀態回報及既有租金租期與同步保護。
 
 ## 社區與商圈回填

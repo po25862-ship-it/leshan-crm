@@ -8,7 +8,7 @@ const { execFileSync } = require("child_process");
 
 const { cachedPropertySheetPrice } = require(fs.existsSync(path.join(__dirname,"property-sheet-price.cjs")) ? "./property-sheet-price.cjs" : "../scripts/property-sheet-price.cjs");
 const { validPriceMark } = require(fs.existsSync(path.join(__dirname,"propertySheetPrice.js")) ? "./propertySheetPrice.js" : "../src/lib/propertySheetPrice.js");
-const {createSheetFileReader,sheetScanResult,retryable}=require("./sheet-file-reader");
+const {createSheetFileReader,copySheetBackup,sheetScanResult,retryable}=require("./sheet-file-reader");
 
 const appDir = __dirname;
 const configDir = path.join(os.homedir(), ".leshan-property-sync");
@@ -314,7 +314,7 @@ function copyCloudFile(source, destination) {
   }
 }
 
-function writeReviewQueue(results) {
+async function writeReviewQueue(results) {
   const pending = results.filter((item) => item.status !== "matched");
   const queueDir = path.join(configDir, "待確認");
   const driveQueueDir = path.join(archiveRoot(), "待確認");
@@ -342,7 +342,7 @@ function writeReviewQueue(results) {
   fs.writeFileSync(localCsv, `\uFEFF${csv}\n`);
   try {
     fs.mkdirSync(driveQueueDir, { recursive: true });
-    fs.copyFileSync(localCsv, path.join(driveQueueDir, "待確認清單.csv"));
+    await copySheetBackup(localCsv, path.join(driveQueueDir, "待確認清單.csv"));
     return { files: pending.length, copiedFiles, copyFailed: copyErrors.length, copyErrors, queueDir, driveQueueDir, driveSynced: true };
   } catch (error) {
     console.error(`Google Drive 待確認清單備份失敗（本機清單已保留）：${error.message}`);
@@ -384,7 +384,7 @@ async function main() {
     if(applyMode){
       writeProgress({phase:"uploading",file:""});
       summary.actions=await applyMatched(results,context);
-      summary.reviewQueue=writeReviewQueue(results);
+      summary.reviewQueue=await writeReviewQueue(results);
       summary.duplicateCleanup=summary.errors||onlyFile||process.argv.includes("--skip-duplicate-cleanup")?{duplicateGroups:0,movedToTrash:0,failed:0,skipped:true}:cleanupDuplicateSourceFiles(results);
       if(!summary.errors){
         try{

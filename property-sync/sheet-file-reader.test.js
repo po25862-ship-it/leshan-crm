@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {createSheetFileReader,sheetScanResult,reconcileSheetStatus}=require('./sheet-file-reader');
+const {createSheetFileReader,copySheetBackup,sheetScanResult,reconcileSheetStatus}=require('./sheet-file-reader');
 function fixture(){const root=fs.mkdtempSync(path.join(os.tmpdir(),'leshan-sheet-test-')),source=path.join(root,'照片.jpg');fs.writeFileSync(source,'original bytes');return {root,source,close:()=>fs.rmSync(root,{recursive:true,force:true})};}
 test('cloud files retry transient failures and subsequent consumers reuse the same local bytes',async()=>{
  const f=fixture(),progress=[];let calls=0;const reader=createSheetFileReader({root:f.root,wait:async()=>{},onProgress:p=>progress.push(p),copy:async(s,d)=>{if(++calls===1)throw Object.assign(new Error('cloud busy'),{errno:-11});fs.copyFileSync(s,d);}});
@@ -31,4 +31,15 @@ test('legacy successful process exits are corrected when the matching report has
  const status={ok:true,finishedAt:'2026-11-19T01:56:39.503Z'},report={generatedAt:'2026-11-19T01:56:39.483Z',summary:{total:332,errors:169}};
  const corrected=reconcileSheetStatus(status,report);assert.equal(corrected.ok,false);assert.equal(corrected.summary.errors,169);assert.match(corrected.message,/169 張/);
  assert.deepEqual(reconcileSheetStatus(status,{...report,generatedAt:'2026-11-18T01:00:00Z'}),status);
+ const failedBackup={...status,ok:false,partial:true,message:'掃描紀錄備份未完成，本機紀錄已保留。'};
+ assert.equal(reconcileSheetStatus(failedBackup,{...report,summary:{total:332,errors:0}}).message,failedBackup.message);
+});
+test('cloud backups preserve the previous file on failure and replace it after a complete retry',async()=>{
+ const f=fixture(),destination=path.join(f.root,'舊備份.csv');fs.writeFileSync(destination,'previous backup');let calls=0;
+ try{
+  await assert.rejects(copySheetBackup(f.source,destination,{attempts:1,copy:async(s,d)=>{fs.writeFileSync(d,'partial');throw Object.assign(new Error('busy'),{code:'EAGAIN'});}}));
+  assert.equal(fs.readFileSync(destination,'utf8'),'previous backup');assert.equal(fs.readdirSync(f.root).some(n=>n.includes('.partial-')),false);
+  await copySheetBackup(f.source,destination,{wait:async()=>{},copy:async(s,d)=>{if(++calls===1)throw Object.assign(new Error('busy'),{code:'EAGAIN'});fs.copyFileSync(s,d);}});
+  assert.equal(calls,2);assert.equal(fs.readFileSync(destination,'utf8'),'original bytes');assert.equal(fs.readFileSync(f.source,'utf8'),'original bytes');
+ }finally{f.close();}
 });

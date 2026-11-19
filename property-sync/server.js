@@ -7,7 +7,7 @@ const path = require("path");
 const { spawn, execFileSync } = require("child_process");
 const { credentialStatus, ensureBackendSession, sessionReady } = require("./backend-auth");
 const { createStore } = require("./sync-control");
-const {sheetScanResult,reconcileSheetStatus,compactSheetSummary}=require("./sheet-file-reader");
+const {copySheetBackup,sheetScanResult,reconcileSheetStatus,compactSheetSummary}=require("./sheet-file-reader");
 
 const HOST = "127.0.0.1";
 const PORT = 8877;
@@ -154,18 +154,18 @@ function runSheetImport() {
   child.stdout.on("data", (chunk) => appendLocalLog(logFile, chunk));
   child.stderr.on("data", (chunk) => appendLocalLog(logFile, chunk));
   child.on("error", error=>appendLocalLog(logFile,`掃描無法啟動：${error.message}\n`));
-  child.on("close", (code) => {
+  child.on("close", async (code) => {
     let archiveError = "";
     try {
       fs.mkdirSync(path.dirname(archiveLogFile), { recursive: true });
-      fs.copyFileSync(logFile, archiveLogFile);
+      await copySheetBackup(logFile, archiveLogFile);
     } catch (error) {
       archiveError = error.message;
     }
     const report=readJsonFile(path.join(configDir,"物件資料配對報告.json"),null);
     const current=report?.runPid===child.pid?report:null;
     const outcome=current?sheetScanResult(current.summary):{ok:false,partial:false,message:"掃描未完成，請查看紀錄後重試。"};
-    sheetLastResult = { finishedAt: new Date().toISOString(), ...outcome,ok:code===0&&outcome.ok,code,logFile,archiveLogFile,archiveError,...(current?{summary:compactSheetSummary(current.summary)}:{}) };
+    sheetLastResult = { finishedAt: new Date().toISOString(), ...outcome,ok:code===0&&outcome.ok&&!archiveError,code,logFile,archiveLogFile,archiveError,...(archiveError?{partial:true,message:`${outcome.message} 掃描紀錄備份未完成，本機紀錄已保留。`}:{}),...(current?{summary:compactSheetSummary(current.summary)}:{}) };
     try { fs.writeFileSync(sheetStatusFile, `${JSON.stringify(sheetLastResult, null, 2)}\n`, { mode: 0o600 }); }
     catch (error) { console.error(`掃描狀態保存失敗：${error.message}`); }
     sheetRunning = null;

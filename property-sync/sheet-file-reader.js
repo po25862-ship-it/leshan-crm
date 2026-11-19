@@ -4,6 +4,7 @@ const path = require('node:path');
 const {execFile} = require('node:child_process');
 
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
+let backupSequence=0;
 function nativeCopy(source, destination, timeoutMs) {
   return new Promise((resolve, reject) => execFile('/bin/cp', ['-f', source, destination],
     {timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 64 * 1024}, (error, stdout, stderr) => {
@@ -16,6 +17,24 @@ function retryable(error) {
   return ['EAGAIN','EDEADLK','EBUSY','ETIMEDOUT','EIO'].includes(error.code)
     || [-11,-35].includes(error.errno)
     || /temporarily unavailable|deadlock|resource busy|timed? out|operation timed out/i.test(error.detail || error.message || '');
+}
+
+// Stage beside the cloud destination, then replace only after a complete copy.
+// Writing directly over an evicted Drive file can fail with EAGAIN.
+async function copySheetBackup(source,destination,{copy=nativeCopy,wait=ms=>new Promise(resolve=>setTimeout(resolve,ms)),timeoutMs=20000,attempts=3}={}){
+  const temporary=`${destination}.partial-${process.pid}-${backupSequence++}`;
+  for(let attempt=1;attempt<=attempts;attempt++){
+    try{
+      const before=fs.statSync(source);
+      await copy(source,temporary,timeoutMs);
+      const after=fs.statSync(source);
+      if(fs.statSync(temporary).size!==before.size||after.size!==before.size||after.mtimeMs!==before.mtimeMs)throw Object.assign(new Error('備份尚未完整複製。'),{code:'EAGAIN'});
+      fs.renameSync(temporary,destination);return;
+    }catch(error){
+      if(!retryable(error)||attempt===attempts)throw error;
+      await wait(attempt*1000);
+    }finally{try{fs.unlinkSync(temporary);}catch{}}
+  }
 }
 
 // Copy through the macOS file provider first. Hashing, OCR and upload then use
@@ -66,7 +85,7 @@ function reconcileSheetStatus(status,report){
   const difference=Math.abs(Date.parse(status.finishedAt)-Date.parse(report.generatedAt));
   if(!Number.isFinite(difference)||difference>120000)return status;
   const outcome=sheetScanResult(report.summary);
-  return {...status,...outcome,ok:status.ok!==false&&outcome.ok,summary:compactSheetSummary(report.summary)};
+  return {...status,...(status.ok===false&&outcome.ok?{}:outcome),ok:status.ok!==false&&outcome.ok,summary:compactSheetSummary(report.summary)};
 }
 function compactSheetSummary(summary={}){return {total:summary.total||0,matched:summary.matched||0,review:summary.review||0,unmatched:summary.unmatched||0,errors:summary.errors||0,uploaded:summary.actions?.firebaseUploaded||0,alreadyProcessed:summary.actions?.alreadyProcessed||0};}
-module.exports = {createSheetFileReader,nativeCopy,retryable,sheetScanResult,reconcileSheetStatus,compactSheetSummary,MAX_IMAGE_BYTES};
+module.exports = {createSheetFileReader,copySheetBackup,nativeCopy,retryable,sheetScanResult,reconcileSheetStatus,compactSheetSummary,MAX_IMAGE_BYTES};
