@@ -51,6 +51,14 @@ Mac 垃圾桶以「樂善同步報表_日期_批次」分組，搬移前先寫 `
 
 `npm run test:archive` 只讀取測試封存，不會連線或寫入 Firebase。正式寫入必須明確加上 `--apply-crm`，且 64 份來源全部驗證成功。
 
+## 物調照片掃描
+
+「掃描物件資料」會先透過 macOS 取回雲端照片，再用同一份本機暫存檔完成雜湊、文字辨識及上傳。最多同時準備兩張照片；每張取回限時 20 秒，暫時性錯誤最多嘗試三次，文字辨識限時 45 秒。連續三張雲端照片仍取回失敗時，剩餘照片保留待下次重試，避免離線時長時間卡住。
+
+本機頁面會顯示處理張數、取回／重試／辨識／匯入階段。照片讀取、上傳或待確認清單備份失敗時會標示未完整完成，程序以代碼 2 結束；待人工確認的配對本身不算掃描故障。原始照片不因讀取失敗而刪除，內容完全相同且已讀取成功的重複照片才依原規則移至垃圾桶。
+
+`node sheet-import.js --source-dir "照片資料夾" --report-file /private/tmp/物調掃描預覽.json` 只辨識與配對，不上傳；加 `--apply` 才匯入。`--only-file "照片.jpg"` 限定單張，`--skip-duplicate-cleanup` 可略過重複照片整理。`node --test sheet-file-reader.test.js sheet-rental.test.js sync-control.test.js` 驗證雲端重試、並行檔案隔離、狀態回報及既有租金租期與同步保護。
+
 ## 社區與商圈回填
 
 `node backfill-property-locations.js` 只會預覽可由案名、地址與 A7／A8／A9 路段可靠判斷的結果。確認後使用 `node backfill-property-locations.js --apply` 才會先備份現有資料並補入空白欄位；人工已填內容不會被覆蓋。每日同步也會保留並沿用同一套判斷規則。
