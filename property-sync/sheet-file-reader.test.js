@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {createSheetFileReader,copySheetBackup,sheetScanResult,reconcileSheetStatus}=require('./sheet-file-reader');
+const {createSheetFileReader,copySheetBackup,retryable,sheetScanResult,reconcileSheetStatus}=require('./sheet-file-reader');
 function fixture(){const root=fs.mkdtempSync(path.join(os.tmpdir(),'leshan-sheet-test-')),source=path.join(root,'照片.jpg');fs.writeFileSync(source,'original bytes');return {root,source,close:()=>fs.rmSync(root,{recursive:true,force:true})};}
 test('cloud files retry transient failures and subsequent consumers reuse the same local bytes',async()=>{
  const f=fixture(),progress=[];let calls=0;const reader=createSheetFileReader({root:f.root,wait:async()=>{},onProgress:p=>progress.push(p),copy:async(s,d)=>{if(++calls===1)throw Object.assign(new Error('cloud busy'),{errno:-11});fs.copyFileSync(s,d);}});
@@ -10,6 +10,10 @@ test('timeouts are bounded and permission failures do not loop or remove the ori
 });
 test('incomplete native copies are rejected and retried rather than uploaded',async()=>{
  const f=fixture();let calls=0;const reader=createSheetFileReader({root:f.root,wait:async()=>{},copy:async(s,d)=>{calls++;fs.writeFileSync(d,'partial');}});try{await assert.rejects(reader.prepare(f.source),/雲端照片/);assert.equal(calls,3);assert.equal(reader.localPath(f.source),null);}finally{reader.close();f.close();}
+});
+test('native copy stderr remains retryable after wrapping so offline scan protection can stop a batch',async()=>{
+ const f=fixture();const reader=createSheetFileReader({root:f.root,attempts:1,copy:async()=>{throw Object.assign(new Error('cp exited 1'),{code:1,detail:'Resource deadlock avoided'});}});
+ try{await assert.rejects(reader.prepare(f.source),error=>retryable(error));assert.equal(fs.readFileSync(f.source,'utf8'),'original bytes');}finally{reader.close();f.close();}
 });
 test('a source updated during cloud retrieval is retried against its new stable metadata',async()=>{
  const f=fixture();let calls=0;const reader=createSheetFileReader({root:f.root,wait:async()=>{},copy:async(s,d)=>{if(++calls===1)fs.writeFileSync(s,'the fully downloaded image');fs.copyFileSync(s,d);}});

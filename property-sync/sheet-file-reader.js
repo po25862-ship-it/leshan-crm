@@ -16,7 +16,8 @@ function nativeCopy(source, destination, timeoutMs) {
 function retryable(error) {
   return ['EAGAIN','EDEADLK','EBUSY','ETIMEDOUT','EIO'].includes(error.code)
     || [-11,-35].includes(error.errno)
-    || /temporarily unavailable|deadlock|resource busy|timed? out|operation timed out/i.test(error.detail || error.message || '');
+    || /temporarily unavailable|deadlock|resource busy|timed? out|operation timed out/i.test(error.detail || error.message || '')
+    || Boolean(error.cause&&error.cause!==error&&retryable(error.cause));
 }
 
 // Stage beside the cloud destination, then replace only after a complete copy.
