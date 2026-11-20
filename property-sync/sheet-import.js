@@ -9,6 +9,7 @@ const { execFileSync } = require("child_process");
 const { cachedPropertySheetPrice } = require(fs.existsSync(path.join(__dirname,"property-sheet-price.cjs")) ? "./property-sheet-price.cjs" : "../scripts/property-sheet-price.cjs");
 const { validPriceMark } = require(fs.existsSync(path.join(__dirname,"propertySheetPrice.js")) ? "./propertySheetPrice.js" : "../src/lib/propertySheetPrice.js");
 const {createSheetFileReader,copySheetBackup,sheetScanResult,retryable}=require("./sheet-file-reader");
+const {reviewedMatch,reviewStillMatches}=require("./sheet-reviewed");
 
 const appDir = __dirname;
 const configDir = path.join(os.homedir(), ".leshan-property-sync");
@@ -275,12 +276,17 @@ async function applyMatched(results, context) {
         contentType: mimeType(result.file), customMetadata: { sha256: result.hash, listingNo: property.listingNo || "" },
       });
       const url = await context.storageModule.getDownloadURL(storageRef);
-      const sheetFiles = [...(property.sheetFiles || [])];
-      if (!sheetFiles.some((item) => item.sha256 === result.hash)) {
-        sheetFiles.push({ url, name: result.file, type: mimeType(result.file), sha256: result.hash, storageKind: "firebase", ...(priceMark ? { priceMark } : {}) });
-        await context.firestore.updateDoc(context.firestore.doc(context.db, "properties", property.id), { sheetFiles });
-        property.sheetFiles = sheetFiles;
-      }
+      const attachment = {url,name:result.file,type:mimeType(result.file),sha256:result.hash,storageKind:"firebase",...(priceMark?{priceMark}:{}),
+        ...(result.reviewPin?{manualReview:{method:result.reviewPin.method,reviewedAt:result.reviewPin.reviewedAt,note:result.reviewPin.note||""}}:{})};
+      property.sheetFiles = await context.firestore.runTransaction(context.db,async transaction=>{
+        const reference=context.firestore.doc(context.db,"properties",property.id),snapshot=await transaction.get(reference);
+        if(!snapshot.exists())throw new Error("案件已不存在，附件保留待確認。");
+        const current={...snapshot.data(),id:property.id};
+        if(result.reviewPin&&!reviewStillMatches(current,result.reviewPin))throw new Error("原圖核對後案件編號或地址已變更，本次不掛入。");
+        const sheetFiles=[...(current.sheetFiles||[])];
+        if(!sheetFiles.some(file=>file.sha256===result.hash)){sheetFiles.push(attachment);transaction.update(reference,{sheetFiles});}
+        return sheetFiles;
+      });
       result.action = "firebaseUploaded";
       counts.firebaseUploaded += 1;
       manifest.files[result.hash] = { propertyId: property.id, listingNo: property.listingNo, destination: "firebase", objectPath, processedAt: new Date().toISOString() };
@@ -361,6 +367,9 @@ async function main() {
   let context;
   try {
     context = await loadProperties();
+    const reviewedFile=path.join(configDir,"sheet-reviewed-matches.json");
+    const reviewed=fs.existsSync(reviewedFile)?JSON.parse(fs.readFileSync(reviewedFile,"utf8")):{version:1,files:{}};
+    if(reviewed.version!==1||!reviewed.files||typeof reviewed.files!=="object")throw new Error("原圖核對紀錄格式不正確，本次停止匯入。");
     const properties = context.properties,results=[];
     let cursor=0,consecutiveReadFailures=0;
     const worker=async()=>{
@@ -372,7 +381,7 @@ async function main() {
           try{file=await reader.prepare(path.join(sourceDir,name));consecutiveReadFailures=0;}catch(error){consecutiveReadFailures=retryable(error)?consecutiveReadFailures+1:0;throw error;}
           writeProgress({phase:"ocr",file:name});
           const hash=hashFile(file),fields=extractFields(recognize(file,hash));
-          results[index]={file:name,hash,recognized:fields,...matchProperty(fields,properties)};
+          results[index]={file:name,hash,recognized:fields,...(reviewedMatch(hash,reviewed.files,properties)||matchProperty(fields,properties))};
         }catch(error){results[index]={file:name,status:"error",error:error.message};}
         const done=results.filter(Boolean).length;
         writeProgress({processed:done});

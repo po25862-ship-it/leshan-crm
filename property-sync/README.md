@@ -59,6 +59,8 @@ Mac 垃圾桶以「樂善同步報表_日期_批次」分組，搬移前先寫 `
 
 待確認清單及掃描紀錄備份至 Google Drive 時，先完整複製到旁邊的暫存檔，驗證後才替換舊備份；暫時性錯誤最多嘗試三次。失敗時保留本機紀錄與舊備份，並在狀態顯示備份未完成。
 
+逐張看過原圖後的確認結果可保存在本機 `sheet-reviewed-matches.json`，以完整照片 SHA-256 綁定案件 ID、委託編號和地址，僅接受明確標示為原圖核對通過的紀錄。後續掃描沿用確認結果，不因同路段或同尾碼重新錯配；照片內容、案件編號或地址變更時回到待確認。掛入附件使用交易合併目前的附件陣列，保留其他同事同時新增的檔案；原售價、地址與售況不因掛檔而覆寫。
+
 `node sheet-import.js --source-dir "照片資料夾" --report-file /private/tmp/物調掃描預覽.json` 只辨識與配對，不上傳；加 `--apply` 才匯入。`--only-file "照片.jpg"` 限定單張，`--skip-duplicate-cleanup` 可略過重複照片整理。`node --test sheet-file-reader.test.js sheet-rental.test.js sync-control.test.js` 驗證雲端重試、並行檔案隔離、狀態回報及既有租金租期與同步保護。
 
 ## 社區與商圈回填
