@@ -30,7 +30,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 const properties = [{ id: "one", title: "測試物件" }];
 const output = { bytes: new Uint8Array([37, 80, 68, 70]), fileCount: 0, summaryCount: 1, pageCount: 1 };
 async function create() {
-  await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "製作合併 PDF").click());
+  await act(async () => [...container.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "製作合併 PDF").click());
 }
 
 test("automatically saves only a successfully generated PDF with the original recipient", async () => {
@@ -104,6 +104,28 @@ test("failed PDF generation never consumes a draft slot", async () => {
   expect(onGenerated).not.toHaveBeenCalled();
   expect(container.textContent).toContain("資料表下載失敗");
   log.mockRestore();
+});
+
+test("PDF generation blocks repeated clicks and reports busy and completion states", async () => {
+  let finish;mergePropertySheets.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  const onBusyChange=jest.fn();
+  act(()=>root.render(<PropertyViewingPdf properties={properties} onBusyChange={onBusyChange}/>));
+  const button=container.querySelector('[aria-label="製作合併 PDF"]');
+  act(()=>{button.click();button.click();});await act(async()=>{});
+  expect(mergePropertySheets).toHaveBeenCalledTimes(1);expect(button.getAttribute('aria-busy')).toBe('true');
+  expect(onBusyChange).toHaveBeenLastCalledWith(true);
+  await act(async()=>finish(output));
+  expect(button.getAttribute('data-state')).toBe('success');expect(button.textContent).toBe('PDF 已完成');
+  expect(onBusyChange).toHaveBeenLastCalledWith(false);
+});
+
+test("a reordered selection uses the same export and snapshot order and discards the previous download", async () => {
+  const ordered=[{id:'b',title:'長庚三房'},{id:'a',title:'文化兩房'}],onGenerated=jest.fn(async()=>({slot:0}));
+  mergePropertySheets.mockResolvedValue(output);
+  act(()=>root.render(<PropertyViewingPdf properties={ordered} onGenerated={onGenerated}/>));await create();
+  expect(mergePropertySheets.mock.calls[0][0]).toEqual(ordered);expect(onGenerated.mock.calls[0][0].properties).toEqual(ordered);
+  act(()=>root.render(<PropertyViewingPdf properties={[...ordered].reverse()} onGenerated={onGenerated}/>));
+  expect(container.querySelector('a[download]')).toBeNull();
 });
 
 

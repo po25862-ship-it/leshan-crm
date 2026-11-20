@@ -7,15 +7,18 @@ import { useSharedCollection } from "../hooks/useSharedCollection";
 import { pdfLibraryError } from "../lib/propertyPdfLibrary";
 import { readLatestPdfProperties } from "../lib/propertyPdfLatest";
 import { renderAnnotatedPropertyImage } from "../lib/propertyAnnotatedImage";
+import AsyncActionButton from "../components/AsyncActionButton";
 
 const isImageSheet = file => file && (/^image\//i.test(file.type) || /\.(?:jpe?g|png|webp|heic|heif|gif|tiff?)$/i.test(file.name));
 
-export default function PropertyViewingPdf({ properties, buyerId, onClose, onGenerated }) {
+export default function PropertyViewingPdf({ properties, buyerId, onClose, onGenerated, onBusyChange }) {
   const { user } = useAuth();
   const { items: contacts } = useSharedCollection("contacts", "name", user.uid);
   const buyerName = contacts.find((contact) => contact.id === buyerId)?.name || "";
   const safeBuyerName = buyerName.replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 24);
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
+  const busyRef = useRef(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [imageResult, setImageResult] = useState(null);
@@ -35,6 +38,8 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
   useEffect(() => () => {
     if (imageResult?.url) URL.revokeObjectURL(imageResult.url);
   }, [imageResult]);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   useEffect(() => {
     requestId.current += 1;
@@ -42,13 +47,17 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
     setImageResult(null);
     setError("");
     setBusy(false);
+    busyRef.current = false;
+    setBusyAction("");
     setStorageNotice("");
     setStorageWarning("");
     return () => { requestId.current += 1; };
   }, [buyerId, selectionKey]);
 
   const createPdf = async () => {
-    if (busy || unavailable.length > 0) return;
+    if (busyRef.current || unavailable.length > 0) return;
+    busyRef.current = true;
+    setBusyAction("pdf");
     const request = ++requestId.current;
     setBusy(true);
     setError("");
@@ -80,12 +89,14 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
       console.error(err);
       if (request === requestId.current) setError(err.message || "PDF 製作失敗，請確認每份資料表可以正常開啟後再試一次。");
     } finally {
-      if (request === requestId.current) setBusy(false);
+      if (request === requestId.current) { busyRef.current = false; setBusy(false); setBusyAction(""); }
     }
   };
 
   const createImage = async () => {
-    if (busy || !canCreateImage) return;
+    if (busyRef.current || !canCreateImage) return;
+    busyRef.current = true;
+    setBusyAction("image");
     const request = ++requestId.current;
     setBusy(true); setError(""); setImageResult(null);
     try {
@@ -102,7 +113,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
     } catch (err) {
       if (request === requestId.current) setError(err.message || "分享圖片製作失敗，請確認原始資料表。");
     } finally {
-      if (request === requestId.current) setBusy(false);
+      if (request === requestId.current) { busyRef.current = false; setBusy(false); setBusyAction(""); }
     }
   };
 
@@ -112,7 +123,7 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
         <div>
           <h2>合併帶看資料表 PDF</h2>
           {buyerName && <p>準備介紹給：{buyerName}</p>}
-          <p>每間物件只取最新一份資料表，依勾選順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。舊檔保留；完成後自動暫存在這台裝置，不會上傳合併檔。</p>
+          <p>每間物件只取最新一份資料表，依目前帶看順序整理 {plan.length} 間：{fileCount} 份原始資料表、{summaryCount} 頁系統摘要。多間物件可先在勾選區調整帶看順序；舊檔保留，完成後自動暫存在這台裝置。</p>
           <p>製作時重新讀取最新售價，以紅色粗體大字標示；有調價時將原表舊價打叉，不顯示調價日期。無法確認售價位置的格式，會在頁首另列最新售價，避免蓋到其他資料。</p>
           <p>有填租金或租期的物件，會一起加上月租金、包含費用與租期。原物調有合適的空白欄位就放入欄位；其他格式另加資訊列，保留原始內容。單間圖片物調也可製作 PNG 傳給客人。</p>
         </div>
@@ -142,10 +153,8 @@ export default function PropertyViewingPdf({ properties, buyerId, onClose, onGen
       )}
       {error && <p className="property-viewing-pdf-warning" role="alert">{error}</p>}
       <div className="property-viewing-pdf-actions">
-        <button type="button" className="btn" onClick={createPdf} disabled={busy || unavailable.length > 0}>
-          {busy ? "正在製作資料表…" : "製作合併 PDF"}
-        </button>
-        {canCreateImage && <button type="button" className="btn ghost" onClick={createImage} disabled={busy}>製作分享圖片 PNG</button>}
+        <AsyncActionButton type="button" aria-label="製作合併 PDF" onClick={createPdf} disabled={busy || unavailable.length > 0} busy={busyAction === "pdf"} busyLabel="正在製作資料表…" success={Boolean(result)} successLabel="PDF 已完成">製作合併 PDF</AsyncActionButton>
+        {canCreateImage && <AsyncActionButton type="button" aria-label="製作分享圖片 PNG" className="btn ghost" onClick={createImage} disabled={busy} busy={busyAction === "image"} busyLabel="正在製作圖片…" success={Boolean(imageResult)} successLabel="圖片已完成">製作分享圖片 PNG</AsyncActionButton>}
         {result && (
           <>
             <a className="btn" href={result.url} target="_blank" rel="noreferrer">開啟 PDF／列印</a>

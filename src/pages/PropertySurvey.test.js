@@ -22,7 +22,7 @@ beforeEach(()=>{
  container=document.createElement('div');document.body.appendChild(container);root=createRoot(container);
 });
 afterEach(()=>{act(()=>root.unmount());container.remove();});
-const button=text=>[...container.querySelectorAll('button')].find(e=>e.textContent===text);
+const button=text=>[...container.querySelectorAll('button')].find(e=>e.getAttribute('aria-label')===text||e.textContent===text);
 const edit=(id,value)=>act(()=>Simulate.change(container.querySelector('#'+id),{target:{value}}));
 const search=value=>act(()=>{const input=container.querySelector('[aria-label="選擇 CRM 物件"]');Simulate.focus(input);Simulate.change(input,{target:{value}});});
 const choose=id=>act(()=>[...container.querySelectorAll('[role="option"]')].find(el=>el.textContent.includes(id)).click());
@@ -57,6 +57,31 @@ test('preview saves the complete case before rendering and editing removes obsol
 test('failed cloud save stops preview and reports the failure',async()=>{
  failSave=true;await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','失敗案');await act(async()=>button('產生／更新預覽').click());
  expect(renderSurveyCanvas).not.toHaveBeenCalled();expect(container.querySelector('[role="alert"]').textContent).toContain('儲存失敗測試');expect(button('產生／更新預覽').disabled).toBe(false);
+});
+test('saving gives immediate busy feedback, blocks duplicate clicks and confirms only a successful response',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','防止重複儲存');
+ const original=global.fetch;let finish;
+ global.fetch=jest.fn((url,options)=>options?.method==='POST'&&JSON.parse(options.body).action==='save'?new Promise(resolve=>{finish=resolve;}):original(url,options));
+ act(()=>{button('儲存案件').click();button('儲存案件').click();});
+ await act(async()=>{});
+ expect(global.fetch.mock.calls.filter(([,opts])=>opts?.method==='POST'&&JSON.parse(opts.body).action==='save')).toHaveLength(1);
+ expect(button('儲存案件').getAttribute('aria-busy')).toBe('true');expect(button('儲存案件').textContent).toContain('儲存中');
+ await act(async()=>finish({ok:true,json:async()=>({ok:true,id:'a'.repeat(32),revision:1,updatedAt:1000})}));
+ expect(button('儲存案件').getAttribute('data-state')).toBe('success');expect(button('儲存案件').textContent).toBe('已儲存');
+ expect(button('儲存案件').disabled).toBe(false);
+});
+test('mobile toolbar keeps three compact controls and offers all export formats inside Downloads',async()=>{
+ const width=window.innerWidth;
+ try{
+  window.innerWidth=390;await act(async()=>root.render(<PropertySurvey/>));
+  const toolbar=container.querySelector('.survey-toolbar-main');
+  expect(toolbar.querySelectorAll(':scope > button')).toHaveLength(2);
+  expect(button('產生／更新預覽').textContent).toBe('預覽');expect(button('儲存案件').textContent).toBe('儲存');
+  const menu=toolbar.querySelector('details');expect(menu.querySelector('summary').textContent).toBe('下載');
+  expect([...menu.querySelectorAll('button')].map(el=>el.textContent)).toEqual(['下載 Word','下載 PDF','下載 JPG']);
+  act(()=>{window.innerWidth=1280;window.dispatchEvent(new Event('resize'));});
+  expect(container.querySelector('.survey-download-menu')).toBeNull();expect(button('下載 PDF')).toBeTruthy();
+ }finally{window.innerWidth=width;}
 });
 test('CRM import brings in values and separates floor/total floors',async()=>{
  await act(async()=>root.render(<PropertySurvey/>));search('CRM');choose('CRM 兩房');act(()=>button('帶入物件').click());

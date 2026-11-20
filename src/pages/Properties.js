@@ -18,6 +18,7 @@ import PropertyHistory from "./PropertyHistory";
 import PropertyShare from "./PropertyShare";
 import BuyerRecipientPicker from "./BuyerRecipientPicker";
 import PropertyViewingPdf from "./PropertyViewingPdf";
+import PropertySelectionOrder from "../components/PropertySelectionOrder";
 import PropertyPdfLibrary from "./PropertyPdfLibrary";
 import { usePropertyPdfLibrary } from "../hooks/usePropertyPdfLibrary";
 import { PROPERTY_CATEGORIES as CATEGORIES, PROPERTY_STORES as STORES } from "../lib/propertyConstants";
@@ -313,6 +314,7 @@ export default function Properties() {
   const [showShare, setShowShare] = useState(false);
   const [selectedBuyerId, setSelectedBuyerId] = useState("");
   const [showViewingPdf, setShowViewingPdf] = useState(false);
+  const [viewingPdfBusy, setViewingPdfBusy] = useState(false);
   const [singleViewingPdfId, setSingleViewingPdfId] = useState(null);
   const [pdfLoadVersion, setPdfLoadVersion] = useState(0);
   const pdfLibrary = usePropertyPdfLibrary(user.uid);
@@ -1360,12 +1362,15 @@ export default function Properties() {
         </div>
       )}
 
+      {selectedProperties.length > 1 && <PropertySelectionOrder properties={selectedProperties} onChange={ids => setSelectedIds(new Set(ids))} disabled={viewingPdfBusy} show={showViewingPdf || showShare} />}
+
       {showViewingPdf && selectedProperties.length > 0 && (
         <PropertyViewingPdf
           key={`${Array.from(selectedIds).join("|")}:${pdfLoadVersion}`}
           properties={selectedProperties}
           buyerId={selectedBuyerId}
           onGenerated={pdfLibrary.saveGenerated}
+          onBusyChange={setViewingPdfBusy}
           onClose={() => setShowViewingPdf(false)}
         />
       )}
