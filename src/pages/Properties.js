@@ -413,7 +413,7 @@ export default function Properties() {
     const target = document.getElementById(editFocus || "property-edit-form");
     target?.scrollIntoView?.({ block: editFocus ? "center" : "start" });
     if (editFocus) target?.focus?.({ preventScroll: true });
-  }, [editMode, showForm, editFocus]);
+  }, [editMode, showForm, editFocus, detailTarget]);
 
   const togglePropertyDetail = (item) => {
     if (showForm && editingId === item.id && !editMode) setShowForm(false);
