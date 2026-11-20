@@ -26,6 +26,25 @@ const button=text=>[...container.querySelectorAll('button')].find(e=>e.textConte
 const edit=(id,value)=>act(()=>Simulate.change(container.querySelector('#'+id),{target:{value}}));
 const search=value=>act(()=>{const input=container.querySelector('[aria-label="選擇 CRM 物件"]');Simulate.focus(input);Simulate.change(input,{target:{value}});});
 const choose=id=>act(()=>[...container.querySelectorAll('[role="option"]')].find(el=>el.textContent.includes(id)).click());
+test('color changes reach cloud save and rendering, invalidate old previews and survive CRM import',async()=>{
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','配色測試');
+ act(()=>button('沉穩藍').click());edit('survey-color-textColor','#112233');edit('survey-color-panelColor','#f0eedd');
+ await act(async()=>button('產生／更新預覽').click());
+ const payload=JSON.parse(calls.find(c=>c.options.method==='POST').options.body);
+ expect(payload.record.appearance).toEqual(expect.objectContaining({textColor:'#112233',headingColor:'#245478',panelColor:'#f0eedd'}));
+ expect(renderSurveyCanvas).toHaveBeenLastCalledWith(expect.objectContaining({appearance:payload.record.appearance}));
+ edit('survey-color-accentColor','#882211');expect(container.querySelector('.survey-preview img')).toBeNull();
+ act(()=>button('物調資料').click());window.confirm=jest.fn(()=>true);search('CRM');choose('CRM 兩房');act(()=>button('帶入物件').click());
+ expect(container.querySelector('#survey-color-textColor').value).toBe('#112233');
+ act(()=>button('新案件').click());expect(container.querySelector('#survey-color-panelColor').value).toBe('#f0eedd');
+ act(()=>button('恢復預設配色').click());expect(container.querySelector('#survey-color-textColor').value).toBe('#182431');
+});
+test('loading an older saved case restores the standard colors instead of leaking another case palette',async()=>{
+ mockCases=[{id:'a'.repeat(32),case_name:'舊案件'}];mockLoadedCase={id:'a'.repeat(32),revision:1,salesData:{case_name:'舊案件'}};
+ await act(async()=>root.render(<PropertySurvey/>));edit('survey-color-textColor','#112233');
+ act(()=>button('案件記錄').click());window.confirm=jest.fn(()=>true);await act(async()=>button('載入編輯').click());
+ expect(container.querySelector('#survey-color-textColor').value).toBe('#182431');expect(container.querySelector('#survey-case_name').value).toBe('舊案件');
+});
 test('preview saves the complete case before rendering and editing removes obsolete images',async()=>{
  await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','雲端測試');edit('survey-sale_floor','3');edit('survey-points','1. 生活機能方便');
  await act(async()=>button('產生／更新預覽').click());

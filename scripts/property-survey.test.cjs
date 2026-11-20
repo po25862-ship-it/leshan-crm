@@ -2,8 +2,19 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const model=require('../src/lib/propertySurveyModel');
 const {createSurveyService,caseId,OWNER_UID}=require('../api/_lib/property-survey-service');
 const {handlerFactory}=require('../api/property-survey');
+const {DEFAULT_APPEARANCE}=require('../src/lib/propertySurveyAppearance');
 function database(){const rows=new Map();const ref=path=>({path,collection:name=>collection(path+'/'+name),get:async()=>({id:path.split('/').pop(),exists:rows.has(path),data:()=>rows.get(path)}),set:async value=>rows.set(path,value)});const collection=path=>({doc:id=>ref(path+'/'+id),orderBy:()=>({limit:()=>({get:async()=>({docs:[...rows].filter(([k])=>k.startsWith(path+'/')&&k.slice(path.length+1).split('/').length===1).map(([k,v])=>({id:k.split('/').pop(),data:()=>v}))})})})});return {rows,collection,runTransaction:async fn=>fn({get:r=>r.get(),set:(r,v)=>rows.set(r.path,v)})};}
 const draft=name=>({salesData:{case_name:name,sale_floor:3,total_floors:6,basement_floors:0},sellingPointsText:'1. 鄰近公園',rawText:'原始文字'});
+test('appearance survives private cloud save/reload and malformed colors cannot be persisted',async()=>{
+ const db=database(),service=createSurveyService(db),appearance={textColor:'#112233',headingColor:'#224466',accentColor:'#993311',panelColor:'#EEEECC',borderColor:'#887766',ownerUid:'B'};
+ const saved=await service.save('A',{...draft('自訂配色'),appearance}),loaded=await service.get('A',saved.id);
+ assert.equal(loaded.appearance.panelColor,'#eeeecc');assert.equal(loaded.appearance.ownerUid,undefined);assert.equal(loaded.appearance.textColor,'#112233');
+ await assert.rejects(service.get('B',saved.id),e=>e.statusCode===404);
+ assert.deepEqual(model.normalizeDraft(draft('舊格式')).appearance,{...DEFAULT_APPEARANCE});
+ const before=JSON.stringify([...db.rows]);
+ for(const value of ['red','url(https://example.invalid)','<script>',123,'#123',[]])await assert.rejects(service.save('A',{...draft('不合法配色'),appearance:{textColor:value}}),e=>e.statusCode===400);
+ assert.equal(JSON.stringify([...db.rows]),before);
+});
 test('floors, zero and inclusive parking price follow the approved format',()=>{
  assert.equal(model.floorLine({sale_floor:'３Ｆ',total_floors:'6樓',basement_floors:'地下1層'}),'出售樓層3樓　總樓層6層　地下1層');
  const d=model.normalizeDraft(draft('案件'));assert.equal(d.salesData.basement_floors,'0');

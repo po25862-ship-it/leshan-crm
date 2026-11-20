@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import model from './propertySurveyModel';
+import {resolveAppearance} from './propertySurveyAppearance';
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',A='http://schemas.openxmlformats.org/drawingml/2006/main',WP='http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const nodes=(root,name,ns=W)=>Array.from(root.getElementsByTagNameNS(ns,name));
 const parse=xml=>new DOMParser().parseFromString(xml,'application/xml');
@@ -37,6 +38,19 @@ export async function surveyWord(record){
   const embed=nodes(drawing,'blip',A)[0].getAttributeNS(R,'embed'),rel=Array.from(rels.documentElement.children).find(x=>x.getAttribute('Id')===embed);zip.remove('word/'+rel.getAttribute('Target'));
   if(record.floorplanBase64){const match=record.floorplanBase64.match(/^data:image\/(png|jpeg);base64,(.+)$/);if(!match)throw new Error('照片格式不正確。');const ext=match[1]==='jpeg'?'jpg':'png',target='media/property-photo.'+ext;zip.file('word/'+target,match[2],{base64:true});rel.setAttribute('Target',target);const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=record.floorplanBase64;});const scale=Math.min(6.5*360000/image.width,4.9*360000/image.height);for(const el of [...nodes(drawing,'extent',WP),...nodes(drawing,'ext',A)]){el.setAttribute('cx',Math.round(image.width*scale));el.setAttribute('cy',Math.round(image.height*scale));}const types=parse(await zip.file('[Content_Types].xml').async('string'));if(!Array.from(types.documentElement.children).some(x=>x.getAttribute('Extension')===ext)){const el=types.createElementNS(types.documentElement.namespaceURI,'Default');el.setAttribute('Extension',ext);el.setAttribute('ContentType','image/'+match[1]);types.documentElement.append(el);}zip.file('[Content_Types].xml',xml(types));}
   else{const parent=drawing.parentNode;drawing.remove();const label=root.createElementNS(W,'w:t');label.textContent='（未提供照片）';parent.append(label);rel.remove();}
+  const colors=resolveAppearance(record.appearance),hex=key=>colors[key].slice(1).toUpperCase();
+  for(const color of nodes(root,'color')){
+    const original=(color.getAttributeNS(W,'val')||'').toUpperCase();
+    color.setAttributeNS(W,'w:val',hex(original==='23766C'?'headingColor':['BD512E','C64F2C'].includes(original)?'accentColor':'textColor'));
+    for(const attr of ['themeColor','themeTint','themeShade'])color.removeAttributeNS(W,attr);
+  }
+  for(const run of nodes(root,'r')){
+    if(!nodes(run,'t').length)continue;
+    let pr=nodes(run,'rPr')[0];if(!pr){pr=root.createElementNS(W,'w:rPr');run.prepend(pr);}
+    if(!nodes(pr,'color').length){const color=root.createElementNS(W,'w:color');color.setAttributeNS(W,'w:val',hex('textColor'));pr.append(color);}
+  }
+  for(const shade of nodes(root,'shd')){shade.setAttributeNS(W,'w:fill',hex('panelColor'));for(const attr of ['themeFill','themeFillTint','themeFillShade'])shade.removeAttributeNS(W,attr);}
+  for(const parent of [...nodes(root,'tcBorders'),...nodes(root,'tblBorders'),...nodes(root,'pBdr')])for(const border of Array.from(parent.children)){border.setAttributeNS(W,'w:color',hex('borderColor'));for(const attr of ['themeColor','themeTint','themeShade'])border.removeAttributeNS(W,attr);}
   const result=xml(root);if(result.includes('{{'))throw new Error('Word 範本欄位尚未完全填入。');zip.file('word/document.xml',result);zip.file('word/_rels/document.xml.rels',xml(rels));
   return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',compression:'DEFLATE'});
 }

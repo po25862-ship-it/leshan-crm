@@ -9,6 +9,37 @@ jest.mock('./propertySurveyPhoto',()=>({imageOf:jest.fn(async()=>({width:100,hei
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const fields={case_name:'測試三人共同服務',store_name:'捷運樂善直營店',sales_rep:'測試甲',sales_rep_phone:'0900-000-001',sales_rep_2:'測試乙',sales_rep_phone_2:'0900-000-002',sales_rep_3:'測試丙',sales_rep_phone_3:'0900-000-003',total_ping:'54.59',parking_area_ping:'11.01',main_area_ping:'27.36',attached_area_ping:'3.18',common_area_ping:'13.04',common_ratio_mode:'auto'};
 const elements=(root,name)=>Array.from(root.getElementsByTagNameNS(W,name));
+const customColors={textColor:'#112233',headingColor:'#245678',accentColor:'#993311',panelColor:'#eeeedd',borderColor:'#887766'};
+
+test('canvas uses the saved palette for body text, headings, price, cell backgrounds and lines',async()=>{
+ const text=[],fills=[],borders=[];
+ const ctx={scale(){},drawImage(){},measureText:value=>({width:String(value).length*6}),fillText(value){text.push({value,color:this.fillStyle});},fillRect(){fills.push(this.fillStyle);},strokeRect(){borders.push(this.strokeStyle);}};
+ const getContext=jest.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue(ctx);
+ try{
+  await renderSurveyCanvas({appearance:customColors,salesData:{...fields,price_wan:'1598'},sellingPointsText:'1. 邊間採光\n2. 雙衛浴開窗'});
+  expect(text.find(row=>row.value==='1598 萬').color).toBe(customColors.accentColor);
+  expect(text.find(row=>row.value==='售　價').color).toBe(customColors.headingColor);
+  expect(text.find(row=>row.value.includes('地址：')).color).toBe(customColors.textColor);
+  expect(fills).toContain(customColors.panelColor);expect(new Set(borders)).toEqual(new Set([customColors.borderColor]));
+ }finally{getContext.mockRestore();}
+});
+
+test('editable Word preserves the chosen palette, including dynamic selling points and borders',async()=>{
+ const template=fs.readFileSync(path.join(process.cwd(),'public/survey/sales-sheet-a4.docx')),originalFetch=global.fetch;
+ global.fetch=jest.fn(async()=>({ok:true,arrayBuffer:async()=>Uint8Array.from(template).buffer}));
+ try{
+  const blob=await surveyWord({appearance:customColors,salesData:{...fields,price_wan:'1598'},sellingPointsText:'1. 邊間採光\n2. 雙衛浴開窗'});
+  const buffer=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsArrayBuffer(blob);});
+  const zip=await JSZip.loadAsync(buffer),document=await zip.file('word/document.xml').async('string'),root=new DOMParser().parseFromString(document,'application/xml');
+  expect(root.querySelector('parsererror')).toBeNull();
+  expect(new Set(elements(root,'color').map(el=>el.getAttributeNS(W,'val')))).toEqual(new Set(['112233','245678','993311']));
+  expect(elements(root,'shd').every(el=>el.getAttributeNS(W,'fill')==='EEEEDD')).toBe(true);
+  const price=elements(root,'p').find(p=>p.textContent.trim()==='1598 萬');expect(elements(price,'color').every(el=>el.getAttributeNS(W,'val')==='993311')).toBe(true);
+  expect(document).toContain('邊間採光');expect(document).toContain('雙衛浴開窗');
+  for(const parent of [...elements(root,'tcBorders'),...elements(root,'tblBorders')])expect(Array.from(parent.children).every(el=>el.getAttributeNS(W,'color')==='887766')).toBe(true);
+  expect(document).toContain('company-logo');
+ }finally{global.fetch=originalFetch;}
+});
 
 test.each([1,2,3])('canvas places exactly %i selected contacts inside the existing A4 footer',async count=>{
  const drawn=[];

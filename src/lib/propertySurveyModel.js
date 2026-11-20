@@ -1,3 +1,4 @@
+const {normalizeAppearance}=require('./propertySurveyAppearance');
 const GROUPS = [
   ['案件基本資訊', [['case_name','案名'],['contract_no','契約編號'],['address','地址'],['phone','門市電話'],['price_wan','售價（萬）'],['parking_price_wan','車位金額（萬）'],['ownership_reg_date','所有權登記日']]],
   ['坪數與車位', [['main_area_ping','主建物（坪）'],['attached_area_ping','附屬建物（坪）'],['common_area_ping','公設（坪）'],['parking_area_ping','車位（坪）'],['parking_type','車位類型'],['total_ping','總坪數（坪）'],['common_ratio_percent','公設比（%）'],['land_ping','土地坪數（坪）'],['land_share','基地持分']]],
@@ -84,7 +85,7 @@ function normalizeDraft(input={}) {
   const floorplanBase64=text(input.floorplanBase64);
   if(floorplanBase64&&!/^data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/]+=*$/.test(floorplanBase64))throw new Error('照片請使用 JPG 或 PNG。');
   if(floorplanBase64.length>560000)throw new Error('照片過大，請重新選取讓系統縮小照片。');
-  const result={salesData,rawText,sellingPointsText,notes,floorplanBase64};
+  const result={salesData,rawText,sellingPointsText,notes,floorplanBase64,appearance:normalizeAppearance(input.appearance)};
   if(JSON.stringify(result).length>850000)throw new Error('案件資料過大，請縮小照片或精簡文字。');
   return result;
 }
