@@ -1,4 +1,6 @@
 const {normalizeAppearance}=require('./propertySurveyAppearance');
+const {resolveTypography,normalizeEmphasis}=require('./propertySurveyTypography');
+const {FIELDS:COMMUNITY_FIELDS}=require('./propertySurveyCommunities');
 const GROUPS = [
   ['案件基本資訊', [['case_name','案名'],['contract_no','契約編號'],['address','地址'],['phone','門市電話'],['price_wan','售價（萬）'],['parking_price_wan','車位金額（萬）'],['ownership_reg_date','所有權登記日']]],
   ['坪數與車位', [['main_area_ping','主建物（坪）'],['attached_area_ping','附屬建物（坪）'],['common_area_ping','公設（坪）'],['parking_area_ping','車位（坪）'],['parking_type','車位類型'],['total_ping','總坪數（坪）'],['common_ratio_percent','公設比（%）'],['land_ping','土地坪數（坪）'],['land_share','基地持分']]],
@@ -6,7 +8,7 @@ const GROUPS = [
   ['生活圈', [['school','學校'],['park','公園'],['market','市場'],['transport','交通'],['viewing_method','帶看方式'],['renovation','裝潢']]],
   ['店家資訊', [['store_name','門市店名'],['store_manager','店長'],['agent_broker','不動產經紀人'],['sales_rep_count','業務人數'],['sales_rep','不動產營業員'],['sales_rep_phone','營業員電話'],['sales_rep_2','第二位營業員'],['sales_rep_phone_2','第二位營業員電話'],['sales_rep_3','第三位營業員'],['sales_rep_phone_3','第三位營業員電話']]],
 ];
-const FIELD_KEYS = [...GROUPS.flatMap(([, fields])=>fields.map(([key])=>key)),'common_area_basis','common_ratio_mode'];
+const FIELD_KEYS = [...GROUPS.flatMap(([, fields])=>fields.map(([key])=>key)),'common_area_basis','common_ratio_mode','community_name'];
 const SALES_REP_FIELDS = [['sales_rep','sales_rep_phone'],['sales_rep_2','sales_rep_phone_2'],['sales_rep_3','sales_rep_phone_3']];
 const SALES_REP_KEYS = ['sales_rep_count',...SALES_REP_FIELDS.flat()];
 const CONTACT_KEYS = ['phone','store_name','store_manager','agent_broker',...SALES_REP_KEYS];
@@ -85,13 +87,18 @@ function normalizeDraft(input={}) {
   const floorplanBase64=text(input.floorplanBase64);
   if(floorplanBase64&&!/^data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/]+=*$/.test(floorplanBase64))throw new Error('照片請使用 JPG 或 PNG。');
   if(floorplanBase64.length>560000)throw new Error('照片過大，請重新選取讓系統縮小照片。');
-  const result={salesData,rawText,sellingPointsText,notes,floorplanBase64,appearance:normalizeAppearance(input.appearance)};
+  const result={salesData,rawText,sellingPointsText,notes,floorplanBase64,appearance:normalizeAppearance(input.appearance),
+    typography:resolveTypography(input.typography),sellingPointEmphasis:normalizeEmphasis(input.sellingPointEmphasis,points)};
+  if(salesData.community_name && input.communityAppliedValues && typeof input.communityAppliedValues === 'object'){
+    result.communityAppliedValues=Object.fromEntries(COMMUNITY_FIELDS.flatMap(([key])=>salesData[key]&&salesData[key]===input.communityAppliedValues[key]?[[key,salesData[key]]]:[]));
+  }
   if(JSON.stringify(result).length>850000)throw new Error('案件資料過大，請縮小照片或精簡文字。');
   return result;
 }
 function fromCrm(property={}) {
   const map={title:'case_name',listingNo:'contract_no',address:'address',totalPrice:'price_wan',parkingPrice:'parking_price_wan',titlePing:'total_ping',mainBuildingPing:'main_area_ping',auxiliaryBuildingPing:'attached_area_ping',commonAreaPing:'common_area_ping',parkingPing:'parking_area_ping',landPing:'land_ping',parkingDescription:'parking_type',floor:'sale_floor',totalFloors:'total_floors',layout:'layout',orientation:'orientation',managementFee:'management_fee',occupancy:'occupancy',laneWidth:'lane_width',viewingMethod:'viewing_method',category:'building_type',parkingNumber:'parking_spot'};
   const result=Object.fromEntries(Object.entries(map).map(([source,target])=>[target,text(property[source])]));
+  result.community_name=text(property.communityName);
   result.common_area_basis=property.commonAreaBasis==='excluding-parking'?'excluding-parking':'auto';result.common_ratio_mode='auto';
   const floors=text(property.floor).match(/^([^/]+)\s*\/\s*(\d+)\s*(?:樓|層)?$/);
   if(floors){result.sale_floor=floors[1].trim();if(!result.total_floors)result.total_floors=floors[2];}

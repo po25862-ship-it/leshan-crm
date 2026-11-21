@@ -31,9 +31,10 @@ function handlerFactory({authenticate=requireFirebaseUser,admin=ensureFirebaseAd
     const user=await authenticate(req),{firestore}=admin();
     if(user.uid!==OWNER_UID&&!(await firestore.collection('colleagues').doc(user.uid).get()).exists)throw fail(403,'此帳號尚未開通 CRM 使用權限。');
     const service=createSurveyService(firestore);
-    if(req.method==='GET'){if(req.query?.id)return res.status(200).json({record:await service.get(user.uid,req.query.id)});await service.seed(user.uid,initial());const [cases,salesDefaults]=await Promise.all([service.list(user.uid),service.getSalesDefaults(user.uid)]);return res.status(200).json({cases,salesDefaults});}
+    if(req.method==='GET'){if(req.query?.id)return res.status(200).json({record:await service.get(user.uid,req.query.id)});await service.seed(user.uid,initial());const [cases,salesDefaults,communityDefaults]=await Promise.all([service.list(user.uid),service.getSalesDefaults(user.uid),service.getCommunityDefaults(user.uid)]);return res.status(200).json({cases,salesDefaults,communityDefaults});}
     const body=req.body||{};
     if(body.action==='save')return res.status(200).json({ok:true,...await service.save(user.uid,body.record||{})});
+    if(body.action==='community-default')return res.status(200).json({ok:true,communityDefaults:await service.saveCommunityDefault(user.uid,body.preset)});
     if(body.action==='sales-defaults')return res.status(200).json({ok:true,salesDefaults:await service.saveSalesDefaults(user.uid,body.salesData)});
     if(['parse','selling_points'].includes(body.action))return res.status(200).json(await generate(user,body,fetcher));
     throw fail(400,'操作不正確。');

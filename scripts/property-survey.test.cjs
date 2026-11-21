@@ -3,8 +3,45 @@ const model=require('../src/lib/propertySurveyModel');
 const {createSurveyService,caseId,OWNER_UID}=require('../api/_lib/property-survey-service');
 const {handlerFactory}=require('../api/property-survey');
 const {DEFAULT_APPEARANCE}=require('../src/lib/propertySurveyAppearance');
+const {DEFAULT_TYPOGRAPHY,sellingPointRuns}=require('../src/lib/propertySurveyTypography');
+const {applyCommunity,STARTER_PRESETS}=require('../src/lib/propertySurveyCommunities');
 function database(){const rows=new Map();const ref=path=>({path,collection:name=>collection(path+'/'+name),get:async()=>({id:path.split('/').pop(),exists:rows.has(path),data:()=>rows.get(path)}),set:async value=>rows.set(path,value)});const collection=path=>({doc:id=>ref(path+'/'+id),orderBy:()=>({limit:()=>({get:async()=>({docs:[...rows].filter(([k])=>k.startsWith(path+'/')&&k.slice(path.length+1).split('/').length===1).map(([k,v])=>({id:k.split('/').pop(),data:()=>v}))})})})});return {rows,collection,runTransaction:async fn=>fn({get:r=>r.get(),set:(r,v)=>rows.set(r.path,v)})};}
 const draft=name=>({salesData:{case_name:name,sale_floor:3,total_floors:6,basement_floors:0},sellingPointsText:'1. 鄰近公園',rawText:'原始文字'});
+test('survey typography and valid emphasis survive a save and old cases keep the original font',async()=>{
+ const service=createSurveyService(database());
+ const typography={font:'serif',sizePercent:110,lineSpacing:1.4,bold:false};
+ const input={...draft('物調排版'),typography,sellingPointEmphasis:['公園','不存在','公園']};
+ const saved=await service.save('A',input),loaded=await service.get('A',saved.id);
+ assert.deepEqual(loaded.typography,typography);
+ assert.deepEqual(loaded.sellingPointEmphasis,['公園']);
+ assert.deepEqual(sellingPointRuns('鄰近公園',['公','公園']),[{text:'鄰近',highlighted:false},{text:'公園',highlighted:true}]);
+ assert.deepEqual(model.normalizeDraft(draft('舊物調')).typography,DEFAULT_TYPOGRAPHY);
+ assert.deepEqual(model.normalizeDraft({...draft('無效設定'),typography:{font:'not-a-font',sizePercent:300,lineSpacing:0,bold:'no'}}).typography,DEFAULT_TYPOGRAPHY);
+});
+test('switching communities replaces inherited data and preserves a checked case-specific value',()=>{
+ const [starter]=STARTER_PRESETS;
+ const initial=applyCommunity({case_name:'個案',completion_date:'單案日期'},null,starter.name,starter);
+ assert.equal(initial.salesData.park,starter.values.park);
+ assert.equal(initial.salesData.completion_date,'單案日期');
+ assert.deepEqual(initial.retained,['建築完成日期']);
+ const next=applyCommunity(initial.salesData,initial.communityAppliedValues,'另一社區',{values:{park:'另一公園'}});
+ assert.equal(next.salesData.park,'另一公園');
+ assert.equal(next.salesData.school,'');
+ assert.equal(next.salesData.completion_date,'單案日期');
+ assert.deepEqual(model.normalizeDraft(next).communityAppliedValues,{park:'另一公園'});
+});
+test('community defaults API stores only account-scoped community fields and supports updating the same name',async()=>{
+ const db=database(),service=createSurveyService(db);
+ await db.collection('colleagues').doc('A').set({name:'測試同事'});
+ const handler=handlerFactory({authenticate:async()=>({uid:'A'}),admin:()=>({firestore:db}),initial:()=>[]});
+ const call=async req=>{const res={setHeader(){},status(code){this.code=code;return this;},json(value){this.value=value;return this;}};await handler(req,res);return res;};
+ const save=(name,values)=>call({method:'POST',body:{action:'community-default',uid:'B',preset:{name,values}}});
+ assert.equal((await save('測試社區',{school:'學校甲',case_name:'不可儲存'})).code,200);
+ assert.equal((await save(' 測試 社區 ',{school:'學校乙'})).code,200);
+ assert.equal((await save('無內容',{case_name:'測試'})).code,400);
+ assert.deepEqual((await call({method:'GET',query:{}})).value.communityDefaults,[{name:'測試 社區',values:{school:'學校乙'}}]);
+ assert.deepEqual(await service.getCommunityDefaults('B'),[]);
+});
 test('appearance survives private cloud save/reload and malformed colors cannot be persisted',async()=>{
  const db=database(),service=createSurveyService(db),appearance={textColor:'#112233',headingColor:'#224466',accentColor:'#993311',panelColor:'#EEEECC',borderColor:'#887766',ownerUid:'B'};
  const saved=await service.save('A',{...draft('自訂配色'),appearance}),loaded=await service.get('A',saved.id);

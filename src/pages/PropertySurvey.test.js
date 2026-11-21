@@ -26,6 +26,49 @@ const button=text=>[...container.querySelectorAll('button')].find(e=>e.getAttrib
 const edit=(id,value)=>act(()=>Simulate.change(container.querySelector('#'+id),{target:{value}}));
 const search=value=>act(()=>{const input=container.querySelector('[aria-label="選擇 CRM 物件"]');Simulate.focus(input);Simulate.change(input,{target:{value}});});
 const choose=id=>act(()=>[...container.querySelectorAll('[role="option"]')].find(el=>el.textContent.includes(id)).click());
+test('selecting a community fills its available defaults, keeps an edited date, and saves only community fields',async()=>{
+  await act(async()=>root.render(<PropertySurvey/>));
+  const existingFetch=global.fetch;
+  let saved;
+  global.fetch=jest.fn((url,options)=>{
+    const body=options?.body&&JSON.parse(options.body);
+    if(body?.action==='community-default'){
+      saved=body.preset;
+      return Promise.resolve({ok:true,json:async()=>({communityDefaults:[saved]})});
+    }
+    return existingFetch(url,options);
+  });
+  edit('survey-completion_date','單案核對日');
+  act(()=>{const input=container.querySelector('.survey-community input');Simulate.focus(input);Simulate.change(input,{target:{value:'甲子園'}});});
+  choose('竹城甲子園');
+  act(()=>button('帶入社區資料').click());
+  expect(container.querySelector('#survey-school').value).toContain('樂善國小');
+  expect(container.querySelector('#survey-completion_date').value).toBe('單案核對日');
+  await act(async()=>button('儲存為我的社區預設').click());
+  expect(saved).toMatchObject({name:'竹城甲子園',values:{park:'樂善公園',completion_date:'單案核對日'}});
+  expect(Object.keys(saved.values)).toHaveLength(8);
+  expect(button('更新我的社區預設')).toBeTruthy();
+});
+test('selecting a font and marking a selling point updates the preview and persists both choices',async()=>{
+  await act(async()=>root.render(<PropertySurvey/>));
+  edit('survey-case_name','排版測試');
+  edit('survey-points','1. 邊間採光\n2. 雙衛浴開窗');
+  act(()=>button('雙衛浴開窗').click());
+  await act(async()=>{
+    const details=container.querySelectorAll('.survey-colors')[1];
+    details.open=true;
+    Simulate.toggle(details);
+  });
+  const [font,size,spacing]=container.querySelectorAll('.survey-type-settings select');
+  act(()=>Simulate.change(font,{target:{value:'round'}}));
+  act(()=>Simulate.change(size,{target:{value:'110'}}));
+  act(()=>Simulate.change(spacing,{target:{value:'1.4'}}));
+  await act(async()=>button('產生／更新預覽').click());
+  const {record}=JSON.parse(calls.find(call=>call.options.method==='POST').options.body);
+  expect(record.typography).toEqual({font:'round',sizePercent:110,lineSpacing:1.4,bold:true});
+  expect(record.sellingPointEmphasis).toEqual(['雙衛浴開窗']);
+  expect(renderSurveyCanvas).toHaveBeenCalledWith(expect.objectContaining({typography:record.typography,sellingPointEmphasis:record.sellingPointEmphasis}));
+});
 test('color changes reach cloud save and rendering, invalidate old previews and survive CRM import',async()=>{
  await act(async()=>root.render(<PropertySurvey/>));edit('survey-case_name','配色測試');
  act(()=>button('沉穩藍').click());edit('survey-color-textColor','#112233');edit('survey-color-panelColor','#f0eedd');

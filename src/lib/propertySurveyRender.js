@@ -1,19 +1,27 @@
 import model from './propertySurveyModel';
 import {resolveAppearance} from './propertySurveyAppearance';
 import {imageOf} from './propertySurveyPhoto';
+import {canvasFamily,FONTS,resolveTypography,sellingPointRuns} from './propertySurveyTypography';
 export {imageOf,prepareSurveyPhoto} from './propertySurveyPhoto';
 
 export const SURVEY_FONT='"Hannotate TC","物調文楷","PingFang TC","Microsoft JhengHei",sans-serif';
 export function downloadSurvey(blob,name) { const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name.replace(/[\\/:*?"<>|]/g,'');document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000); }
 export async function renderSurveyCanvas(record) {
-  await document.fonts?.load('20px "物調文楷"');await document.fonts?.ready;
+  const typography=resolveTypography(record.typography),choice=FONTS[typography.font],fontFamily=canvasFamily(choice);
+  const fontName=choice.web || '物調文楷';
+  if(document.fonts){
+    const faces=await document.fonts.load(`20px "${fontName}"`);
+    if(choice.web&&!faces.length)throw new Error('物調字型尚未載入，請重新整理後再試。');
+    await document.fonts.load(`700 20px "${fontName}"`);
+  }
+  const scale=typography.sizePercent/100;
   const canvas=document.createElement('canvas');canvas.width=1588;canvas.height=2246;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('瀏覽器無法產生物調圖片。');ctx.scale(2,2);ctx.fillStyle='#fff';ctx.fillRect(0,0,794,1123);
   const colors=resolveAppearance(record.appearance),d=model.values(record.salesData||{}),green=colors.headingColor,ink=colors.textColor,orange=colors.accentColor,line=colors.borderColor;
   const shown=k=>d[k]||'-';
   function rectangle(x,y,w,h,fill='#fff'){ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);ctx.strokeStyle=line;ctx.lineWidth=.55;ctx.strokeRect(x,y,w,h);}
   function write(text,x,y,w,size=20,color=ink,bold=false,align='left'){
-    const value=String(text??'');let font=size;ctx.font=`${bold?700:400} ${font}px ${SURVEY_FONT}`;
-    while(ctx.measureText(value).width>w&&font>9){font-=.5;ctx.font=`${bold?700:400} ${font}px ${SURVEY_FONT}`;}
+    const value=String(text??'');let font=size*scale;ctx.font=`${bold?700:400} ${font}px ${fontFamily}`;
+    while(ctx.measureText(value).width>w&&font>9){font-=.5;ctx.font=`${bold?700:400} ${font}px ${fontFamily}`;}
     if(ctx.measureText(value).width>w)throw new Error('欄位內容過長，請精簡後產生預覽：'+value.slice(0,50));
     ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(value,align==='center'?x+w/2:x,y);ctx.textAlign='left';
   }
@@ -38,9 +46,40 @@ export async function renderSurveyCanvas(record) {
   if(record.floorplanBase64){const image=await imageOf(record.floorplanBase64),scale=Math.min(246/image.width,194/image.height);ctx.drawImage(image,x+(260-image.width*scale)/2,y+(216-image.height*scale)/2,image.width*scale,image.height*scale);}else write('（未提供照片）',x+8,y+108,244,18,ink,false,'center');
   write('介紹分析欄：',290,y+30,474,22,green,true);
   const points=model.sellingPoints(record.sellingPointsText);if(!points.length)points.push('（尚未填寫賣點文案）');
-  function wrapped(size){ctx.font=`${size}px ${SURVEY_FONT}`;const lines=[];points.forEach((point,i)=>{let row=`${i+1}. `;for(const char of point){if(ctx.measureText(row+char).width>465){lines.push({text:row,index:i});row='　';}row+=char;}lines.push({text:row,index:i});});return lines;}
-  let size=23,lines=wrapped(size);while(lines.length*size*1.2>158&&size>10){size--;lines=wrapped(size);}if(lines.length*size*1.2>158)throw new Error('介紹分析欄超過一頁版面，請精簡後產生預覽。');
-  lines.forEach((row,i)=>write(row.text,290,y+69+i*size*1.2,474,size,row.index%2?green:ink,true));y+=216;
+  const pointFont=(size,highlighted)=>`${typography.bold||highlighted?700:400} ${size}px ${fontFamily}`;
+  function wrapped(size){
+    const lines=[];
+    points.forEach((point,index)=>{
+      let row=[], used=0;
+      const add=(text,highlighted)=>{
+        if(row.at(-1)?.highlighted===highlighted)row.at(-1).text+=text;
+        else row.push({text,highlighted});
+      };
+      const pointRuns=[{text:`${index+1}. `,highlighted:false},...sellingPointRuns(point,record.sellingPointEmphasis)];
+      for(const {text,highlighted} of pointRuns){
+        ctx.font=pointFont(size,highlighted);
+        for(const char of text){
+          const width=ctx.measureText(char).width;
+          if(used+width>465&&row.length){lines.push({row,index});row=[];add('　',false);used=size;}
+          add(char,highlighted);used+=width;
+        }
+      }
+      lines.push({row,index});
+    });
+    return lines;
+  }
+  let size=23*scale,lines=wrapped(size);
+  while(lines.length*size*typography.lineSpacing>158&&size>10){size--;lines=wrapped(size);}
+  if(lines.length*size*typography.lineSpacing>158)throw new Error('介紹分析欄超過一頁版面，請縮小字體、縮短行距或精簡文字。');
+  lines.forEach(({row,index},i)=>{
+    let cursor=290;
+    for(const run of row){
+      ctx.font=pointFont(size,run.highlighted);ctx.fillStyle=run.highlighted?orange:index%2?green:ink;
+      ctx.textBaseline='middle';ctx.fillText(run.text,cursor,y+69+i*size*typography.lineSpacing);
+      cursor+=ctx.measureText(run.text).width;
+    }
+  });
+  y+=216;
   rectangle(x,y,260,96,colors.panelColor);rectangle(284,y,244,96);rectangle(528,y,242,96);write(shown('store_name'),32,y+48,244,28,ink,true,'center');write('店長：'+shown('store_manager'),290,y+39,232,18);write('不動產經紀人：'+shown('agent_broker'),290,y+64,232,18);write('不動產營業員',535,y+16,227,14);
   const reps=model.salesReps(record.salesData);
   if(reps.length===1){write(reps[0].name||'-',535,y+44,227,27,ink,true);write(reps[0].phone||'-',535,y+75,227,28,ink,true);}
